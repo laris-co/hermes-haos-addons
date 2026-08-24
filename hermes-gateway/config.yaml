@@ -1,0 +1,62 @@
+name: "Hermes Gateway"
+version: "1.0.0"
+slug: "hermes_gateway"
+description: >-
+  Nous Research's Hermes Agent, running as the messaging gateway
+  (Telegram, Discord, Slack, WhatsApp, Email, cron) plus an optional
+  OpenAI-compatible API server. Wraps the upstream nousresearch/hermes-agent
+  Docker image unmodified — this add-on only translates Supervisor options
+  into the environment variables hermes already reads.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-gateway"
+# Upstream publishes native amd64 + arm64 images (see docker.yml build matrix:
+# arch: amd64 -> ubuntu-latest, arch: arm64 -> ubuntu-24.04-arm — both real
+# native runners, not qemu). Our added layer is a shell script + chmod, so it
+# is arch-agnostic on top of either base. i386/armv7/armhf are NOT published
+# upstream and are deliberately left off this list.
+arch:
+  - amd64
+  - aarch64
+startup: services
+boot: manual
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# The gateway process itself needs no inbound port — it makes outbound
+# connections to Telegram/Discord/Slack/etc. The API server below is the
+# one optional inbound surface, off by default.
+ports:
+  "8642/tcp": null
+ports_description:
+  "8642/tcp": >-
+    OpenAI-compatible API server (for Open WebUI / LibreChat / similar).
+    Only listens if api_server_enabled is turned on below. Leave unmapped
+    otherwise. Never remap this to 80 or 443 — Home Assistant itself owns
+    those on this host.
+options:
+  openrouter_api_key: ""
+  telegram_bot_token: ""
+  telegram_allowed_users: ""
+  discord_bot_token: ""
+  discord_allowed_users: ""
+  slack_bot_token: ""
+  slack_app_token: ""
+  slack_allowed_users: ""
+  gateway_allow_all_users: false
+  api_server_enabled: false
+  api_server_key: ""
+  extra_env: []
+schema:
+  openrouter_api_key: password?
+  telegram_bot_token: password?
+  telegram_allowed_users: str?
+  discord_bot_token: password?
+  discord_allowed_users: str?
+  slack_bot_token: password?
+  slack_app_token: password?
+  slack_allowed_users: str?
+  gateway_allow_all_users: bool
+  api_server_enabled: bool
+  api_server_key: password?
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)
