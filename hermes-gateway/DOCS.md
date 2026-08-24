@@ -46,9 +46,21 @@ here is optional with a safe empty/`false` default — there's no
 "Advanced-SSH-empty-required-password" failure mode possible for this
 add-on because nothing is actually required to reach a running state.
 
-## Verification log (2026-08-24, Docker Desktop 29.6.2 on macOS, amd64 host)
+## Verification log (2026-08-24, Docker Desktop 29.6.2 on macOS)
 
 All commands run for real; output trimmed to the relevant lines.
+
+**Correction**: this log originally said "amd64 host." The build host is
+actually **arm64** (Apple Silicon) — `uname -m` / `docker info` confirm
+it. Section 2's `docker build -t local/hermes-gateway-amd64:1.0.0 .`
+(no `--platform` flag) therefore built a native arm64 image that was
+simply *mislabeled* "amd64" at the time, not a genuine cross-platform
+build — the arm64 build two lines below it (`--platform linux/arm64`,
+explicitly) was the only one that was actually testing what its tag
+claimed. This was caught and fixed in the follow-up pass: see "Real
+measured image size / idle memory" below, which redoes both archs with
+explicit `--platform` flags and gives real, distinguishable numbers for
+each.
 
 ### 1. Base image is real and multi-arch
 
@@ -77,6 +89,39 @@ arm64
 $ docker run --rm --platform linux/arm64 local/hermes-gateway-aarch64:1.0.0 \
     sh -c 'uname -m'                                          # boots and runs under QEMU
 ```
+
+### 2b. Real measured image size / idle memory (2026-08-24, follow-up pass)
+
+Redone with explicit `--platform` on both archs, and the real per-image
+size metric (`docker image inspect --format '{{.Size}}'`, not `docker
+images`' list view — that view double-counts shared base layers per tag
+and had produced a misleading ~3.93 GB figure in an earlier draft of
+this file):
+
+```
+$ docker buildx build --platform linux/amd64 -t local/hermes-gateway-full-amd64:1.0.0 --load .
+$ docker image inspect local/hermes-gateway-full-amd64:1.0.0 --format '{{.Size}}'
+952682844
+```
+**~908 MiB**, not 3.93 GB.
+
+```
+$ docker run -d --platform linux/amd64 -v .../data:/data local/hermes-gateway-full-amd64:1.0.0
+$ docker stats <container> --no-stream --format '{{.MemUsage}}'
+196.1MiB / 7.748GiB
+$ docker exec <container> sh -c 'grep VmRSS /proc/<hermes-pid>/status'
+VmRSS:  188092 kB
+```
+~196 MiB container memory / ~184 MB process RSS at idle, on an empty
+`options.json`, amd64 (this Mac's Docker Desktop ran this via Rosetta
+translation rather than QEMU — Docker Desktop's faster x86-on-arm64
+path — functionally faithful either way, not a performance benchmark).
+
+For the equivalent numbers on `hermes-gateway-lite` (the from-source
+minimal profile) — ~248 MiB image / ~106 MiB container / ~126 MB process
+RSS — see `hermes-gateway-lite/DOCS.md`. The gap is real (~3.6x on disk,
+~1.5-1.8x on idle memory) but far smaller than the number that
+originally motivated building a minimal profile at all.
 
 ### 3. Starts clean with zero config
 

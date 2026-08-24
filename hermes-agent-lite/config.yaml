@@ -1,28 +1,40 @@
-name: "Hermes Agent"
-version: "1.0.0"
-slug: "hermes_agent"
+name: "Hermes Agent (lite)"
+version: "2.0.0"
+slug: "hermes_agent_lite"
 description: >-
   Nous Research's Hermes Agent, running as `hermes dashboard` — the web UI
   that includes an embedded PTY-backed chat tab (the same interactive agent
   you'd otherwise only get from the `hermes` terminal command). This is the
-  browser-reachable half of Hermes; see hermes-gateway for the messaging
-  (Telegram/Discord/Slack/etc.) side. Wraps the upstream
-  nousresearch/hermes-agent Docker image unmodified.
-url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-agent"
-# See hermes-gateway/config.yaml for the arch-claim rationale — same
-# upstream image, same digest pin, both archs built natively upstream.
+  browser-reachable half of Hermes; see hermes-gateway-lite for the
+  messaging (Telegram/Discord/Slack/etc.) side. MINIMAL profile, built
+  fresh from pinned upstream source instead of wrapping upstream's own
+  Docker image — the frontend is built fresh (no prebuilt frontend ships
+  on PyPI), but no Playwright and no provider extras, and code-exec tools
+  (including the embedded Chat tab's) run directly in this container
+  instead of upstream's sandboxed backend — a real security tradeoff, not
+  a free lunch, see README.md. ~189 MiB vs. the full hermes-agent add-on's
+  ~908 MiB — a real but modest difference. hermes-agent (no "lite"
+  suffix) is the recommended default for most people: it uses upstream's
+  own published, tested Docker image. Install this instead only if the
+  size/memory difference genuinely matters for your hardware, and you
+  accept the TERMINAL_ENV=local tradeoff below — it matters more here
+  since the Chat tab is this add-on's whole point.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-agent-lite"
+# Both archs genuinely built and run-tested on this machine (2026-08-24) —
+# see hermes-gateway-lite/config.yaml for the same note (full login round trip
+# verified on both amd64-via-QEMU and native arm64).
 arch:
   - amd64
   - aarch64
 startup: application
 boot: manual
-# init: false (NOT true) — this image wraps upstream's own Docker image,
-# which already ships its own s6-overlay supervisor and expects to own
-# PID 1 (see docker/entrypoint-dispatch.sh in the hermes-agent source).
-# Do not "fix" this to true: true is only correct for hermes-agent-lite
-# (the minimal add-on next door), which has no bundled supervisor of its
-# own — see that add-on's config.yaml.
-init: false
+# init: true (NOT false) — this image is a single `hermes dashboard`
+# process with no bundled supervisor of its own, so Supervisor's own
+# init is what reaps zombies / forwards signals. Do not "fix" this to
+# false: false is only correct for hermes-agent (the full add-on next
+# door), which wraps upstream's own s6-overlay image that already owns
+# PID 1 — see that add-on's config.yaml and this one's DOCS.md.
+init: true
 hassio_api: false
 homeassistant_api: false
 host_network: false

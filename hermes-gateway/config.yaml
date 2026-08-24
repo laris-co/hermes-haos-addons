@@ -18,6 +18,12 @@ arch:
   - aarch64
 startup: services
 boot: manual
+# init: false (NOT true) — this image wraps upstream's own Docker image,
+# which already ships its own s6-overlay supervisor and expects to own
+# PID 1 (see docker/entrypoint-dispatch.sh in the hermes-agent source).
+# Do not "fix" this to true: true is only correct for hermes-gateway-lite
+# (the minimal add-on next door), which has no bundled supervisor of its
+# own — see that add-on's config.yaml.
 init: false
 hassio_api: false
 homeassistant_api: false

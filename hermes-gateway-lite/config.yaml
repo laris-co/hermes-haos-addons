@@ -1,0 +1,88 @@
+name: "Hermes Gateway (lite)"
+version: "2.0.0"
+slug: "hermes_gateway_lite"
+description: >-
+  Nous Research's Hermes Agent, running as the messaging gateway
+  (Telegram, Discord, Slack, WhatsApp, Email, cron) plus an optional
+  OpenAI-compatible API server. MINIMAL profile, built fresh from pinned
+  upstream source instead of wrapping upstream's own Docker image: no
+  Playwright, no Docker-in-Docker code-exec sandbox (code-exec tools run
+  directly in this container instead — a real security tradeoff, not a
+  free lunch, see README.md), no baked-in messaging SDKs (those
+  lazy-install on first real use). ~250 MiB vs. the full hermes-gateway
+  add-on's ~908 MiB — a real but modest difference. hermes-gateway (no
+  "lite" suffix) is the recommended default for most people: it uses
+  upstream's own published, tested Docker image. Install this instead
+  only if the size/memory difference genuinely matters for your
+  hardware, and you accept the TERMINAL_ENV=local tradeoff below.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-gateway-lite"
+# Both archs genuinely built and run-tested on this machine (2026-08-24):
+# `docker buildx build --platform linux/amd64` and `linux/arm64`, both
+# --load'ed and both booted `gateway run` to a clean "Up" state (amd64
+# via QEMU emulation on this arm64 build host; arm64 natively). armhf/
+# armv7/i386 are Supervisor-deprecated (sunset 2025-05) and not attempted.
+arch:
+  - amd64
+  - aarch64
+startup: services
+boot: manual
+# init: true (NOT false) — this image is a single `hermes` process with
+# no bundled supervisor of its own, so Supervisor's own init is what
+# reaps zombies / forwards signals. Do not "fix" this to false: false is
+# only correct for hermes-gateway (the full add-on next door), which
+# wraps upstream's own s6-overlay image that already owns PID 1 — see
+# that add-on's config.yaml and this one's DOCS.md.
+init: true
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# The gateway process itself needs no inbound port — it makes outbound
+# connections to Telegram/Discord/Slack/etc. The API server below is the
+# one optional inbound surface, off by default.
+ports:
+  "8642/tcp": null
+ports_description:
+  "8642/tcp": >-
+    OpenAI-compatible API server (for Open WebUI / LibreChat / similar).
+    Only listens if api_server_enabled is turned on below. Leave unmapped
+    otherwise. Never remap this to 80 or 443 — Home Assistant itself owns
+    those on this host.
+options:
+  openrouter_api_key: ""
+  telegram_bot_token: ""
+  telegram_allowed_users: ""
+  discord_bot_token: ""
+  discord_allowed_users: ""
+  slack_bot_token: ""
+  slack_app_token: ""
+  slack_allowed_users: ""
+  gateway_allow_all_users: false
+  api_server_enabled: false
+  api_server_key: ""
+  # 0 = leave unset, hermes uses its own internal default (see DOCS.md
+  # for the exact defaults each of these overrides).
+  max_iterations: 0
+  agent_timeout_seconds: 0
+  agent_timeout_warning_seconds: 0
+  session_stall_timeout_seconds: 0
+  restart_drain_timeout_seconds: 0
+  extra_env: []
+schema:
+  openrouter_api_key: password?
+  telegram_bot_token: password?
+  telegram_allowed_users: str?
+  discord_bot_token: password?
+  discord_allowed_users: str?
+  slack_bot_token: password?
+  slack_app_token: password?
+  slack_allowed_users: str?
+  gateway_allow_all_users: bool
+  api_server_enabled: bool
+  api_server_key: password?
+  max_iterations: int(0,)
+  agent_timeout_seconds: int(0,)
+  agent_timeout_warning_seconds: int(0,)
+  session_stall_timeout_seconds: int(0,)
+  restart_drain_timeout_seconds: int(0,)
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

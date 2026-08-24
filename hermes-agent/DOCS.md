@@ -100,7 +100,11 @@ which 404s against Home Assistant's own frontend routing instead of
 reaching the add-on. A direct port sidesteps this completely and is
 provably correct (see the login round-trip test below).
 
-## Verification log (2026-08-24, Docker Desktop 29.6.2 on macOS, amd64 host)
+## Verification log (2026-08-24, Docker Desktop 29.6.2 on macOS)
+
+**Correction**: this log originally said "amd64 host." The build host is
+actually **arm64** (Apple Silicon). See `hermes-gateway/DOCS.md`'s
+equivalent note for the full explanation — same correction applies here.
 
 ### 1. Refuses to start with no credentials
 
@@ -162,6 +166,38 @@ Same as `hermes-gateway` — see that add-on's `DOCS.md` §1-2. Both
 were built and the arm64 image was confirmed
 (`docker image inspect --format '{{.Architecture}}'` → `arm64`) and run
 under QEMU emulation.
+
+### 6. Real measured image size / idle memory (2026-08-24, follow-up pass)
+
+Redone with explicit `--platform` and the correct per-image size metric
+(`docker image inspect --format '{{.Size}}'`, not `docker images`' list
+view, which had produced a misleading multi-GB figure in an earlier
+draft — see `hermes-gateway/DOCS.md`'s equivalent section for the full
+explanation):
+
+```
+$ docker buildx build --platform linux/amd64 -t local/hermes-agent-full-amd64:1.0.0 --load .
+$ docker image inspect local/hermes-agent-full-amd64:1.0.0 --format '{{.Size}}'
+952681044
+```
+**~908 MiB** (essentially identical to `hermes-gateway`'s size — same
+underlying image, different `CMD`).
+
+```
+$ echo '{"username":"admin","password":"S3cretPass!"}' > options.json
+$ docker run -d --platform linux/amd64 -p 19198:9119 -v .../data:/data local/hermes-agent-full-amd64:1.0.0
+$ curl -X POST http://127.0.0.1:19198/auth/password-login -d '{...}' -> 200
+$ docker stats <container> --no-stream --format '{{.MemUsage}}'
+171.8MiB / 7.748GiB
+```
+~172 MiB container memory at idle, with a real successful login already
+exercised (not a cold/never-touched boot).
+
+For the equivalent numbers on `hermes-agent-lite` (the from-source
+minimal profile) — ~189 MiB image / ~137 MiB container / ~158 MB process
+RSS — see `hermes-agent-lite/DOCS.md`. The gap is real (~4.8x on disk,
+~1.25x on idle memory) but far smaller than the number that originally
+motivated building a minimal profile at all.
 
 ## Not verified
 
