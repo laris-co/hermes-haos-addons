@@ -90,21 +90,40 @@ $ docker run --rm --platform linux/arm64 local/hermes-gateway-aarch64:1.0.0 \
     sh -c 'uname -m'                                          # boots and runs under QEMU
 ```
 
-### 2b. Real measured image size / idle memory (2026-08-24, follow-up pass)
+### 2b. Real measured image size / idle memory — THREE PASSES, two of them wrong
 
-Redone with explicit `--platform` on both archs, and the real per-image
-size metric (`docker image inspect --format '{{.Size}}'`, not `docker
-images`' list view — that view double-counts shared base layers per tag
-and had produced a misleading ~3.93 GB figure in an earlier draft of
-this file):
+This section went through three measurements before landing on a real
+number. Recorded in full because the failure mode (cross-arch emulated
+measurement) will bite again if it isn't named clearly:
 
+**Pass 1** (2026-08-24, on this arm64 Mac, `docker images` list view):
+~3.93 GB. Wrong — that view double-counts shared base layers per tag.
+
+**Pass 2** (2026-08-24, same arm64 Mac, `docker image inspect --format
+'{{.Size}}'` instead):
 ```
 $ docker buildx build --platform linux/amd64 -t local/hermes-gateway-full-amd64:1.0.0 --load .
 $ docker image inspect local/hermes-gateway-full-amd64:1.0.0 --format '{{.Size}}'
 952682844
 ```
-**~908 MiB**, not 3.93 GB.
+Read as ~908 MiB. **Also wrong** — on an arm64 host, an amd64 image built/
+pulled under QEMU/Rosetta emulation is only partially materialized, so
+`docker images`, `docker image inspect`, and `docker save` disagree with
+each other AND with reality there. `docker image inspect` looking like
+the more "correct" metric (vs. the visibly-broken list view) doesn't mean
+its number is right when the underlying image itself is emulated.
 
+**Pass 3** (2026-08-24, on **black.local, a native amd64 host** — the
+one that counts): all three tools agree there:
+```
+docker images        2.68 GB
+docker image inspect  2,678,364,779 bytes
+docker save            2,755,512,832 bytes
+```
+**The real size is ~2.68 GB.**
+
+**Idle memory**, still measured under emulation on the arm64 Mac (not yet
+re-measured natively at the time of this pass — treat as directional):
 ```
 $ docker run -d --platform linux/amd64 -v .../data:/data local/hermes-gateway-full-amd64:1.0.0
 $ docker stats <container> --no-stream --format '{{.MemUsage}}'
@@ -112,16 +131,24 @@ $ docker stats <container> --no-stream --format '{{.MemUsage}}'
 $ docker exec <container> sh -c 'grep VmRSS /proc/<hermes-pid>/status'
 VmRSS:  188092 kB
 ```
-~196 MiB container memory / ~184 MB process RSS at idle, on an empty
-`options.json`, amd64 (this Mac's Docker Desktop ran this via Rosetta
-translation rather than QEMU — Docker Desktop's faster x86-on-arm64
-path — functionally faithful either way, not a performance benchmark).
+~196 MiB container memory / ~184 MB process RSS at idle on an empty
+`options.json` — **emulated measurement, treat as approximate.** The
+number that actually matters: **a real Supervisor install of this exact
+add-on on a live HAOS guest (catlab) measured 134.5 MiB resident**,
+built on-device by Supervisor from this published repo. Trust that
+number over the emulated one above if they ever seem to disagree.
 
 For the equivalent numbers on `hermes-gateway-lite` (the from-source
-minimal profile) — ~248 MiB image / ~106 MiB container / ~126 MB process
-RSS — see `hermes-gateway-lite/DOCS.md`. The gap is real (~3.6x on disk,
-~1.5-1.8x on idle memory) but far smaller than the number that
-originally motivated building a minimal profile at all.
+minimal profile) — natively measured at ~659 MB (`docker images` /
+`docker image inspect` / `docker save`: 658,577,529 / 684,941,312 bytes,
+all agreeing on black.local) — see `hermes-gateway-lite/DOCS.md`. The
+real ratio is **~4.07x** on disk (2,678,364,779 / 658,577,529). That's
+smaller than the original (wrong) ~3.93 GB premise implied, but larger
+than the (also wrong) ~908 MiB/~248 MiB pass made it look — the ratio
+itself happened to survive both bad passes reasonably well (~3.6-4.8x
+reported at the time vs. 4.07x actual) because the emulation artifact
+scaled both variants in the same direction by a similar factor; the
+absolute numbers did not survive.
 
 ### 3. Starts clean with zero config
 

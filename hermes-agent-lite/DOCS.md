@@ -2,20 +2,29 @@
 
 ## Why this add-on exists, and why it is NOT the recommended default
 
-Same as `hermes-gateway-lite` — see that add-on's `DOCS.md` for the full,
-honest history (the ~1 GB HAOS-guest budget that originally motivated
-this add-on was based on a bad size measurement — the full wrapped image
-is really ~908 MiB, not the ~3.93 GB first reported — and that guest
-target turned out not to be the right one anyway). Read that file first
-if you haven't; it isn't repeated in full here.
+Same as `hermes-gateway-lite` — see that add-on's `DOCS.md` §"Why this
+add-on exists" for the full, honest history: the ~1 GB HAOS-guest budget
+that originally motivated this add-on was based on a bad size
+measurement (~3.93 GB from a `docker images` list-view artifact), then a
+SECOND bad measurement (~908 MiB from measuring an amd64 image on an
+arm64 Mac under emulation — an artifact just as real as the first one,
+just smaller), before a native-amd64-host remeasurement (black.local)
+found the true figure: the full wrapped image is **~2.68 GB**. Read that
+file first if you haven't; it isn't repeated in full here. Separately,
+that guest target turned out not to be the right one anyway.
 
-**`hermes-agent` (no "lite" suffix) is the recommended default.** This
-add-on trades a modest size reduction (~189 MiB vs. ~908 MiB) for a real
+**`hermes-agent` (no "lite" suffix) is the recommended default.** The
+real size gap is **~4.07x** (measured on `hermes-gateway`/
+`hermes-gateway-lite` natively; this add-on's own lite image was not
+independently re-measured on native hardware — see below), for a real
 cost: `TERMINAL_ENV=local` (no code-exec sandbox) and a from-source
 build instead of upstream's own tested distribution channel. That
 tradeoff matters *more* here than for the gateway, since this add-on's
 whole point is the Chat tab, which is exactly where the sandbox would
-matter.
+matter — and the correctness argument for the full variant gets
+*stronger*, not weaker, once the real ~2.68 GB figure is in view: on
+modern hardware, ~2 GB of disk is a smaller cost than trading away the
+sandbox and the official distribution channel.
 
 The dashboard is the harder half of that redirect: **it genuinely needs
 a built frontend**, unlike the gateway. Confirmed the PyPI wheel does
@@ -142,12 +151,20 @@ $ docker image inspect local/hermes-agent-amd64:2.0.0 --format '{{.Size}} {{.Arc
 $ docker image inspect local/hermes-agent-arm64:2.0.0 --format '{{.Size}} {{.Architecture}}'
 197280509 arm64
 ```
-**~188-189 MiB real image size** — smaller than the gateway's ~250 MiB
-image despite including the built frontend, because it doesn't need
-`nemo-relay`'s platform-marker pulls the same way and the frontend
-assets themselves are small (a few MB of minified JS/CSS) compared to
-Python dependency wheels. Both real, both built with explicit
-`--platform`, no QEMU-vs-native ambiguity in the numbers.
+Read at the time as ~188-189 MiB, smaller than the gateway's
+(also-misread) ~250 MiB figure. **These numbers are unreliable** — both
+were measured on an arm64 Mac, where an amd64 image built under
+QEMU/Rosetta emulation is only partially materialized, so `docker image
+inspect` (and `docker images`, and `docker save`) don't agree with each
+other or with reality there; a same-arch (arm64-native-on-this-Mac)
+build isn't a safe substitute either, since it wasn't independently
+cross-checked against a second measurement tool the way the amd64
+figure was on black.local. Unlike `hermes-gateway-lite`, this add-on's
+image was **not** independently re-measured on a native amd64 host —
+`hermes-gateway-lite`'s natively-measured ~659 MB is the closest
+trustworthy anchor for this whole "lite" family; treat any specific
+number for `hermes-agent-lite` itself as an open question until it's
+re-measured on real amd64 hardware.
 
 ### 3. Refuses to start with no credentials (same as v1)
 

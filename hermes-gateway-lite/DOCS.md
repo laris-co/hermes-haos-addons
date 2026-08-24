@@ -9,31 +9,46 @@ no extras — no Playwright, no npm frontend build, no
 matrix/anthropic/bedrock/azure-identity/hindsight/otlp Python extras.
 
 **The honest history, because the numbers that motivated this add-on
-changed twice:**
+changed three times, not twice:**
 
 1. It was originally built because a specific 2048 MB HAOS guest target
    (no `<maxMemory>` stanza in its libvirt XML — RAM couldn't be raised
    without an XML edit and a cold boot) had only ~1 GB free after HA core
    and other add-ons, and the full wrapped image was reported at **3.93
-   GB** — measured via `docker images`' list view, which double-counts
-   shared base layers per tag. That number was wrong.
-2. Re-measured with `docker image inspect --format '{{.Size}}'` (the
-   correct per-image metric): the full wrapped image is **~908 MiB**, not
-   3.93 GB. Separately, that specific guest target turned out not to be
-   the right target at all — the project ended up running Hermes as a
-   plain Docker container on different hardware, because Hermes' code-exec
-   backend spawns nested Docker containers and Supervisor add-ons don't
-   get `docker.sock` by default, so the sandboxed backend can't work
-   under HAOS regardless of image size.
+   GB** — measured via `docker images`' list view on an arm64 Mac, which
+   double-counts shared base layers per tag. Wrong.
+2. Re-measured on the *same arm64 Mac*, cross-arch, with `docker image
+   inspect --format '{{.Size}}'` instead: ~908 MiB. **Also wrong** — on
+   an arm64 host, an amd64 image built/pulled under QEMU/Rosetta
+   emulation is only partially materialized, so `docker images`, `docker
+   image inspect`, and `docker save` disagree with each other and with
+   reality there. The more "precise-sounding" metric doesn't fix a
+   measurement taken on an emulated image. Separately, that specific
+   guest target turned out not to be the right target at all — the
+   project ended up running Hermes as a plain Docker container on
+   different hardware, because Hermes' code-exec backend spawns nested
+   Docker containers and Supervisor add-ons don't get `docker.sock` by
+   default, so the sandboxed backend can't work under HAOS regardless of
+   image size.
+3. Measured a third time on **black.local, a native amd64 host**: all
+   three tools agree there. Full wrapped image: **~2.68 GB**
+   (2,678,364,779 bytes). This add-on's own image, built natively from
+   this exact Dockerfile: **~659 MB** (658,577,529 bytes via `docker
+   image inspect`, 684,941,312 via `docker save`, 659 MB via `docker
+   images` — all agreeing). Real ratio: **~4.07x**.
 
-**So: the size gap this add-on buys (~908 MiB → ~250 MiB) is real but
-modest, and it comes with a real cost — `TERMINAL_ENV=local`, no
-sandbox, a from-source build instead of upstream's own tested
-distribution channel.** `hermes-gateway` (no "lite" suffix) is the
-recommended default for most people. This add-on is kept, documented,
-and fully verified for the case where the size/memory difference
-genuinely matters — not deleted, per this fleet's own "nothing is
-deleted" rule, and not hidden behind an inflated number either.
+**So: the size gap this add-on buys (~2.68 GB → ~659 MB) is real, and it
+comes with a real cost — `TERMINAL_ENV=local`, no sandbox, a from-source
+build instead of upstream's own tested distribution channel.**
+`hermes-gateway` (no "lite" suffix) is the recommended default for most
+people — if anything the correctness argument for it gets *stronger*
+once the real 2.68 GB figure is in view, since ~2 GB of extra disk on
+modern hardware is a smaller cost than trading away the sandboxed
+code-exec backend and the official distribution channel. This add-on is
+kept, documented, and fully verified for the case where the size
+difference genuinely matters — not deleted, per this fleet's own
+"nothing is deleted" rule, and not hidden behind an inflated OR deflated
+number either.
 
 It's a from-scratch Dockerfile: `pip install -e` from a pinned upstream
 git commit, no extras, no Node, no Playwright, no s6-overlay.
@@ -213,14 +228,26 @@ $ docker image inspect local/hermes-gateway-amd64:2.0.0 --format '{{.Size}} {{.A
 $ docker image inspect local/hermes-gateway-arm64:2.0.0 --format '{{.Size}} {{.Architecture}}'
 258453794 arm64
 ```
-**~247-248 MiB real image size**, vs. `hermes-gateway`'s (the full,
-wrapped-image variant) real measured ~908 MiB — roughly a 3.6x
-reduction, not the ~16x an earlier draft of this file claimed based on
-a bad metric. (`docker images`' list-view "SIZE" column shows a larger,
-different number for the same image; that column double-counts shared
-base layers per-tag and is not the right metric here — `docker image
-inspect --format '{{.Size}}'` is, and that's what both numbers above
-use.)
+These two numbers (measured on this arm64 Mac) are **known-unreliable
+for the amd64 figure** — see below — and the arm64 figure, while native
+to this host, has not been independently cross-checked with a second
+measurement tool the way the amd64 one was, so it should also be
+treated as approximate rather than confirmed.
+
+**The trustworthy number**: re-measured on **black.local, a native
+amd64 host**, where `docker images`, `docker image inspect`, and `docker
+save` all agree: **~659 MB** (658,577,529 bytes / 684,941,312 bytes via
+`docker save`). Compared against `hermes-gateway`'s (the full,
+wrapped-image variant) equally natively-measured **~2.68 GB**
+(2,678,364,779 bytes): a real **~4.07x** reduction — smaller than the
+original (wrong) ~3.93 GB premise implied a gap could be, but this
+add-on's actual boot/functional behavior (below) was still validated
+correctly on this Mac; only the *size* numbers from this host are
+unreliable, because an amd64 image on an arm64 host under QEMU/Rosetta
+is only partially materialized, so none of `docker images`, `docker
+image inspect`, or `docker save` agree with each other or with reality
+there. Measure image size on a native host of the target arch, or not
+at all.
 
 ### 2. Boots clean with zero config, on both archs
 
@@ -245,14 +272,19 @@ $ docker exec <container> sh -c 'grep VmRSS /proc/1/status'   # PID 1 = hermes i
 VmRSS:  125932 kB
 ```
 ~106 MiB container memory, ~126 MB process RSS at idle, measured after
-30+ seconds of uptime (not a cold-start snapshot). For comparison,
-`hermes-gateway` (the full, wrapped-image variant) measured ~196 MiB
-container memory / ~184 MB process RSS under the same test — real, but
-only about 1.5-1.8x higher, not the dramatic gap the (wrong) 3.93 GB
-image-size figure implied. Both are comfortably small in absolute terms
-on any reasonably modern host; this add-on exists for the case where
-even that smaller gap matters (genuinely constrained hardware), not
-because the full variant is impractical.
+30+ seconds of uptime (not a cold-start snapshot) — **under QEMU
+emulation on the arm64 Mac, not native amd64; treat as directional, not
+precise.** For comparison, `hermes-gateway` (the full, wrapped-image
+variant) measured ~196 MiB container memory / ~184 MB process RSS under
+the same (also emulated) test. The number that actually matters: a real
+Supervisor install of `hermes-gateway` on a live HAOS guest (catlab)
+measured **134.5 MiB resident** — this add-on (`hermes-gateway-lite`)
+has not been installed on a live Supervisor, so there's no equivalently
+trustworthy idle-memory figure for it yet. Both variants are comfortably
+small in absolute terms on any reasonably modern host; this add-on
+exists for the case where the (real, ~4.07x) disk-size gap matters
+(genuinely constrained hardware), not because the full variant is
+impractical.
 
 ### 4. `api_server_enabled` without a key still fails loud
 

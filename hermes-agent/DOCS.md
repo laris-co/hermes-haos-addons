@@ -167,21 +167,27 @@ were built and the arm64 image was confirmed
 (`docker image inspect --format '{{.Architecture}}'` → `arm64`) and run
 under QEMU emulation.
 
-### 6. Real measured image size / idle memory (2026-08-24, follow-up pass)
+### 6. Real measured image size / idle memory — corrected in two steps
 
-Redone with explicit `--platform` and the correct per-image size metric
-(`docker image inspect --format '{{.Size}}'`, not `docker images`' list
-view, which had produced a misleading multi-GB figure in an earlier
-draft — see `hermes-gateway/DOCS.md`'s equivalent section for the full
-explanation):
-
+First pass (2026-08-24, arm64 Mac, cross-arch amd64 build):
 ```
 $ docker buildx build --platform linux/amd64 -t local/hermes-agent-full-amd64:1.0.0 --load .
 $ docker image inspect local/hermes-agent-full-amd64:1.0.0 --format '{{.Size}}'
 952681044
 ```
-**~908 MiB** (essentially identical to `hermes-gateway`'s size — same
-underlying image, different `CMD`).
+Read as ~908 MiB at the time. **Wrong** — this is the same emulated-
+cross-arch-measurement artifact documented in full in
+`hermes-gateway/DOCS.md` §2b: on an arm64 host, an amd64 image built/
+pulled under QEMU/Rosetta is only partially materialized, so none of
+`docker images`, `docker image inspect`, or `docker save` agree with
+each other or with reality there.
+
+Corrected: this add-on shares the exact same base image as
+`hermes-gateway` (same digest, different `CMD` only), which was
+natively re-measured on black.local (a real amd64 host, all three tools
+agreeing) at **~2.68 GB** (2,678,364,779 bytes). That figure applies
+here unchanged — see `hermes-gateway/DOCS.md` §2b for the full
+measurement.
 
 ```
 $ echo '{"username":"admin","password":"S3cretPass!"}' > options.json
@@ -191,13 +197,21 @@ $ docker stats <container> --no-stream --format '{{.MemUsage}}'
 171.8MiB / 7.748GiB
 ```
 ~172 MiB container memory at idle, with a real successful login already
-exercised (not a cold/never-touched boot).
+exercised (not a cold/never-touched boot) — **still measured under
+emulation, treat as approximate.** `hermes-gateway`'s real Supervisor
+install (134.5 MiB resident, on catlab) is the more trustworthy data
+point for this image family; this add-on wasn't independently installed
+on a live Supervisor.
 
 For the equivalent numbers on `hermes-agent-lite` (the from-source
-minimal profile) — ~189 MiB image / ~137 MiB container / ~158 MB process
-RSS — see `hermes-agent-lite/DOCS.md`. The gap is real (~4.8x on disk,
-~1.25x on idle memory) but far smaller than the number that originally
-motivated building a minimal profile at all.
+minimal profile): `hermes-gateway-lite` was natively re-measured at
+~659 MB; `hermes-agent-lite` (which additionally bundles a built
+frontend) was not independently re-measured natively, so treat its
+~189 MiB figure in `hermes-agent-lite/DOCS.md` as an emulated,
+likely-understated number rather than a confirmed one — the real ratio
+between full and lite is **~4.07x** (measured on `hermes-gateway`/
+`hermes-gateway-lite`, both natively), not the ~4.8x this file
+originally reported from two emulated numbers.
 
 ## Not verified
 

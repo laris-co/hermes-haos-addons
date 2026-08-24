@@ -8,21 +8,38 @@ for Home Assistant OS / Supervisor. Not affiliated with Nous Research.
 | | `hermes-gateway` / `hermes-agent` | `hermes-gateway-lite` / `hermes-agent-lite` |
 |---|---|---|
 | Built from | Upstream's own published Docker image, `FROM`-unmodified | Pinned upstream **git commit**, `pip install -e`, minimal extras |
-| Image size (measured) | **~908 MiB** | gateway ~248 MiB / agent ~189 MiB |
-| Idle memory (measured) | gateway ~196 MiB / agent ~172 MiB | gateway ~106 MiB / agent ~137 MiB |
+| Image size (measured natively, amd64) | **~2.68 GB** | **~659 MB** (gateway; agent not independently re-measured natively, expect the same order of magnitude) |
+| Idle memory | gateway: **134.5 MiB resident**, measured on a real Supervisor install (see below) | measured under emulation only — see each add-on's `DOCS.md` |
 | Code-exec sandbox | Whatever upstream ships (still needs `docker.sock`, which Supervisor add-ons don't get by default — see below) | **None — `TERMINAL_ENV=local`, runs directly in the container** |
 | Distribution channel | Official, upstream-published, upstream-tested | Not upstream-published — this repo's own build from source |
 | **Recommended for** | **Most people. Start here.** | Genuinely disk/RAM-constrained hosts, once you've read and accepted the tradeoff below |
 
+**Measurement note**: image sizes above are from a **native amd64 host**
+(`docker images`, `docker image inspect --format '{{.Size}}'`, and `docker
+save` all agree to within compression overhead there). An earlier pass of
+this repo measured on an arm64 Mac pulling/building amd64 images under
+QEMU/Rosetta emulation, where those same three tools *disagree with each
+other and with reality* — that pass under-reported ~908 MiB / ~248 MiB,
+off by ~2.7-2.9x in the same direction on both variants. If you're
+re-measuring this yourself: **measure on a native host of the target
+architecture, or not at all** — cross-arch emulated measurement is not a
+smaller-but-close number, it's a wrong one, and it can go either
+direction (a different pass that same night mis-read a real 259 MB image
+as possibly 4x too small, in the *other* direction, before `docker save`
+settled it). The ratio between variants held up across both passes
+(~4x), even though both absolute numbers were wrong the first time —
+that's the one thing safe to reason about from an emulated measurement.
+
 **If you're not sure which to pick, install `hermes-gateway` / `hermes-agent`
-(no "lite" suffix).** The size difference is smaller than it might sound —
-continue reading for why.
+(no "lite" suffix).** The size difference is real (~4x) but the
+correctness/distribution-channel argument for the full variant is the
+stronger reason — continue reading for why.
 
 ## Why two variants (the honest version)
 
-This repo went through two redirects while being built, and the numbers
-changed materially each time — recorded here instead of quietly memory-
-holed:
+This repo went through several rounds of review while being built, and
+the numbers changed materially more than once — recorded here instead of
+quietly memory-holed:
 
 1. **First build**: wrapped upstream's published Docker image
    unmodified. Verified working end-to-end (real login round-trip, real
@@ -30,29 +47,45 @@ holed:
 2. **Second build**: told the wrapped image was ~3.93 GB and wouldn't fit
    a 2048 MB target guest with ~1 GB free — rebuilt from scratch as a
    minimal profile (no Playwright, no Docker-in-Docker sandbox, no
-   baked-in provider extras) to fit that budget. That number came from
-   `docker images`' list view, which double-counts shared base layers per
-   tag — the metric looked dramatic, and it was wrong.
-3. **Third pass** (this one): re-measured with `docker image inspect
-   --format '{{.Size}}'`, the actual per-image size. The wrapped image is
-   **~908 MiB**, not 3.93 GB. Separately, the original target guest
-   turned out not to be the right target at all — Hermes ended up running
-   as a plain Docker container on a full-size host instead, because its
-   code-exec backend spawns nested Docker containers and Supervisor
-   add-ons don't get `docker.sock` by default, so the sandboxed backend
-   cannot work under HAOS regardless of image size. This repo is now
-   aimed at other people running HA on their own hardware, not a specific
-   constrained guest.
+   baked-in provider extras) to fit that budget. That ~3.93 GB number
+   came from `docker images`' list view on an arm64 Mac, which double-
+   counts shared base layers per tag — wrong.
+3. **Third pass**: re-measured on the *same arm64 Mac*, cross-arch, with
+   `docker image inspect --format '{{.Size}}'` instead. Got ~908 MiB —
+   looked authoritative (a different, more precise-sounding metric), and
+   was *also* wrong: on an arm64 host, amd64 images pulled/built under
+   QEMU/Rosetta emulation are only partially materialized, so none of
+   `docker images`, `docker image inspect`, or `docker save` agree with
+   each other or with reality there. Separately, the original target
+   guest turned out not to be the right target at all — Hermes ended up
+   running as a plain Docker container on a full-size host instead,
+   because its code-exec backend spawns nested Docker containers and
+   Supervisor add-ons don't get `docker.sock` by default, so the
+   sandboxed backend cannot work under HAOS regardless of image size.
+   This repo is now aimed at other people running HA on their own
+   hardware, not a specific constrained guest.
+4. **Fourth pass** (this one): measured on a native amd64 host
+   (black.local) instead of the arm64 Mac. All three tools agree there:
+   the wrapped image is **~2.68 GB**, the minimal `hermes-gateway-lite`
+   image is **~659 MB**. A real Supervisor install of the full
+   `hermes-gateway` add-on on a live HAOS guest (catlab) additionally
+   confirms **134.5 MiB resident** at idle — the number that actually
+   matters for "will this fit," measured the only way that counts.
 
-Net effect: the size gap between the two variants is real (~650-720 MiB
-of disk, and idle memory roughly 1.2-1.85x higher for the full variant)
-but far less dramatic than the number that originally justified building
-"lite" at all. **Given that, `hermes-gateway`/`hermes-agent` (the full,
-upstream-image variant) is the recommended default** — it uses the
-official, upstream-tested distribution channel, and ~900 MiB is a small
-ask on most Home Assistant hardware. `-lite` is kept and documented for
-the case where it genuinely matters (older SBCs, HAOS VMs with a real
-disk/RAM ceiling), with its tradeoffs stated plainly rather than buried.
+Net effect: the size gap between the two variants is real (~4x, both on
+disk and — separately measured, see each add-on's `DOCS.md` — plausibly
+in idle memory too, though the idle-memory side of that comparison was
+only measured under emulation and should be treated as directional, not
+precise) but the deciding factor isn't really the megabytes. **Given
+that, `hermes-gateway`/`hermes-agent` (the full, upstream-image variant)
+is the recommended default** — it uses the official, upstream-tested
+distribution channel, and ~2.7 GB of disk plus ~135 MiB of resident
+memory is a small ask on most Home Assistant hardware (nine add-ons
+including HA core summed to 945 MiB on the real guest this was tested
+against). `-lite` is kept and documented for the case where the size
+difference genuinely matters (older SBCs, HAOS VMs with a real disk/RAM
+ceiling), with its tradeoffs — smaller, but `TERMINAL_ENV=local` and an
+unofficial distribution channel — stated plainly rather than buried.
 
 ## What's here
 
@@ -90,9 +123,14 @@ equivalent).
   multi-arch manifest list (linux/amd64 + linux/arm64), and confirmed
   against upstream's `.github/workflows/docker.yml` that both are built
   on native runners (`ubuntu-latest` / `ubuntu-24.04-arm`), not qemu.
-- **Real measured size: ~908 MiB** (`docker image inspect --format
-  '{{.Size}}'`), not the ~3.93 GB earlier reported from `docker images`'
-  list view.
+- **Real measured size: ~2.68 GB**, measured on a native amd64 host
+  (`docker images`, `docker image inspect --format '{{.Size}}'`, and
+  `docker save` all agree there). Two earlier, wrong numbers were
+  reported before this one — ~3.93 GB (a `docker images` list-view
+  artifact) and ~908 MiB (an emulated-cross-arch-measurement artifact,
+  from measuring an amd64 image on an arm64 Mac) — see "Why two
+  variants" above for the full history. **Idle memory on a real
+  Supervisor install: 134.5 MiB resident.**
 - **`init: false`**: the upstream image already supervises itself via
   s6-overlay and expects to own PID 1. Each add-on's own `ENTRYPOINT` is
   `run.sh`, which does the options.json → env translation and then
@@ -143,14 +181,22 @@ equivalent).
 
 ## What's verified vs. not
 
-Verified locally with real `docker build` + `docker run` on this
-machine — **this Mac is arm64 (Apple Silicon)**, not amd64 (an earlier
-report's error, corrected here). The deployment target for anyone
-installing this is amd64 or arm64 hardware of their own; both were built
-with explicit `--platform` flags via `docker buildx` and run-tested
-(amd64 via Rosetta/QEMU on this host — functionally faithful, not a
-performance benchmark). See each add-on's `DOCS.md` for exact commands
-and full output.
+Two independent verification passes went into this repo:
+
+1. **Local `docker build`/`docker run` on an arm64 Mac** (Apple Silicon —
+   an earlier report's "amd64 host" was an error, corrected here), both
+   archs built with explicit `--platform` flags via `docker buildx` and
+   run-tested. Reliable for *functional* correctness (does it boot, does
+   login work, does a token reach the process) — **not** reliable for
+   *image size* on the amd64 target, since amd64 images on this host are
+   QEMU/Rosetta-emulated and only partially materialized (see "Why two
+   variants" above). See each add-on's `DOCS.md` for exact commands and
+   full output.
+2. **A real Supervisor install on a native amd64 HAOS guest** (catlab):
+   the full `hermes-gateway` add-on, built on-device by Supervisor from
+   this published repo, confirmed installed, started, and resident at
+   134.5 MiB — the strongest evidence in this repo, and the one to trust
+   over any locally-measured number if they ever disagree.
 
 Both variants: build on both archs and boot cleanly; `hermes-gateway*`
 starts with zero config and rejects `api_server_enabled: true` with no
@@ -162,10 +208,12 @@ login round-trip (200 + cookies / 401) with real credentials, and
 persists `HERMES_HOME=/data` correctly; the dashboard session secret
 survives a restart.
 
-**Not verified** (explicitly out of scope for this task):
+**Not verified**:
 
-- Actual install/run on a live HAOS Supervisor — plain `docker
-  build`/`docker run` only.
+- `hermes-gateway-lite` and both `hermes-agent*` add-ons have not been
+  installed on a live Supervisor (only `hermes-gateway`, the full
+  variant, has — see above). Everything else in this bullet list was
+  local `docker build`/`docker run` testing only.
 - Real Telegram/Discord/Slack/WhatsApp/Email credentials — only a
   deliberately fake Telegram token was used.
 - `ingress: true` for either `hermes-agent` variant — see their `DOCS.md`
