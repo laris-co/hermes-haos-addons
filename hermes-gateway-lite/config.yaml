@@ -9,12 +9,13 @@ description: >-
   Playwright, no Docker-in-Docker code-exec sandbox (code-exec tools run
   directly in this container instead — a real security tradeoff, not a
   free lunch, see README.md), no baked-in messaging SDKs (those
-  lazy-install on first real use). ~250 MiB vs. the full hermes-gateway
-  add-on's ~908 MiB — a real but modest difference. hermes-gateway (no
-  "lite" suffix) is the recommended default for most people: it uses
-  upstream's own published, tested Docker image. Install this instead
-  only if the size/memory difference genuinely matters for your
-  hardware, and you accept the TERMINAL_ENV=local tradeoff below.
+  lazy-install on first real use). Natively measured on amd64: ~659 MB
+  vs. the full hermes-gateway add-on's ~2.68 GB — a real ~4.07x
+  difference. hermes-gateway (no "lite" suffix) is the recommended
+  default for most people: it uses upstream's own published, tested
+  Docker image. Install this instead only if the size/memory difference
+  genuinely matters for your hardware, and you accept the
+  TERMINAL_ENV=local tradeoff below.
 url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-gateway-lite"
 # Both archs genuinely built and run-tested on this machine (2026-08-24):
 # `docker buildx build --platform linux/amd64` and `linux/arm64`, both

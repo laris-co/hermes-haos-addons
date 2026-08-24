@@ -12,8 +12,10 @@ description: >-
   on PyPI), but no Playwright and no provider extras, and code-exec tools
   (including the embedded Chat tab's) run directly in this container
   instead of upstream's sandboxed backend — a real security tradeoff, not
-  a free lunch, see README.md. ~189 MiB vs. the full hermes-agent add-on's
-  ~908 MiB — a real but modest difference. hermes-agent (no "lite"
+  a free lunch, see README.md. Its sibling hermes-gateway-lite, natively
+  measured on amd64, is ~659 MB vs. the full variant's ~2.68 GB — a real
+  ~4.07x difference (this add-on's own image size wasn't independently
+  re-measured on native hardware). hermes-agent (no "lite"
   suffix) is the recommended default for most people: it uses upstream's
   own published, tested Docker image. Install this instead only if the
   size/memory difference genuinely matters for your hardware, and you

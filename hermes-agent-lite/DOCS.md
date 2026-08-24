@@ -202,7 +202,7 @@ Repeated on the amd64 (QEMU) image with the same result (200 OK login,
 container logged "→ Using web dist from HERMES_WEB_DIST:
 /opt/hermes-web/web_dist").
 
-### 5. Idle memory (amd64, target arch, via QEMU)
+### 5. Idle memory (amd64, target arch, via QEMU — emulated, not native)
 
 ```
 $ docker stats <container> --no-stream --format '{{.MemUsage}}'
@@ -211,11 +211,23 @@ $ docker exec <container> sh -c 'grep VmRSS /proc/1/status'
 VmRSS:  158432 kB
 ```
 For comparison, `hermes-agent` (the full, wrapped-image variant)
-measured ~172 MiB container memory under the same test (real login,
-same idle wait) — real, but only about 1.25x higher, not a dramatic gap.
-Image size is the bigger, more genuine difference: ~189 MiB here vs.
-~908 MiB for the full variant (measured with `docker image inspect`,
-correcting an earlier draft's inflated multi-GB figure).
+measured ~172 MiB container memory under the same (also emulated) test.
+**Both idle-memory figures here are emulated, not native — treat as
+directional only.** The one trustworthy idle-memory data point in this
+whole repo is `hermes-gateway`'s real Supervisor install on catlab:
+134.5 MiB resident. Neither `hermes-agent` nor `hermes-agent-lite` has
+been installed on a live Supervisor.
+
+Image size is the more clearly established difference between variants,
+but even here: the ~189 MiB figure above for this add-on is an emulated
+number, not independently confirmed on native hardware (see §2 above).
+What IS confirmed on native hardware: `hermes-gateway`'s wrapped image
+is ~2.68 GB and `hermes-gateway-lite`'s minimal image is ~659 MB, a real
+~4.07x gap. This add-on and `hermes-agent` (the full variant) are
+presumed to sit at a similar order of magnitude and similar ratio, since
+both add-on families share their respective base images/build
+approaches, but that's an inference, not a direct native measurement of
+this specific image.
 
 ### 6. Session secret survives a restart (unchanged behavior, re-verified)
 

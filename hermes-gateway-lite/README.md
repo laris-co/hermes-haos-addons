@@ -6,13 +6,13 @@
 > runs (or is tricked into running, e.g. via prompt injection from a
 > message it receives) a destructive shell command, there is no
 > container boundary between "the agent's sandbox" and this add-on's own
-> filesystem/`/data`. This is the price of the ~250 MiB image size below —
-> and that price buys less than it might sound: the full variant is
-> ~908 MiB, not multiple gigabytes (see the repo README for the corrected
-> measurement history). **Unless the size difference genuinely matters
-> for your hardware, install [`hermes-gateway`](../hermes-gateway/) (no
-> "lite" suffix) instead** — it wraps Nous Research's own published,
-> tested Docker image, and is the recommended default. See
+> filesystem/`/data`. This is the price of the ~659 MB image size below
+> (measured natively on amd64 — see the repo README for why this repo's
+> numbers went through three revisions before landing here). **Unless
+> the size difference genuinely matters for your hardware, install
+> [`hermes-gateway`](../hermes-gateway/) (no "lite" suffix) instead** —
+> it wraps Nous Research's own published, tested Docker image (~2.68 GB,
+> also natively measured), and is the recommended default. See
 > [`DOCS.md`](DOCS.md) for the full writeup, not just this warning.
 
 Runs [Hermes Agent](https://github.com/NousResearch/hermes-agent)'s
@@ -28,12 +28,14 @@ repository — see the [repo README](../README.md) for the full picture:
 **Minimal profile**: built fresh from pinned upstream source instead of
 wrapping upstream's published Docker image — no Playwright, no Node, no
 baked-in provider/messaging extras (they lazy-install on first real
-use). Measured image size is **~250 MiB**, vs. the full `hermes-gateway`
-add-on's **~908 MiB** (measured with `docker image inspect`, not the
-inflated ~3.9 GB an earlier draft of this repo reported from `docker
-images`' list view — see the repo README for the correction). See
-[`DOCS.md`](DOCS.md) for the full reasoning and the real measured
-numbers on both variants — this is a documented tradeoff, not a hidden
+use). Measured natively on amd64: **~659 MB**, vs. the full
+`hermes-gateway` add-on's **~2.68 GB** — a real ~4.07x difference. (Two
+earlier numbers for the full variant — ~3.93 GB, an overcount, then
+~908 MiB, an undercount — were both measurement artifacts from an arm64
+Mac; see the repo README for the full correction history.) See
+[`DOCS.md`](DOCS.md) for
+the full reasoning and the real measured numbers on both variants —
+this is a documented tradeoff, not a hidden
 one.
 
 ## Quick start

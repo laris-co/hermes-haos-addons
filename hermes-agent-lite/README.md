@@ -8,15 +8,15 @@
 > container boundary between "the agent's sandbox" and this add-on's own
 > filesystem/`/data`. This matters more here than for `hermes-gateway`:
 > the Chat tab is this add-on's whole point, so you will actually be
-> running agent commands through it. This is the price of the ~189 MiB
-> image size below — and that price buys less than it might sound: the
-> full variant is ~908 MiB, not multiple gigabytes (see the repo README
-> for the corrected measurement history). **Unless the size difference
-> genuinely matters for your hardware, install
-> [`hermes-agent`](../hermes-agent/) (no "lite" suffix) instead** — it
-> wraps Nous Research's own published, tested Docker image, and is the
-> recommended default. See [`DOCS.md`](DOCS.md) for the full writeup,
-> not just this warning.
+> running agent commands through it. This is the price of a smaller
+> image (the sibling `hermes-gateway-lite`, natively measured, is ~659 MB
+> against the full variant's ~2.68 GB — a real ~4.07x difference; this
+> add-on's own image wasn't independently re-measured on native
+> hardware, see `DOCS.md`). **Unless the size difference genuinely
+> matters for your hardware, install [`hermes-agent`](../hermes-agent/)
+> (no "lite" suffix) instead** — it wraps Nous Research's own published,
+> tested Docker image, and is the recommended default. See
+> [`DOCS.md`](DOCS.md) for the full writeup, not just this warning.
 
 Runs [Hermes Agent](https://github.com/NousResearch/hermes-agent)'s
 **dashboard** (`hermes dashboard --host 0.0.0.0 --port 9119`): a web UI
@@ -43,12 +43,14 @@ repository — see the [repo README](../README.md) for the full picture:
 **Minimal profile**: like `hermes-gateway-lite`, this is built from
 pinned upstream source, not a wrap of upstream's published Docker image.
 The frontend still has to be built (no prebuilt frontend ships on
-PyPI), but without Playwright or any provider extras — measured image
-size is **~189 MiB**, vs. the full `hermes-agent` add-on's **~908 MiB**
-(measured with `docker image inspect`, not the inflated multi-GB figure
-an earlier draft of this repo reported — see the repo README for the
-correction). See [`DOCS.md`](DOCS.md) for the reasoning and the real measured
-numbers on both variants.
+PyPI), but without Playwright or any provider extras. Its sibling
+`hermes-gateway-lite`, natively measured on amd64, is **~659 MB** versus
+the full variant's **~2.68 GB** (a real ~4.07x difference) — this
+add-on's own image size wasn't independently re-measured on native
+hardware and is expected to be in the same range. See
+[`DOCS.md`](DOCS.md) for the reasoning and the real measured numbers on
+both variants, including exactly which numbers are natively confirmed
+and which aren't.
 
 ## Quick start
 
