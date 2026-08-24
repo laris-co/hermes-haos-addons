@@ -2,9 +2,11 @@
 # shellcheck shell=sh
 #
 # HAOS options.json -> hermes env translation shim for the dashboard.
-# Runs as PID 1 (see Dockerfile ENTRYPOINT). Mirrors hermes-gateway/run.sh
-# — see that file for the general design note on why python3 instead of
-# jq.
+# Runs as PID 1 under Supervisor's own init (config.yaml sets init: true
+# — no bundled supervisor in this minimal image). Mirrors
+# hermes-gateway/run.sh — see that file for the general design note on
+# why python3 instead of jq, and why we exec straight into `hermes`
+# instead of an upstream entrypoint script.
 set -eu
 
 OPTIONS_FILE="/data/options.json"
@@ -70,5 +72,5 @@ if [ -n "$public_url" ]; then
     export HERMES_DASHBOARD_PUBLIC_URL="$public_url"
 fi
 
-echo "[hermes-agent] handing off to upstream entrypoint: $*"
-exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"
+echo "[hermes-agent] exec: hermes $*"
+exec hermes "$@"

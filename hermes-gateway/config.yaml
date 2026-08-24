@@ -1,24 +1,31 @@
 name: "Hermes Gateway"
-version: "1.0.0"
+version: "2.0.0"
 slug: "hermes_gateway"
 description: >-
   Nous Research's Hermes Agent, running as the messaging gateway
   (Telegram, Discord, Slack, WhatsApp, Email, cron) plus an optional
-  OpenAI-compatible API server. Wraps the upstream nousresearch/hermes-agent
-  Docker image unmodified — this add-on only translates Supervisor options
-  into the environment variables hermes already reads.
+  OpenAI-compatible API server. Built as a MINIMAL profile from pinned
+  upstream source — no Playwright, no Docker-in-Docker code-exec sandbox,
+  no baked-in messaging SDKs (those lazy-install on first real use). See
+  DOCS.md for why, and for the real measured image size / idle memory.
 url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-gateway"
-# Upstream publishes native amd64 + arm64 images (see docker.yml build matrix:
-# arch: amd64 -> ubuntu-latest, arch: arm64 -> ubuntu-24.04-arm — both real
-# native runners, not qemu). Our added layer is a shell script + chmod, so it
-# is arch-agnostic on top of either base. i386/armv7/armhf are NOT published
-# upstream and are deliberately left off this list.
+# Both archs genuinely built and run-tested on this machine (2026-08-24):
+# `docker buildx build --platform linux/amd64` and `linux/arm64`, both
+# --load'ed and both booted `gateway run` to a clean "Up" state (amd64
+# via QEMU emulation on this arm64 build host; arm64 natively). armhf/
+# armv7/i386 are Supervisor-deprecated (sunset 2025-05) and not attempted.
 arch:
   - amd64
   - aarch64
 startup: services
 boot: manual
-init: false
+# This image has no bundled init/supervisor of its own (see Dockerfile —
+# it's a single `hermes` process, not upstream's s6-overlay image).
+# Supervisor's own init (docker run --init) is what reaps zombies and
+# forwards signals here, so init: true (the default) is correct — do NOT
+# copy the init: false used by this add-on's v1 design, which wrapped a
+# *different* image that already shipped its own PID-1 supervisor.
+init: true
 hassio_api: false
 homeassistant_api: false
 host_network: false
@@ -45,6 +52,13 @@ options:
   gateway_allow_all_users: false
   api_server_enabled: false
   api_server_key: ""
+  # 0 = leave unset, hermes uses its own internal default (see DOCS.md
+  # for the exact defaults each of these overrides).
+  max_iterations: 0
+  agent_timeout_seconds: 0
+  agent_timeout_warning_seconds: 0
+  session_stall_timeout_seconds: 0
+  restart_drain_timeout_seconds: 0
   extra_env: []
 schema:
   openrouter_api_key: password?
@@ -58,5 +72,10 @@ schema:
   gateway_allow_all_users: bool
   api_server_enabled: bool
   api_server_key: password?
+  max_iterations: int(0,)
+  agent_timeout_seconds: int(0,)
+  agent_timeout_warning_seconds: int(0,)
+  session_stall_timeout_seconds: int(0,)
+  restart_drain_timeout_seconds: int(0,)
   extra_env:
     - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

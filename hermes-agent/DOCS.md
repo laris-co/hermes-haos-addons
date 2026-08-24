@@ -1,19 +1,80 @@
 # Hermes Agent (dashboard) — details
 
+## v2: minimal profile
+
+Same redirect as `hermes-gateway` — see that add-on's `DOCS.md` for the
+full rationale (target guest is 2048 MB with a hard ceiling, ~1 GB free;
+upstream's published image doesn't fit that budget). Read this file
+first if you haven't — it isn't repeated here.
+
+The dashboard is the harder half of that redirect: **it genuinely needs
+a built frontend**, unlike the gateway. Confirmed the PyPI wheel does
+NOT bundle it — `pyproject.toml`'s `[tool.setuptools.package-data]`
+only ships `hermes_cli/observability/schemas/*.json` and
+`gateway/assets/**/*`, nothing under `hermes_cli/web_dist`. So this
+add-on still runs a Node build stage, but a much narrower one than
+upstream's Dockerfile:
+
+- Builds **only** `web/` (the dashboard SPA) and `ui-tui/` (the
+  prebuilt Chat-tab bundle — see below for why this one still matters).
+- Does **not** install Playwright (that's a *runtime* dependency of the
+  agent's Python-side browser tool, not something the frontend build
+  needs at all).
+- Does **not** install the matrix/bedrock/azure/hindsight/anthropic/otlp
+  Python extras — same reasoning as `hermes-gateway`.
+- Prunes `apps/*` (except `apps/shared`, needed as a `file:` workspace
+  dependency of `web/package.json`) and `tests-js` before `npm install`
+  resolves the root `package.json`'s `workspaces` array — otherwise npm
+  would also try to install `apps/desktop` (Electron — hundreds of MB,
+  irrelevant to a headless add-on).
+
+## Why build BOTH halves from the same pinned git commit (not PyPI + git)
+
+`hermes-gateway` uses `pip install -e` from the pinned commit because a
+plain `pip install hermes-agent` from PyPI would have worked just as
+well there (gateway needs no frontend, so there's nothing to keep in
+sync). The dashboard is different: mixing a PyPI-published Python
+package (currently `0.19.0`) with a **separately** git-cloned frontend
+build (from commit `d1afa1605`, whose `pyproject.toml` says `0.19.1`)
+would build two halves of the same app from two different, unrelated
+points in history — a real risk of API drift between the SPA's
+`fetch()` calls and the backend's actual routes. Upstream's own git tags
+are CalVer (`v2026.6.19`) and don't map 1:1 onto PyPI's SemVer, so there
+is no obvious way to find "the git commit that matches PyPI 0.19.0"
+without deeper archaeology. Building both the frontend and the backend
+from the **same** pinned commit sidesteps the whole question — it's
+guaranteed internally consistent even though it isn't the literal PyPI
+release.
+
 ## What this wraps
 
-`FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495`
-(same pin as `hermes-gateway` — see that add-on's `DOCS.md` for the
-multi-arch verification), unmodified, plus:
+Same commit pin as `hermes-gateway`: `d1afa16053a3777849c2b5465d59a0147b2172f9`
+(verified reachable via `git fetch --depth 1 origin <sha>` from the
+public repo). Base image: `python:3.13-slim-trixie` for the final stage,
+`node:26-bookworm-slim` for the (discarded) frontend builder stage —
+matching upstream's own Node version choice, though the repo's actual
+`engines.node` floor is `>=22.22.0`.
 
-- `run.sh` — reads `/data/options.json`, exports the matching env vars,
-  auto-generates/persists a session secret if none was supplied, then
-  `exec`s `/opt/hermes/docker/entrypoint-dispatch.sh dashboard --host
-  0.0.0.0 --port 9119 --no-open`.
-- `HERMES_HOME=/data` / `HERMES_WRITE_SAFE_ROOT=/data` — same
-  persistence redirect as `hermes-gateway`.
+Same editable-install requirement and reasoning as `hermes-gateway`
+(upstream's `setup.py` refuses a normal wheel/sdist build) — `pip
+install -e /opt/hermes-src`, no extras. The built frontend lands at
+`/opt/hermes-web/web_dist` and `/opt/hermes-web/ui-tui`, deliberately
+**outside** `/opt/hermes-src` so a future re-install of the Python
+package can't accidentally clobber them; `HERMES_WEB_DIST` /
+`HERMES_TUI_DIR` point there explicitly.
+
+No custom SQLite build here either — same self-mitigation via
+`journal_mode=DELETE` as `hermes-gateway` (see that add-on's DOCS.md for
+the actual log line). Same `TERMINAL_ENV=local` tradeoff for the
+embedded Chat tab's agent tool calls — see that add-on's DOCS.md for the
+full writeup; it applies identically here since the Chat tab runs the
+same agent loop as the gateway does.
 
 ## Option → env var mapping
+
+Unchanged from v1 — this is app-level configuration, not Docker-image
+plumbing, so the redirect from wrapping upstream's image to building our
+own didn't touch it:
 
 | Option | Env var |
 |---|---|
@@ -22,130 +83,108 @@ multi-arch verification), unmodified, plus:
 | `session_secret` (or the auto-generated `/data/.dashboard_secret`) | `HERMES_DASHBOARD_BASIC_AUTH_SECRET` |
 | `public_url` | `HERMES_DASHBOARD_PUBLIC_URL` |
 
-These are upstream's own documented env vars for the bundled
-zero-infrastructure `basic` dashboard-auth provider — see
-`plugins/dashboard_auth/basic/__init__.py` in the hermes-agent source
-(`HERMES_DASHBOARD_BASIC_AUTH_USERNAME` / `_PASSWORD` / `_SECRET`).
-
 ## Why `username`/`password` are required with no default
 
+Unchanged from v1 — see that reasoning below, still verified against
+this rebuilt image (§2).
+
 Upstream's dashboard **refuses to bind a non-loopback host without a
-registered auth provider** — verified directly (see below): binding
-`0.0.0.0:9119` with no credentials configured produces a clear
-`Refusing to bind dashboard to 0.0.0.0 — the auth gate engages on
-non-loopback binds...` error and the process exits.
-
-Given that, the only two sane choices for `config.yaml` are:
-
-1. `options: {username: "", password: ""}` + `schema: {username: str?,
-   password: password?}` — technically valid, but an empty string
-   satisfies `str?`, so Supervisor would let the add-on save/start with
-   a blank password. hermes itself would still refuse to bind — so this
-   *does* fail loud rather than silently — but it's the same shape of
-   bug the packaging brief called out (Advanced SSH's empty required
-   password), just caught one layer down instead of zero.
-2. `options: {username: null, password: null}` + `schema: {username:
-   str, password: password}` (no `?`) — what this add-on actually uses.
-   Per Home Assistant's own add-on config docs: *"Set values to `null`
-   or omit them to make options mandatory."* This makes Supervisor treat
-   the fields as genuinely unset and required, blocking Save/Start in
-   the UI until both are filled in — the failure surfaces at
-   configuration time, in the Supervisor UI, instead of at container
-   boot in the log.
-
-`run.sh` also checks both are non-empty before exporting anything, as a
-second line of defense, with a message naming the Supervisor option
-(`username`/`password` in "this add-on's Configuration tab") rather than
-just the env var — since a HAOS user configuring this through the UI has
-never seen `HERMES_DASHBOARD_BASIC_AUTH_USERNAME`.
+registered auth provider**. The `options: null` + non-optional `schema`
+type pattern (not an empty-string default) is what makes Supervisor
+treat the fields as genuinely required and block Save/Start on a blank
+value — per Home Assistant's own add-on config docs: *"Set values to
+`null` or omit them to make options mandatory."*
 
 ## Why no `ingress: true`
 
-Investigated and rejected with a real reproduction, not a guess:
+Unchanged from v1, and **re-verified against this rebuilt image** on
+2026-08-24 (byte-identical `/login` response with and without
+`X-Forwarded-Prefix` set — this is app-level behavior in
+`hermes_cli/web_server.py` / the built SPA, not something the Docker
+image rebuild could have changed). See the full writeup and the
+Home-Assistant-ingress-specific test-suite evidence in the v1 history of
+this file (same reasoning, unchanged): HA's Supervisor sends
+`X-Ingress-Path`, hermes only reads `X-Forwarded-Prefix`, and the
+basic-auth login page hardcodes root-relative paths regardless of either
+header.
 
-1. Home Assistant Supervisor's ingress proxy injects `X-Ingress-Path`
-   (confirmed via Home Assistant's own developer docs: *"Ingress adds a
-   request header `X-Ingress-Path` which may be filtered to obtain the
-   base URL."*).
-2. hermes's dashboard path-prefix logic
-   (`hermes_cli/dashboard_auth/prefix.py`, exercised by
-   `tests/hermes_cli/test_dashboard_auth_prefix.py` upstream) only reads
-   `X-Forwarded-Prefix`. The upstream test suite is explicitly aware of
-   Home Assistant — it has a test literally named
-   `test_home_assistant_ingress_prefix_with_subpath_is_accepted` and
-   hardcodes the exact HA-shaped prefix
-   (`/api/hassio_ingress/<64-char-token>/dashboard`) — but tests it via
-   the `X-Forwarded-Prefix` header, not `X-Ingress-Path`. Nothing in the
-   codebase translates one into the other.
-3. Even if header naming were fixed (e.g. by a local nginx shim
-   translating `X-Ingress-Path` → `X-Forwarded-Prefix`), the
-   **unauthenticated basic-auth login page** — the one this add-on
-   actually uses, since OAuth needs an external Nous Portal account — is
-   a static HTML/JS blob that hardcodes root-relative paths regardless
-   of any header:
-   ```html
-   fetch('/auth/password-login', { ... })
-   window.location.assign((data && data.next) || '/')
-   src="/fonts/Collapse-Regular.woff2"
-   ```
-   Confirmed by diffing two real responses from a running container —
-   one with `X-Forwarded-Prefix: /api/hassio_ingress/testtoken12345`
-   set, one without. **Byte-identical.** The login page does not vary at
-   all based on that header.
+## Verification log (2026-08-24)
 
-Net effect under `ingress: true`: the login page would load fine (HA's
-proxy forwards the initial GET), but submitting the form would `POST` to
-`<ingress-root>/auth/password-login` — past the ingress mount prefix —
-which 404s against Home Assistant's own frontend routing instead of
-reaching the add-on. A direct port sidesteps this completely and is
-provably correct (see the login round-trip test below).
+Build host: this Mac is **arm64** (Apple Silicon) — see
+`hermes-gateway/DOCS.md` for the same correction. Target guest is amd64.
 
-## Verification log (2026-08-24, Docker Desktop 29.6.2 on macOS, amd64 host)
+### 1. Builds fast — real minutes, not upstream's 15-45
 
-### 1. Refuses to start with no credentials
+```
+$ time docker build -t local/hermes-agent-min:1.0.0 .
+...
+real   0m35.9s
+```
+(First build; Docker layer caching makes subsequent builds faster still.)
+
+### 2. Both archs build and boot
+
+```
+$ docker buildx build --platform linux/amd64 -t local/hermes-agent-amd64:2.0.0 --load .
+$ docker buildx build --platform linux/arm64 -t local/hermes-agent-arm64:2.0.0 --load .
+$ docker image inspect local/hermes-agent-amd64:2.0.0 --format '{{.Size}} {{.Architecture}}'
+198425451 amd64
+$ docker image inspect local/hermes-agent-arm64:2.0.0 --format '{{.Size}} {{.Architecture}}'
+197280509 arm64
+```
+**~188-189 MiB real image size** — smaller than the gateway's ~250 MiB
+image despite including the built frontend, because it doesn't need
+`nemo-relay`'s platform-marker pulls the same way and the frontend
+assets themselves are small (a few MB of minified JS/CSS) compared to
+Python dependency wheels. Both real, both built with explicit
+`--platform`, no QEMU-vs-native ambiguity in the numbers.
+
+### 3. Refuses to start with no credentials (same as v1)
 
 ```
 $ echo '{}' > options.json
-$ docker run --name ag-noauth -v .../data:/data local/hermes-agent-amd64:1.0.0
+$ docker run --name ag-noauth -v .../data:/data local/hermes-agent-min:1.0.0
 [hermes-agent] ERROR: username and password must both be set in this add-on's Configuration tab.
 [hermes-agent] The dashboard binds 0.0.0.0 and hermes refuses to serve an unauthenticated public dashboard.
 $ docker inspect ag-noauth --format '{{.State.ExitCode}}'
 1
 ```
 
-### 2. Starts clean and serves a real login flow with credentials
+### 4. Real login round trip, on both the native build and amd64-via-QEMU
 
 ```
 $ echo '{"username": "admin", "password": "S3cretPass!"}' > options.json
-$ docker run -d -p 19120:9119 -v .../data:/data local/hermes-agent-amd64:1.0.0
-$ curl -i http://127.0.0.1:19120/
+$ docker run -d -p 19121:9119 -v .../data:/data local/hermes-agent-min:1.0.0
+$ curl -i http://127.0.0.1:19121/
 HTTP/1.1 302 Found
 location: /login?next=%2F
 
-$ curl -i -X POST http://127.0.0.1:19120/auth/password-login \
-    -H 'Content-Type: application/json' \
+$ curl -i -X POST http://127.0.0.1:19121/auth/password-login \
     -d '{"provider":"basic","username":"admin","password":"S3cretPass!","next":""}'
 HTTP/1.1 200 OK
 set-cookie: hermes_session_at=...; HttpOnly; Max-Age=43200; Path=/; SameSite=lax
-set-cookie: hermes_session_rt=...; HttpOnly; Max-Age=2592000; Path=/; SameSite=lax
 {"ok":true,"next":"/"}
 
-$ curl -i -X POST http://127.0.0.1:19120/auth/password-login \
-    -H 'Content-Type: application/json' \
-    -d '{"provider":"basic","username":"admin","password":"WRONG","next":""}'
-HTTP/1.1 401 Unauthorized
+$ curl -b cookies.txt http://127.0.0.1:19121/
+HTTP/1.1 200            # authenticated page, real SPA bundle:
+<script type="module" crossorigin src="/assets/index-DzvhJ1Gp.js">
+```
+The served JS bundle hash (`index-DzvhJ1Gp.js`) confirms this is the
+frontend **this Dockerfile built**, not a cached/vendored copy.
+Repeated on the amd64 (QEMU) image with the same result (200 OK login,
+container logged "→ Using web dist from HERMES_WEB_DIST:
+/opt/hermes-web/web_dist").
+
+### 5. Idle memory (amd64, target arch, via QEMU)
+
+```
+$ docker stats <container> --no-stream --format '{{.MemUsage}}'
+137.2MiB / 7.748GiB
+$ docker exec <container> sh -c 'grep VmRSS /proc/1/status'
+VmRSS:  158432 kB
 ```
 
-### 3. `/data` (HERMES_HOME) is genuinely populated
-
-```
-$ ls .../data
-.dashboard_secret  .env  audio_cache  backups  cache  config.yaml  cron
-home  hooks  image_cache  lazy-packages  logs  memories  options.json
-pairing  plans  platforms  ...
-```
-
-### 4. Session secret survives a restart
+### 6. Session secret survives a restart (unchanged behavior, re-verified)
 
 ```
 $ SECRET_BEFORE=$(cat .../data/.dashboard_secret)
@@ -155,19 +194,22 @@ $ [ "$SECRET_BEFORE" = "$SECRET_AFTER" ] && echo PASS
 PASS
 ```
 
-### 5. Base image / multi-arch build
+### 7. `/data` (HERMES_HOME) genuinely populated
 
-Same as `hermes-gateway` — see that add-on's `DOCS.md` §1-2. Both
-`local/hermes-agent-amd64:1.0.0` and `local/hermes-agent-aarch64:1.0.0`
-were built and the arm64 image was confirmed
-(`docker image inspect --format '{{.Architecture}}'` → `arm64`) and run
-under QEMU emulation.
+Same result as v1 — `config.yaml`, `sessions/`, `.dashboard_secret`,
+`memories/`, etc. all land under the mounted `/data` volume.
 
 ## Not verified
 
-- No live HAOS Supervisor install, and therefore no real end-to-end test
-  of the direct-port networking through Supervisor's actual bridge
-  network (only a plain `docker run -p` port publish was tested).
-- OAuth-based dashboard auth (the alternative to `username`/`password`)
-  was not implemented or tested — it needs an external Nous Portal
-  account and was out of scope for a zero-infra default.
+- No live HAOS Supervisor install — plain `docker build`/`docker run`
+  only, per the task's constraint not to touch the live guest.
+- OAuth-based dashboard auth was not implemented or tested (needs an
+  external Nous Portal account).
+- The embedded Chat tab's actual `/api/pty` WebSocket round trip (a
+  live terminal session) was not driven end-to-end — verified the
+  ui-tui bundle builds and is served (`ui-tui/dist/entry.js`, 3.5 MB per
+  the build log), and verified the same code path in the v1 wrapped
+  image worked, but did not re-drive a live PTY session against this
+  specific rebuild.
+- Long-running memory behavior under actual chat use (only idle-after-
+  boot was measured).

@@ -21,6 +21,15 @@ This is one of two add-ons in this repository — see the
 [repo README](../README.md) for how it relates to `hermes-gateway`
 (the messaging-platform side).
 
+**Minimal profile**: like `hermes-gateway`, this is built from pinned
+upstream source, not a wrap of upstream's published Docker image. The
+frontend still has to be built (no prebuilt frontend ships on PyPI), but
+without Playwright or any provider extras — measured image size is
+**~189 MiB**, and the agent's code-exec tool (including the embedded
+Chat tab's tool calls) runs in-container (`TERMINAL_ENV=local`) rather
+than upstream's sandboxed Docker-in-Docker backend. See
+[`DOCS.md`](DOCS.md) for the reasoning and the real measured numbers.
+
 ## Quick start
 
 1. Set **Username** and **Password** in this add-on's Configuration tab
