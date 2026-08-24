@@ -1,30 +1,22 @@
 name: "Hermes Agent"
-version: "2.0.0"
+version: "1.0.0"
 slug: "hermes_agent"
 description: >-
   Nous Research's Hermes Agent, running as `hermes dashboard` — the web UI
   that includes an embedded PTY-backed chat tab (the same interactive agent
   you'd otherwise only get from the `hermes` terminal command). This is the
   browser-reachable half of Hermes; see hermes-gateway for the messaging
-  (Telegram/Discord/Slack/etc.) side. Built as a MINIMAL profile from
-  pinned upstream source — the frontend is built fresh (no prebuilt
-  frontend ships on PyPI), but no Playwright and no provider extras. See
-  DOCS.md for the real measured image size / idle memory and the
-  TERMINAL_ENV=local tradeoff.
+  (Telegram/Discord/Slack/etc.) side. Wraps the upstream
+  nousresearch/hermes-agent Docker image unmodified.
 url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-agent"
-# Both archs genuinely built and run-tested on this machine (2026-08-24) —
-# see hermes-gateway/config.yaml for the same note (full login round trip
-# verified on both amd64-via-QEMU and native arm64).
+# See hermes-gateway/config.yaml for the arch-claim rationale — same
+# upstream image, same digest pin, both archs built natively upstream.
 arch:
   - amd64
   - aarch64
 startup: application
 boot: manual
-# No bundled init/supervisor in this image (single `hermes dashboard`
-# process — see Dockerfile). Supervisor's own init reaps zombies and
-# forwards signals, so init: true is correct here, unlike the v1 design
-# that wrapped upstream's own s6-overlay image.
-init: true
+init: false
 hassio_api: false
 homeassistant_api: false
 host_network: false

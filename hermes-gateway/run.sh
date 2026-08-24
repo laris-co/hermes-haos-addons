@@ -1,19 +1,16 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# HAOS options.json -> hermes env translation shim. Runs as PID 1 under
-# Supervisor's own init (config.yaml sets init: true — this minimal
-# image has no bundled supervisor of its own, unlike the v1 design that
-# wrapped upstream's s6-overlay image). Reads Supervisor's
-# /data/options.json, exports the env vars hermes's gateway already
-# knows how to read (see nousresearch/hermes-agent .env.example), then
-# execs straight into `hermes` so it becomes the real PID 1 / process
-# Supervisor's init actually supervises (no extra shell layer sitting
-# between init and the app).
+# HAOS options.json -> hermes env translation shim. Runs as PID 1 (see
+# Dockerfile ENTRYPOINT). Reads Supervisor's /data/options.json, exports
+# the env vars hermes's gateway already knows how to read (see
+# nousresearch/hermes-agent .env.example), then execs straight into the
+# upstream image's own entrypoint so its s6-overlay supervision tree
+# takes over PID 1 exactly as it would under `docker run`.
 #
-# We use python3 (already present — this is the same interpreter
-# `hermes` itself runs under) instead of jq, so this shim adds no new
-# packages/layers beyond this one script.
+# We use python3 (already baked into the base image for hermes itself)
+# instead of jq, so this shim adds no new packages/layers beyond this
+# one script.
 set -eu
 
 OPTIONS_FILE="/data/options.json"
@@ -68,25 +65,6 @@ export_if_set SLACK_ALLOWED_USERS "$(get_opt slack_allowed_users)"
 if [ "$(get_opt gateway_allow_all_users)" = "true" ]; then
     export GATEWAY_ALLOW_ALL_USERS=true
 fi
-
-# --- Optional tunables (gateway/run.py) ---
-# 0 (the default) means "leave unset, let hermes use its own internal
-# default" — these are genuine runtime knobs, not required config, so a
-# 0 default is safe rather than a magic sentinel that could collide with
-# a real user-intended value.
-export_if_nonzero() {
-    env_name="$1"
-    value="$2"
-    case "$value" in
-        ""|0) return 0 ;;
-    esac
-    export "$env_name=$value"
-}
-export_if_nonzero HERMES_MAX_ITERATIONS "$(get_opt max_iterations)"
-export_if_nonzero HERMES_AGENT_TIMEOUT "$(get_opt agent_timeout_seconds)"
-export_if_nonzero HERMES_AGENT_TIMEOUT_WARNING "$(get_opt agent_timeout_warning_seconds)"
-export_if_nonzero HERMES_SESSION_STALL_TIMEOUT "$(get_opt session_stall_timeout_seconds)"
-export_if_nonzero HERMES_RESTART_DRAIN_TIMEOUT "$(get_opt restart_drain_timeout_seconds)"
 
 # --- Optional OpenAI-compatible API server ---
 # Off by default (verified: `hermes gateway run` starts cleanly with no
@@ -155,5 +133,5 @@ PY
     fi
 fi
 
-echo "[hermes-gateway] exec: hermes $*"
-exec hermes "$@"
+echo "[hermes-gateway] handing off to upstream entrypoint: $*"
+exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"
