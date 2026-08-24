@@ -5,6 +5,19 @@
 # Runs as PID 1 (see Dockerfile ENTRYPOINT). Mirrors hermes-gateway/run.sh
 # — see that file for the general design note on why python3 instead of
 # jq.
+#
+# NOTE what's NOT here anymore: username/password/session_secret/
+# public_url. This add-on now binds hermes to 127.0.0.1 (see Dockerfile
+# CMD) and reaches it through an in-container nginx + HA ingress (see
+# rootfs/etc/nginx/hermes-ingress.conf). hermes's own auth gate
+# (hermes_cli/web_server.py should_require_auth()) is keyed PURELY on
+# whether the bind host is loopback — not on whether credentials are
+# configured — so a username/password option here would be a dead
+# setting that LOOKS like it adds protection but has zero effect. HA's
+# own login is the auth boundary now, same as every other ingress-only
+# add-on. Don't add those options back without also making the bind
+# host configurable (and understanding that reintroduces the broken
+# root-relative login page — see DOCS.md).
 set -eu
 
 OPTIONS_FILE="/data/options.json"
@@ -31,44 +44,38 @@ print(val)
 PY
 }
 
-username="$(get_opt username)"
-password="$(get_opt password)"
-
-# Schema marks both required (options: null + schema: str/password, no
-# `?`) so Supervisor should refuse to even start the add-on with either
-# blank. We check again here anyway: schema is enforced by Supervisor at
-# save/start time, not by this container, and hermes's own dashboard
-# fails closed on an empty auth provider with a clear log line either
-# way — but naming the Supervisor option (not just the env var) here
-# gets the user to the fix faster.
-if [ -z "$username" ] || [ -z "$password" ]; then
-    echo "[hermes-agent] ERROR: username and password must both be set in this add-on's Configuration tab." >&2
-    echo "[hermes-agent] The dashboard binds 0.0.0.0 and hermes refuses to serve an unauthenticated public dashboard." >&2
-    exit 1
-fi
-
-export HERMES_DASHBOARD_BASIC_AUTH_USERNAME="$username"
-export HERMES_DASHBOARD_BASIC_AUTH_PASSWORD="$password"
-
-# --- Session secret: auto-generate and persist so restarts don't log
-# everyone out. If the operator supplied one via the session_secret
-# option, that always wins (and is NOT persisted here — it already lives
-# in Supervisor's own options.json).
-session_secret="$(get_opt session_secret)"
-if [ -z "$session_secret" ]; then
-    secret_file="/data/.dashboard_secret"
-    if [ ! -s "$secret_file" ]; then
-        python3 -c "import secrets; print(secrets.token_hex(32))" > "$secret_file"
-        chmod 600 "$secret_file"
+# --- Escape hatch: arbitrary KEY=VALUE pairs, same pattern (and same
+# regex re-validation reasoning) as hermes-gateway/run.sh.
+if [ -f "$OPTIONS_FILE" ]; then
+    extra_env="$(python3 - "$OPTIONS_FILE" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+for item in data.get("extra_env", None) or []:
+    print(item)
+PY
+)"
+    if [ -n "$extra_env" ]; then
+        old_ifs="$IFS"
+        IFS='
+'
+        for pair in $extra_env; do
+            case "$pair" in
+                [A-Za-z_]*=*)
+                    # shellcheck disable=SC2163
+                    export "$pair"
+                    ;;
+                *)
+                    echo "[hermes-agent] WARNING: ignoring malformed extra_env entry: $pair" >&2
+                    ;;
+            esac
+        done
+        IFS="$old_ifs"
     fi
-    session_secret="$(cat "$secret_file")"
-fi
-export HERMES_DASHBOARD_BASIC_AUTH_SECRET="$session_secret"
-
-public_url="$(get_opt public_url)"
-if [ -n "$public_url" ]; then
-    export HERMES_DASHBOARD_PUBLIC_URL="$public_url"
 fi
 
-echo "[hermes-agent] handing off to upstream entrypoint: $*"
+echo "[hermes-agent] handing off to upstream entrypoint: $* (dashboard bound to loopback; reachable via HA ingress only — see DOCS.md)"
 exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"

@@ -1,5 +1,5 @@
 name: "Hermes Agent"
-version: "1.0.0"
+version: "1.1.0"
 slug: "hermes_agent"
 description: >-
   Nous Research's Hermes Agent, running as `hermes dashboard` — the web UI
@@ -7,10 +7,14 @@ description: >-
   you'd otherwise only get from the `hermes` terminal command). This is the
   browser-reachable half of Hermes; see hermes-gateway for the messaging
   (Telegram/Discord/Slack/etc.) side. Wraps the upstream
-  nousresearch/hermes-agent Docker image unmodified.
+  nousresearch/hermes-agent Docker image, plus an in-container nginx that
+  makes HA ingress work — see DOCS.md for the full verified writeup,
+  including a real 101-Switching-Protocols WebSocket round trip through it.
 url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-agent"
 # See hermes-gateway/config.yaml for the arch-claim rationale — same
 # upstream image, same digest pin, both archs built natively upstream.
+# nginx-light is a tiny cross-arch-trivial Debian package, adds nothing
+# arch-specific.
 arch:
   - amd64
   - aarch64
@@ -19,64 +23,32 @@ boot: manual
 # init: false (NOT true) — this image wraps upstream's own Docker image,
 # which already ships its own s6-overlay supervisor and expects to own
 # PID 1 (see docker/entrypoint-dispatch.sh in the hermes-agent source).
-# Do not "fix" this to true: true is only correct for hermes-agent-lite
-# (the minimal add-on next door), which has no bundled supervisor of its
-# own — see that add-on's config.yaml.
+# The new nginx-ingress service (see rootfs/etc/s6-overlay/s6-rc.d/) is
+# supervised BY that same s6 tree, not by Supervisor's init — this key
+# is about who owns PID 1 in the container, unchanged by adding a
+# second supervised service. Do not "fix" this to true: true is only
+# correct for hermes-agent-lite (the minimal add-on next door), which
+# has no bundled supervisor of its own — see that add-on's config.yaml.
 init: false
 hassio_api: false
 homeassistant_api: false
 host_network: false
-# NOT using ingress: true. Verified against a running container
-# (2026-08-24) that this does not work correctly yet:
-#   - Home Assistant's Supervisor ingress proxy sends `X-Ingress-Path`.
-#   - hermes's dashboard only reads `X-Forwarded-Prefix` for path-prefix
-#     awareness (hermes_cli/dashboard_auth/prefix.py) — confirmed by its own
-#     test suite, which is explicitly written against the HA ingress prefix
-#     *format* (tests/hermes_cli/test_dashboard_auth_prefix.py references
-#     "Home Assistant Supervisor ingress prefixes") but exercises it via the
-#     X-Forwarded-Prefix header, not X-Ingress-Path.
-#   - Worse: the unauthenticated /login page hermes serves for basic-auth
-#     (the zero-infra auth mode this add-on uses) hardcodes root-relative
-#     paths (`fetch('/auth/password-login', ...)`, `/fonts/...`) in its
-#     static HTML/JS — confirmed by diffing a real response with and
-#     without an X-Forwarded-Prefix header set: byte-identical, the prefix
-#     is not honoured on this page at all. Under an ingress mount, the
-#     login *page* would load but submitting the form would POST past the
-#     ingress prefix and 404 against Home Assistant's own frontend instead
-#     of the add-on.
-# A direct port avoids all of that and is guaranteed to work. If a future
-# hermes-agent release adds real X-Ingress-Path support end-to-end
-# (including the login page), switch this to ingress: true and drop the
-# ports block below.
-ports:
-  "9119/tcp": 9119
-ports_description:
-  "9119/tcp": >-
-    Hermes dashboard web UI. Open http://<host>:9119/ and sign in with the
-    username/password configured below. Never remap this to 80 or 443 —
-    Home Assistant itself owns those on this host.
+# ingress: true — REPLACES the v1 direct-port design, verified working
+# end to end (2026-08-24), including the WebSocket upgrade the chat tab
+# depends on. See DOCS.md for the full architecture (loopback bind +
+# in-container nginx translating Host/Origin) and the real request/
+# response transcript, including a genuine HTTP/1.1 101 Switching
+# Protocols on both /api/ws and /api/pty through the whole chain with a
+# simulated HA-ingress Origin header. No `ports:` block — this add-on
+# is reachable ONLY through Home Assistant's sidebar now; there is no
+# direct-port fallback shipped alongside it (the v1 approach is
+# preserved in git history if ever needed again — see DOCS.md).
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:robot-happy
+panel_title: Hermes Agent
 options:
-  username: null
-  password: null
-  session_secret: ""
-  public_url: ""
+  extra_env: []
 schema:
-  # No safe default exists for a dashboard credential — an empty-string
-  # default would satisfy schema validation and let the add-on start with
-  # no real password (exactly the Advanced-SSH-style failure this repo
-  # was asked to avoid). Using `null` in options + a non-optional type
-  # here instead makes Supervisor treat the field as genuinely required:
-  # it will not let the add-on start until both are filled in.
-  username: str
-  password: password
-  # Optional: without this, dashboard sessions are signed with a random
-  # per-boot secret and everyone is logged out on every add-on restart.
-  # run.sh auto-generates and persists one to /data/.dashboard_secret if
-  # this is left blank, so restarts stay logged-in either way — this
-  # option exists only for operators who want to pin/rotate it themselves.
-  session_secret: password?
-  # Advanced: only needed for a reverse-proxy-behind-HAOS setup with a
-  # fixed public hostname (see hermes's dashboard.public_url docs).
-  # Leave blank for the normal http://<host>:9119/ direct-port access
-  # this add-on is built around.
-  public_url: str?
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

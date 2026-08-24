@@ -1,0 +1,59 @@
+name: "LiteLLM Proxy"
+version: "1.0.0"
+slug: "litellm"
+description: >-
+  BerriAI's LiteLLM proxy — a single OpenAI-compatible /v1 endpoint in
+  front of 100+ LLM providers (OpenAI, Anthropic, Gemini, Bedrock,
+  OpenRouter, local Ollama, ...). Point hermes-gateway's
+  openrouter_api_key-style config, Open WebUI, or anything else that
+  speaks the OpenAI API at this add-on instead of juggling per-provider
+  keys directly. Wraps BerriAI's published Docker image, pinned by
+  digest (v1.83.14-stable, satisfies >= 1.83.10 — images cosign-signed
+  since v1.83.0).
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/litellm"
+# Both archs confirmed via `docker manifest inspect` (real manifest
+# list, amd64 + arm64) — see DOCS.md. amd64 additionally confirmed by
+# actually running it.
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+# init: true — this is a single Python/uvicorn process with no bundled
+# supervisor of its own (confirmed: ENTRYPOINT is a plain shell script,
+# not an s6/tini-style init). Supervisor's own init handles zombie
+# reaping / signal forwarding.
+init: true
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# A real port: this is an API proxy other services call directly
+# (Hermes, Open WebUI, curl, ...), not a browser UI — ingress has no
+# meaning here (compare hermes-server, the same shape of add-on).
+ports:
+  "4000/tcp": 4000
+ports_description:
+  "4000/tcp": >-
+    OpenAI-compatible API (http://<host>:4000/v1). Requires the
+    Authorization: Bearer <master_key> header (or an OpenAI SDK's
+    api_key set to your master_key). Never remap this to 80 or 443 —
+    Home Assistant itself owns those on this host.
+options:
+  # No safe default exists for a proxy credential — LiteLLM ships with
+  # NO auth at all unless this is set (verified directly: /v1/models is
+  # reachable unauthenticated with no master key configured). `null` +
+  # a non-optional schema type makes Supervisor refuse Save/Start until
+  # a real key is entered, rather than letting an empty string pass
+  # schema validation and ship an unauthenticated proxy that LOOKS
+  # secured.
+  master_key: null
+  # Optional — genuinely optional, verified the proxy runs fine with no
+  # database (only needed for virtual-key/spend-tracking persistence).
+  # Not bundled in this add-on; point it at your own Postgres instance.
+  database_url: ""
+  extra_env: []
+schema:
+  master_key: password
+  database_url: password?
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

@@ -1,0 +1,71 @@
+# THIS FILE IS INTENTIONALLY NAMED config.yaml.disabled, NOT config.yaml.
+# Supervisor requires a real config.yaml to list an add-on — renaming it
+# is how this add-on is kept out of the published Add-on Store while
+# staying in the repo. See NOT_PUBLISHED.md in this directory for why
+# (two unpatched CRITICAL advisories, as of this writing). Do not rename
+# this back to config.yaml without re-checking that NOT_PUBLISHED.md's
+# reasoning still holds.
+name: "9Router"
+version: "1.0.0"
+slug: "nine_router"
+description: >-
+  ⚠️ READ THE SECURITY WARNING IN README.md FIRST. decolua's 9Router —
+  an AI routing proxy in front of 40+ providers with fallback and quota
+  tracking. This codebase has shipped, and had to re-fix, multiple
+  unauthenticated-RCE and auth-bypass advisories through 2026, several
+  the SAME root cause (trusting a client-controlled Host/Origin/
+  X-9r-Real-Ip header for a security decision) recurring after being
+  "fixed" once already — see README.md/DOCS.md before installing this.
+  Wraps decolua's published Docker image, pinned by digest.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/9router"
+# Both archs confirmed via `docker manifest inspect` (amd64 + arm64).
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+# init: true — this is a plain Node.js process with no bundled
+# supervisor of its own (confirmed: upstream's own /entrypoint.sh is a
+# 3-line chown+su-exec script, not an init system). Supervisor's own
+# init handles zombie reaping / signal forwarding.
+init: true
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# NO published port, by design — the dashboard is reachable via ingress
+# (HA's own login is the auth boundary for the browser UI), and the
+# /v1/* proxy API is reachable by OTHER add-ons on this same host over
+# Supervisor's internal add-on network (by hostname, no port publish
+# needed) — e.g. hermes-gateway calling this add-on's /v1 endpoint
+# directly. Given this project's own advisory history is almost
+# entirely "a reverse-proxy/header trust decision was wrong," minimizing
+# the externally-reachable surface is the deliberate, conservative
+# choice here — not a UX default that can be casually reversed. See
+# DOCS.md if you still want a published port for an external tool
+# (Claude Code, Cursor, etc. running on a different machine) — that
+# requires editing this add-on's config.yaml yourself; it is
+# deliberately not a one-click option.
+ingress: true
+ingress_port: 20128
+panel_icon: mdi:router-network
+panel_title: 9Router
+options:
+  # No safe default exists here — upstream's OWN default (INITIAL_PASSWORD
+  # unset) falls back to the literal string "123456", the exact weakness
+  # behind a documented prior 9router RCE advisory (VulnCheck: "9router
+  # before 0.4.60 Remote Code Execution via default password"). `null` +
+  # a non-optional schema type makes Supervisor refuse Save/Start until a
+  # real password is set, matching the pattern used throughout this repo.
+  initial_password: null
+  # Default true here — verified upstream defaults to unset/false,
+  # leaving /v1/* reachable with no credential at all. This add-on
+  # deliberately does not inherit that default.
+  require_api_key: true
+  auth_cookie_secure: true
+  extra_env: []
+schema:
+  initial_password: password
+  require_api_key: bool
+  auth_cookie_secure: bool
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

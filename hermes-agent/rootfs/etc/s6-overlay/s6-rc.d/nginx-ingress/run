@@ -1,0 +1,9 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+# HA-ingress reverse proxy. Added alongside upstream's own "dashboard"
+# and "main-hermes" s6 services (see docker/s6-rc.d/ in the hermes-agent
+# source) so it's supervised the same way — auto-restarts if nginx dies,
+# shows up in the same s6-svstat conventions. See
+# /etc/nginx/hermes-ingress.conf for the actual proxy logic and the
+# full rationale (loopback bind + Host/Origin header rewriting).
+exec nginx -c /etc/nginx/hermes-ingress.conf

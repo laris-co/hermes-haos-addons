@@ -4,12 +4,13 @@
 
 `FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495`
 (same pin as `hermes-gateway` — see that add-on's `DOCS.md` for the
-multi-arch verification), unmodified, plus:
+multi-arch verification), plus (as of v1.1) `nginx-light` and one new s6
+service — see "ingress: true" below for why.
 
-- `run.sh` — reads `/data/options.json`, exports the matching env vars,
-  auto-generates/persists a session secret if none was supplied, then
-  `exec`s `/opt/hermes/docker/entrypoint-dispatch.sh dashboard --host
-  0.0.0.0 --port 9119 --no-open`.
+- `run.sh` — reads `/data/options.json`, exports `extra_env` pairs (the
+  only option this add-on has left — see below), then `exec`s
+  `/opt/hermes/docker/entrypoint-dispatch.sh dashboard --host 127.0.0.1
+  --port 9119 --no-open`.
 - `HERMES_HOME=/data` / `HERMES_WRITE_SAFE_ROOT=/data` — same
   persistence redirect as `hermes-gateway`.
 
@@ -17,51 +18,27 @@ multi-arch verification), unmodified, plus:
 
 | Option | Env var |
 |---|---|
-| `username` | `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` |
-| `password` | `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` |
-| `session_secret` (or the auto-generated `/data/.dashboard_secret`) | `HERMES_DASHBOARD_BASIC_AUTH_SECRET` |
-| `public_url` | `HERMES_DASHBOARD_PUBLIC_URL` |
+| `extra_env: ["KEY=VALUE", ...]` | each pair exported as-is, after re-validating shape — same escape hatch as `hermes-gateway` |
 
-These are upstream's own documented env vars for the bundled
-zero-infrastructure `basic` dashboard-auth provider — see
-`plugins/dashboard_auth/basic/__init__.py` in the hermes-agent source
-(`HERMES_DASHBOARD_BASIC_AUTH_USERNAME` / `_PASSWORD` / `_SECRET`).
+**v1 history**: earlier versions of this add-on exposed
+`username`/`password`/`session_secret`/`public_url`, mapped to
+upstream's `HERMES_DASHBOARD_BASIC_AUTH_USERNAME`/`_PASSWORD`/`_SECRET`
+and `HERMES_DASHBOARD_PUBLIC_URL` (upstream's bundled zero-infra `basic`
+dashboard-auth provider — see `plugins/dashboard_auth/basic/__init__.py`
+in the hermes-agent source). Those options are **gone as of v1.1**: the
+dashboard now binds loopback (see "ingress: true" below), and
+`should_require_auth()` is keyed purely on the bind host — a configured
+username/password would have zero effect in that mode, so keeping them
+in `schema` would mean shipping options that look like they add security
+and don't. The `git log` for this file still has the full v1 reasoning
+if this add-on ever needs a non-ingress, direct-port mode again.
 
-## Why `username`/`password` are required with no default
+## `ingress: true` — the sidebar (v1.1, replaces the direct-port design)
 
-Upstream's dashboard **refuses to bind a non-loopback host without a
-registered auth provider** — verified directly (see below): binding
-`0.0.0.0:9119` with no credentials configured produces a clear
-`Refusing to bind dashboard to 0.0.0.0 — the auth gate engages on
-non-loopback binds...` error and the process exits.
+### Why the obvious approach (bind 0.0.0.0, add ingress: true) doesn't work
 
-Given that, the only two sane choices for `config.yaml` are:
-
-1. `options: {username: "", password: ""}` + `schema: {username: str?,
-   password: password?}` — technically valid, but an empty string
-   satisfies `str?`, so Supervisor would let the add-on save/start with
-   a blank password. hermes itself would still refuse to bind — so this
-   *does* fail loud rather than silently — but it's the same shape of
-   bug the packaging brief called out (Advanced SSH's empty required
-   password), just caught one layer down instead of zero.
-2. `options: {username: null, password: null}` + `schema: {username:
-   str, password: password}` (no `?`) — what this add-on actually uses.
-   Per Home Assistant's own add-on config docs: *"Set values to `null`
-   or omit them to make options mandatory."* This makes Supervisor treat
-   the fields as genuinely unset and required, blocking Save/Start in
-   the UI until both are filled in — the failure surfaces at
-   configuration time, in the Supervisor UI, instead of at container
-   boot in the log.
-
-`run.sh` also checks both are non-empty before exporting anything, as a
-second line of defense, with a message naming the Supervisor option
-(`username`/`password` in "this add-on's Configuration tab") rather than
-just the env var — since a HAOS user configuring this through the UI has
-never seen `HERMES_DASHBOARD_BASIC_AUTH_USERNAME`.
-
-## Why no `ingress: true`
-
-Investigated and rejected with a real reproduction, not a guess:
+Investigated and rejected with a real reproduction, not a guess — this
+is why v1 shipped a direct port instead:
 
 1. Home Assistant Supervisor's ingress proxy injects `X-Ingress-Path`
    (confirmed via Home Assistant's own developer docs: *"Ingress adds a
@@ -77,12 +54,10 @@ Investigated and rejected with a real reproduction, not a guess:
    (`/api/hassio_ingress/<64-char-token>/dashboard`) — but tests it via
    the `X-Forwarded-Prefix` header, not `X-Ingress-Path`. Nothing in the
    codebase translates one into the other.
-3. Even if header naming were fixed (e.g. by a local nginx shim
-   translating `X-Ingress-Path` → `X-Forwarded-Prefix`), the
-   **unauthenticated basic-auth login page** — the one this add-on
-   actually uses, since OAuth needs an external Nous Portal account — is
-   a static HTML/JS blob that hardcodes root-relative paths regardless
-   of any header:
+3. Even if header naming were fixed, the **unauthenticated basic-auth
+   login page** — the one v1 used, since OAuth needs an external Nous
+   Portal account — is a static HTML/JS blob that hardcodes
+   root-relative paths regardless of any header:
    ```html
    fetch('/auth/password-login', { ... })
    window.location.assign((data && data.next) || '/')
@@ -91,20 +66,183 @@ Investigated and rejected with a real reproduction, not a guess:
    Confirmed by diffing two real responses from a running container —
    one with `X-Forwarded-Prefix: /api/hassio_ingress/testtoken12345`
    set, one without. **Byte-identical.** The login page does not vary at
-   all based on that header.
+   all based on that header. Under `ingress: true` with a 0.0.0.0 bind,
+   the login page would load fine but submitting the form would `POST`
+   past the ingress mount prefix and 404 against Home Assistant's own
+   frontend instead of reaching the add-on.
 
-Net effect under `ingress: true`: the login page would load fine (HA's
-proxy forwards the initial GET), but submitting the form would `POST` to
-`<ingress-root>/auth/password-login` — past the ingress mount prefix —
-which 404s against Home Assistant's own frontend routing instead of
-reaching the add-on. A direct port sidesteps this completely and is
-provably correct (see the login round-trip test below).
+### The fix: don't fix the login page — make it never load
 
-## Verification log (2026-08-24, Docker Desktop 29.6.2 on macOS)
+The login page is only reachable when hermes's own auth gate is
+engaged, and that gate is controlled entirely by
+`hermes_cli/web_server.py`'s `should_require_auth()`:
 
-**Correction**: this log originally said "amd64 host." The build host is
-actually **arm64** (Apple Silicon). See `hermes-gateway/DOCS.md`'s
-equivalent note for the full explanation — same correction applies here.
+```python
+def should_require_auth(host: str, allow_public: bool = False) -> bool:
+    return host not in _LOOPBACK_HOST_VALUES   # {"localhost", "127.0.0.1", "::1"}
+```
+
+Bind hermes to **127.0.0.1** instead of 0.0.0.0, and the gate never
+engages at all — no login page, no basic-auth flow, nothing to break
+under a path prefix. HA's own login (already required to reach the
+ingress URL in the first place) becomes the auth boundary, exactly like
+every other ingress-only HA add-on (Node-RED, ESPHome Builder, etc.).
+
+That leaves one problem: something still has to sit between Supervisor's
+ingress proxy (which connects on `ingress_port`, 8099) and hermes's now
+loopback-only listener. This add-on adds **nginx, running in the same
+container**, as a new s6-rc service
+(`rootfs/etc/s6-overlay/s6-rc.d/nginx-ingress/`, supervised the same way
+as upstream's own `dashboard`/`main-hermes` services) that reverse-proxies
+`:8099 → 127.0.0.1:9119`. Two of hermes's own guards had to be satisfied
+for that loopback bind to accept nginx's traffic (both in
+`hermes_cli/web_server.py`):
+
+1. **`_is_accepted_host()`** — when bound to loopback, only accepts a
+   `Host` header in `{localhost, 127.0.0.1, ::1}` (a DNS-rebinding
+   defence, GHSA-ppp5-vxwm-4cf7). Supervisor's real Host header would
+   otherwise get a 400. Fixed: `proxy_set_header Host 127.0.0.1;`.
+2. **`_ws_host_origin_reason()`** — the WebSocket-upgrade path
+   (`/api/ws`, `/api/pty` — what the Chat tab actually uses) *also*
+   checks the browser's `Origin` header against the same loopback set. A
+   real browser's Origin under ingress is Home Assistant's own frontend
+   origin (e.g. `https://ha.laris.co`), which would fail that check —
+   **but** the same function reads `if not origin: return None` *before*
+   the loopback comparison, so a missing Origin passes outright. Fixed:
+   `proxy_set_header Origin "";` (stripped, not spoofed — more robust
+   against a future hermes release changing the accepted value).
+
+A third guard (`_ws_client_is_allowed`, the actual TCP peer IP) needs no
+fix at all: nginx and hermes share this container's network namespace,
+so a connection to `127.0.0.1:9119` is loopback-sourced by construction.
+
+Full nginx config: `rootfs/etc/nginx/hermes-ingress.conf` (same file,
+comments included, is the primary source of truth — this section
+summarizes it).
+
+**Consequence for config.yaml**: since `should_require_auth()` is keyed
+purely on the bind host, not on whether credentials are configured,
+`username`/`password`/`session_secret`/`public_url` would now be dead
+options — set them and nothing changes, hermes's gate still never
+engages. They've been removed from `options`/`schema` entirely rather
+than left in as options that silently do nothing (the exact
+misleading-security-toggle failure class this whole packaging effort
+has tried to avoid). `extra_env` is kept as the one remaining option, for
+forward-compatible tuning.
+
+## Verification log — v1.1 ingress (2026-08-24)
+
+This is the verification that actually matters for the current design.
+Sections 1-4 further below are **v1 history** (the direct-port,
+username/password design this replaced) — kept for provenance, no
+longer describing what ships today.
+
+### v1.1-1. `nginx-ingress` starts alongside upstream's own services
+
+```
+$ docker build -t local/hermes-agent:1.1.0 .
+$ docker run -d -p 18099:8099 -v .../data:/data local/hermes-agent:1.1.0
+$ docker logs <container>
+...
+s6-rc: info: service nginx-ingress: starting
+s6-rc: info: service main-hermes: starting
+s6-rc: info: service dashboard: starting
+s6-rc: info: service nginx-ingress successfully started
+s6-rc: info: service main-hermes successfully started
+s6-rc: info: service dashboard successfully started
+...
+  Hermes Web UI → http://127.0.0.1:9119
+```
+Confirms the loopback bind (`127.0.0.1:9119`, not `0.0.0.0:9119`) and
+that `nginx-ingress` is a real, running, s6-supervised sibling of
+upstream's own services — `docker exec <container> s6-rc -a list`
+prints `dashboard`, `main-hermes`, `nginx-ingress` alongside the s6
+internals.
+
+### v1.1-2. No login page — the auth gate genuinely never engages
+
+```
+$ curl -i http://127.0.0.1:18099/
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+<!doctype html>...<title>Hermes Agent - Dashboard</title>...
+
+$ curl http://127.0.0.1:18099/api/status | jq .auth_required
+false
+```
+Plain `200 OK` on the SPA's root — no `302` to `/login` (contrast with
+the v1 log below, which redirects). `auth_required: false` confirms
+`should_require_auth()` took the loopback branch.
+
+### v1.1-3. The WebSocket path — the part that actually had to be proven
+
+Both `/api/ws` (the chat tab's event stream) and `/api/pty` (the PTY
+bridge — an actual terminal session) tested with a **simulated real
+browser under HA ingress**: `Origin: https://ha.laris.co` and
+`Host: ha.laris.co` (Home Assistant's own frontend origin, reached
+through the same nginx that's supposed to be sitting in the way of a
+naive setup), plus the session token scraped from the served page
+(`window.__HERMES_SESSION_TOKEN__` — the loopback-mode credential
+`_ws_auth_ok()` checks; discovered by reading the guard functions
+directly rather than guessing why a bare `curl` upgrade attempt 403'd):
+
+```
+$ TOKEN=$(curl -s http://127.0.0.1:18099/ | grep -o '__HERMES_SESSION_TOKEN__="[^"]*"' | sed 's/.*"\(.*\)"/\1/')
+
+$ curl -i --max-time 3 \
+    -H "Connection: Upgrade" -H "Upgrade: websocket" \
+    -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+    -H "Origin: https://ha.laris.co" -H "Host: ha.laris.co" \
+    "http://127.0.0.1:18099/api/ws?token=$TOKEN"
+HTTP/1.1 101 Switching Protocols
+Server: nginx/1.26.3
+Connection: upgrade
+Upgrade: websocket
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+
+{"jsonrpc": "2.0", "method": "event", "params": {"type": "gateway.ready", ...}}
+
+$ curl -i --max-time 3 [... same headers ...] "http://127.0.0.1:18099/api/pty?token=$TOKEN"
+HTTP/1.1 101 Switching Protocols
+...
+[15KB of real PTY output — an actual hermes chat session banner, streamed]
+```
+**A genuine `HTTP/1.1 101 Switching Protocols` on both endpoints**,
+through nginx, with a Host/Origin pair that would fail every one of
+hermes's own guards if nginx weren't rewriting them — this is the litmus
+test the whole architecture stood or fell on, not just the HTTP page
+load. Re-ran without a spoofed Origin/Host (hitting `127.0.0.1:9119`
+directly, bypassing nginx) and confirmed a bare `curl` upgrade attempt
+with no `?token=` genuinely 403s at the HTTP level (Starlette's
+behavior for `ws.close()` called pre-`accept()`) — ruling out "nginx
+happens to make everything pass" as an alternative explanation.
+
+### v1.1-4. Survives a restart
+
+```
+$ docker restart <container>
+$ curl -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18099/
+200
+```
+s6 brings `nginx-ingress` and `dashboard` back up cleanly together.
+
+### v1.1-5. `extra_env` still works (the one remaining option)
+
+```
+$ echo '{"extra_env": ["MY_TEST=hello"]}' > options.json
+$ docker run -d -p 18100:8099 -v .../data:/data local/hermes-agent:1.1.0
+$ curl -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18100/
+200
+```
+Same options.json → env mechanism as `hermes-gateway`, unaffected by
+the ingress rework.
+
+## v1 history: direct-port verification log (2026-08-24, superseded)
+
+Kept for provenance — describes the design v1.1 replaced, not what
+ships today. Build host correction: this log originally said "amd64
+host"; the actual build host is **arm64** (Apple Silicon) — see
+`hermes-gateway/DOCS.md`'s equivalent note.
 
 ### 1. Refuses to start with no credentials
 
@@ -215,9 +353,26 @@ originally reported from two emulated numbers.
 
 ## Not verified
 
-- No live HAOS Supervisor install, and therefore no real end-to-end test
-  of the direct-port networking through Supervisor's actual bridge
-  network (only a plain `docker run -p` port publish was tested).
-- OAuth-based dashboard auth (the alternative to `username`/`password`)
-  was not implemented or tested — it needs an external Nous Portal
-  account and was out of scope for a zero-infra default.
+- No live HAOS Supervisor install of the v1.1 ingress design
+  specifically. The `/api/ws` and `/api/pty` tests above simulate a real
+  browser's Host/Origin under ingress as closely as `curl` allows, but
+  the real proof is Supervisor actually routing a browser through the
+  sidebar panel end to end (real `X-Ingress-Path` header, real cookie
+  auth, real click on the sidebar icon) — not yet done. `hermes-gateway`
+  (a different add-on) has a real Supervisor install on catlab; this one
+  doesn't yet.
+- `panel_icon: mdi:robot-happy` wasn't checked against a running HA
+  frontend to confirm the icon name resolves to something sensible
+  (any invalid MDI name typically just renders a blank/default icon in
+  HA's sidebar rather than erroring, so this is low-risk but unverified).
+- OAuth-based dashboard auth was not implemented or tested — moot now
+  anyway, since the dashboard's own auth gate never engages in loopback
+  mode regardless of which provider would otherwise be configured.
+- hermes-agent-lite (the minimal-profile sibling) has NOT received the
+  same ingress treatment — it still uses the v1 direct-port design. The
+  nginx + loopback-bind mechanism is architecture-agnostic (it would
+  work identically in front of the lite build's Python backend), but
+  porting it there needs a different process-supervision approach since
+  lite has no s6-overlay to hang a new service off of (a plain
+  background-process-plus-wait pattern in run.sh would do it). Flagging
+  as a real gap, not silently leaving it inconsistent.

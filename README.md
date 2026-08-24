@@ -95,6 +95,10 @@ unofficial distribution channel — stated plainly rather than buried.
 | [`hermes-agent`](hermes-agent/) | `hermes dashboard` | Browser UI with an embedded PTY chat tab. Wraps upstream's published Docker image. |
 | [`hermes-gateway-lite`](hermes-gateway-lite/) | `hermes gateway run` | Same, built minimal from pinned source. Smaller, but `TERMINAL_ENV=local` — see its README before installing. |
 | [`hermes-agent-lite`](hermes-agent-lite/) | `hermes dashboard` | Same, built minimal from pinned source. Same `TERMINAL_ENV=local` tradeoff, and it matters more here since the Chat tab is this add-on's whole point. |
+| [`hermes-server`](hermes-server/) | `hermes serve` | Headless JSON-RPC/WebSocket backend for Hermes Desktop's "remote gateway" — a real published port + required credentials (no ingress; there's no browser page for HA to embed). Wraps upstream's published Docker image. |
+| [`litellm`](litellm/) | LiteLLM proxy | OpenAI-compatible `/v1` endpoint in front of 100+ LLM providers. Real published port + required master key (LiteLLM has no auth by default — verified). |
+| ~~`9router`~~ | 9Router | 🚫 **Built, NOT published.** A deeper advisory pass found 19 total (6 CRITICAL, 11 HIGH), two CRITICAL with no patch at all. Kept in the repo, deliberately excluded from the Add-on Store (`config.yaml` renamed to `config.yaml.disabled`) — see `9router/NOT_PUBLISHED.md`. |
+| [`open-webui`](open-webui/) | Open WebUI | Browser chat UI over the OpenAI-compatible API — pairs with `litellm`. ⚠️ Heaviest add-on here (~1.66 GB / ~660-970 MiB idle) and no ingress (verified its frontend has no HA path-prefix support) — real published port instead. |
 
 Within each pair, the two add-ons are faces of the same upstream
 project — this mirrors upstream's own `docker-compose.yml`, which runs
@@ -137,12 +141,24 @@ equivalent).
   `exec`s straight into the upstream entrypoint.
 - **Persistence**: `HERMES_HOME=/data`, Supervisor's own per-add-on
   volume, no `map:` entry needed.
-- **Required-option safety**: `hermes-gateway` has no required options
-  (verified running with an empty `options.json`). `hermes-agent`
-  requires username/password via `options: null` + a non-optional
-  schema type (not an empty-string default), so Supervisor blocks
-  Save/Start on a blank value instead of failing at runtime with no
-  visible error.
+- **No required options**: neither `hermes-gateway` (verified running
+  with an empty `options.json`) nor `hermes-agent` (as of v1.1 — see
+  below) requires any configuration to start.
+- **`hermes-agent` uses `ingress: true`, not a direct port** (as of
+  v1.1 — this replaced an earlier direct-port + required-username/
+  password design). The dashboard binds `127.0.0.1` inside its own
+  container; an in-container nginx translates Host/Origin headers so
+  Home Assistant Supervisor's ingress proxy can reach it, and binding
+  loopback means hermes's own auth gate never engages at all — HA's own
+  login becomes the auth boundary, same as every other ingress-only
+  add-on. Verified with a genuine `101 Switching Protocols` on both
+  `/api/ws` and `/api/pty` through the proxy, simulating a real
+  browser's Host/Origin under ingress — see `hermes-agent/DOCS.md` for
+  the full transcript. (An earlier attempt at `ingress: true` with a
+  0.0.0.0 bind was rejected for a real, reproduced reason — hermes's
+  basic-auth login page hardcodes root-relative paths that break under
+  an ingress mount — that failure mode still applies to
+  `hermes-agent-lite`, which has not yet received this fix.)
 
 ## Design notes — lite variant (`hermes-gateway-lite` / `hermes-agent-lite`)
 
@@ -198,29 +214,35 @@ Two independent verification passes went into this repo:
    134.5 MiB — the strongest evidence in this repo, and the one to trust
    over any locally-measured number if they ever disagree.
 
-Both variants: build on both archs and boot cleanly; `hermes-gateway*`
+All four add-ons build on both archs and boot cleanly; `hermes-gateway*`
 starts with zero config and rejects `api_server_enabled: true` with no
 key with a clear log line and non-zero exit; a fake `telegram_bot_token`
 genuinely reaches the process and is genuinely rejected by Telegram's
-real API; `extra_env` rejects malformed entries with a warning;
-`hermes-agent*` refuses to start with blank credentials, serves a real
-login round-trip (200 + cookies / 401) with real credentials, and
-persists `HERMES_HOME=/data` correctly; the dashboard session secret
-survives a restart.
+real API; `extra_env` rejects malformed entries with a warning and
+persists `HERMES_HOME=/data` correctly. `hermes-agent` (v1.1, full
+variant) serves its dashboard with no login at all via ingress, and a
+genuine `101 Switching Protocols` on both `/api/ws` and `/api/pty`
+through the in-container nginx proxy with a simulated real-browser
+Host/Origin. `hermes-agent-lite` still has the earlier direct-port +
+required-username/password design (refuses to start with blank
+credentials, serves a real login round-trip with real ones) — it has
+not yet received the ingress fix.
 
 **Not verified**:
 
-- `hermes-gateway-lite` and both `hermes-agent*` add-ons have not been
-  installed on a live Supervisor (only `hermes-gateway`, the full
-  variant, has — see above). Everything else in this bullet list was
+- `hermes-gateway-lite`, `hermes-agent`, and `hermes-agent-lite` have
+  not been installed on a live Supervisor (only `hermes-gateway`, the
+  full variant, has — see above). Everything else in this bullet list was
   local `docker build`/`docker run` testing only.
 - Real Telegram/Discord/Slack/WhatsApp/Email credentials — only a
   deliberately fake Telegram token was used.
-- `ingress: true` for either `hermes-agent` variant — see their `DOCS.md`
-  for the reproduced reason it's not used (HA's ingress proxy sends
+- `ingress: true` for `hermes-agent-lite` — it still uses the direct-port
+  design; see `hermes-agent/DOCS.md` for why the naive `ingress: true` +
+  0.0.0.0-bind approach doesn't work (HA's ingress proxy sends
   `X-Ingress-Path`; hermes's dashboard only reads `X-Forwarded-Prefix`,
   and its basic-auth login page hardcodes root-relative paths
-  regardless).
+  regardless), and for the loopback-bind-plus-nginx design that fixed it
+  for the full `hermes-agent` variant.
 - Long-running memory behavior under real chat/messaging load — only
   idle-after-boot was measured, for all four add-ons.
 - The embedded Chat tab's live `/api/pty` WebSocket round trip (verified
@@ -233,9 +255,13 @@ survives a restart.
 ```
 repository.yaml              # Supervisor reads this for the store listing
 hermes-gateway/               # full — wraps upstream's Docker image
-hermes-agent/                 # full — wraps upstream's Docker image
+hermes-agent/                 # full — wraps upstream's Docker image, ingress sidebar
 hermes-gateway-lite/          # minimal — built from pinned source
 hermes-agent-lite/            # minimal — built from pinned source
+hermes-server/                # full — hermes serve, headless backend, real port
+litellm/                      # BerriAI LiteLLM proxy — OpenAI-compatible /v1
+9router/                      # BUILT, NOT PUBLISHED — see 9router/NOT_PUBLISHED.md
+open-webui/                   # Open WebUI — heaviest add-on here, no ingress, read its README
 ```
 Each add-on directory: `config.yaml` (options/schema/ports/arch),
 `Dockerfile`, `run.sh` (options.json → env, then exec into hermes),

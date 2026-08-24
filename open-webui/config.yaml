@@ -1,0 +1,74 @@
+name: "Open WebUI"
+version: "1.1.0"
+slug: "open_webui"
+description: >-
+  Open WebUI — a browser chat interface speaking the OpenAI-compatible
+  API. Built specifically to close the loop with the `litellm` add-on
+  in this repo (litellm routes, Open WebUI is the human interface,
+  hermes is the agent) — `openai_api_base_url` is REQUIRED and points
+  at litellm's `/v1` endpoint; install litellm first and read its
+  hostname from its own Supervisor info page (see DOCS.md for a worked
+  example — this add-on never guesses a hostname, since add-on
+  hostnames are per-installation). Heavier than every other add-on in
+  this repository — see DOCS.md for real measured numbers (~1.66 GB
+  image, ~660-970 MiB idle memory depending on config) before installing
+  on constrained hardware. No `ingress: true` — verified (not assumed)
+  that this app's compiled frontend has no HA-ingress path-prefix
+  awareness; a direct port is what actually works.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/open-webui"
+# Both archs confirmed via `docker manifest inspect` (amd64 + arm64).
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+# init: true — a plain uvicorn/Python process with no bundled supervisor
+# of its own (upstream's start.sh is a shell script, not an init
+# system). Supervisor's own init handles zombie reaping / signal
+# forwarding.
+init: true
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# A real published port, not ingress — see the top-of-file description
+# and DOCS.md for the verified reason (root-relative asset paths, no
+# runtime path-prefix support; confirmed empirically, including a
+# negative test of the PUBLIC_BASE_PATH env var upstream added for
+# reverse-proxy subpath deployments, which did not change the served
+# asset paths in this version).
+ports:
+  "8080/tcp": 8080
+ports_description:
+  "8080/tcp": >-
+    Open WebUI's browser interface. Open http://<host>:8080/ and sign in
+    with the admin_email/admin_password configured below. Never remap
+    this to 80 or 443 — Home Assistant itself owns those on this host.
+options:
+  # No safe default exists for admin credentials. This add-on hardcodes
+  # ENABLE_SIGNUP=false (see Dockerfile) so there is no "first visitor
+  # becomes admin" race — these are the ONLY way to get an account at
+  # all, so `options: null` + non-optional schema types (Supervisor
+  # blocks Save/Start until both are set), same pattern as every other
+  # add-on in this repo.
+  admin_email: null
+  admin_password: null
+  # REQUIRED, no default and deliberately not a guessed one. This
+  # add-on exists to close the loop with this repo's own `litellm`
+  # add-on, but HAOS add-on hostnames are repository-hash-prefixed and
+  # assigned per installation (confirmed on a real guest — different
+  # prefix every install, not predictable at build time). A hardcoded
+  # default like `local-litellm` would work on exactly one installation
+  # and silently fail everywhere else. `options: null` + non-optional
+  # schema (Supervisor blocks Save/Start until set) plus a run.sh check
+  # with instructions on where to find the real value — see DOCS.md for
+  # a worked example.
+  openai_api_base_url: null
+  openai_api_key: ""
+  extra_env: []
+schema:
+  admin_email: email
+  admin_password: password
+  openai_api_base_url: url
+  openai_api_key: password?
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

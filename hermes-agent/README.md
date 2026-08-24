@@ -1,10 +1,22 @@
 # Hermes Agent
 
 Runs [Hermes Agent](https://github.com/NousResearch/hermes-agent)'s
-**dashboard** (`hermes dashboard --host 0.0.0.0 --port 9119`): a web UI
+**dashboard** (`hermes dashboard --host 127.0.0.1 --port 9119`): a web UI
 that includes model/config management *and* an embedded, PTY-backed Chat
 tab — the same interactive agent conversation you'd otherwise only get
-from the `hermes` terminal command.
+from the `hermes` terminal command. Appears in Home Assistant's own
+sidebar via ingress — no port to open, no separate login.
+
+> **If the sidebar entry doesn't appear after install**: `ingress: true`
+> in `config.yaml` makes the add-on *eligible* for a sidebar entry, but
+> whether it's actually shown is separate Supervisor **runtime** state
+> (`ingress_panel`, the "Show in sidebar" toggle — not a `config.yaml`
+> key at all). Confirmed on a real guest: 8 of 9 installed add-ons
+> defaulted to this toggle off, including an official add-on that ships
+> `panel_icon`/`panel_title` just like this one does. If the panel is
+> missing, check the add-on's own page for a "Show in sidebar" toggle
+> (or an equivalent Supervisor-side action) — this add-on is not
+> broken, the panel is just hidden by default.
 
 ## Why "dashboard" and not the raw `hermes` CLI
 
@@ -23,39 +35,45 @@ This is one of two add-ons in this repository — see the
 
 ## Quick start
 
-1. Set **Username** and **Password** in this add-on's Configuration tab
-   — both are required, with no default, on purpose (see `DOCS.md` for
-   why an empty default would be a real security hole here).
-2. Start the add-on.
-3. Open `http://<your-home-assistant-host>:9119/` and sign in.
+1. Install and start the add-on. There is nothing to configure — no
+   username, no password.
+2. Open it from **Home Assistant's own sidebar** (it registers itself
+   there via ingress — look for "Hermes Agent").
+3. Sign-in is whatever getting to that sidebar already required: your
+   Home Assistant login. There's no separate hermes credential.
+
+## How the sidebar works (v1.1 — read this if you're curious why there's no login)
+
+This add-on binds the dashboard to `127.0.0.1` **inside its own
+container** and puts a small nginx in front of it, translating headers
+so Home Assistant Supervisor's ingress proxy can reach it. Binding
+loopback means hermes's own auth gate (`should_require_auth()` in
+`hermes_cli/web_server.py`) never engages at all — there's no login page
+to break under an ingress path prefix (which is exactly what killed the
+earlier direct-port-plus-basic-auth design; see `DOCS.md` for that
+history). Home Assistant's own login becomes the auth boundary instead,
+same as every other ingress-only add-on (Node-RED, ESPHome Builder,
+etc.) — anyone who can reach your Home Assistant sidebar can open this
+add-on.
+
+Verified end to end, including the part that's easy to get wrong: a real
+`HTTP/1.1 101 Switching Protocols` on both `/api/ws` and `/api/pty` (the
+Chat tab's actual sockets) through the nginx proxy, with a Host/Origin
+pair simulating a real browser under ingress. See `DOCS.md` for the full
+transcript.
 
 ## Options
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
-| `username` | string | *(none — required)* | Dashboard login username. |
-| `password` | password | *(none — required)* | Dashboard login password. Hashed/session-signed by hermes itself; not stored in plaintext beyond Supervisor's own options store. |
-| `session_secret` | password | *(empty)* | Optional. If left blank, the add-on generates one on first boot and persists it to `/data/.dashboard_secret`, so restarts don't log everyone out. Set this yourself only if you want to pin/rotate it explicitly. |
-| `public_url` | string | *(empty)* | Advanced — only for a reverse-proxy-behind-HAOS setup with a fixed public hostname. Leave blank for normal direct-port access. |
-
-## Networking: a real port, not ingress
-
-This add-on maps `9119/tcp` directly rather than using Home Assistant's
-`ingress: true`. That was a deliberate, verified decision — see
-`config.yaml`'s comment and `DOCS.md` for the reproduction: HA's ingress
-proxy sends `X-Ingress-Path`, hermes's dashboard only understands
-`X-Forwarded-Prefix`, and its basic-auth login page hardcodes
-root-relative paths regardless of either header. Ingress would load the
-login page and then break on submit. A direct port has none of that
-risk. **Never remap this to 80 or 443** — Home Assistant itself owns
-those on this host.
+| `extra_env` | list of `KEY=VALUE` | `[]` | Escape hatch for advanced tuning — same pattern as `hermes-gateway`. Malformed entries are logged and skipped. |
 
 ## Persistence
 
-All dashboard state (config.yaml, sessions, the auto-generated session
-secret, memories, skills) lives under this add-on's `/data`, which
-Supervisor persists and backs up automatically.
+All dashboard state (config.yaml, sessions, memories, skills) lives
+under this add-on's `/data`, which Supervisor persists and backs up
+automatically.
 
 See [`DOCS.md`](DOCS.md) for the full verification log (exact
-`docker build`/`docker run` commands and their real output, including a
-real login round-trip).
+`docker build`/`docker run` commands and their real output, including
+the WebSocket-upgrade transcript this design depends on).

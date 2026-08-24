@@ -1,0 +1,63 @@
+name: "Hermes Server"
+version: "1.0.0"
+slug: "hermes_server"
+description: >-
+  Nous Research's Hermes Agent, running as `hermes serve` — the headless
+  JSON-RPC/WebSocket backend Hermes Desktop (and other remote clients)
+  connect to. Per upstream's own docs: "the same server `hermes
+  dashboard` runs, but headless: it never opens a browser UI." Wraps the
+  upstream nousresearch/hermes-agent Docker image, published on a real
+  port (no ingress — this is a machine client backend, not a browser
+  UI, so there's no page for Home Assistant's frontend to embed).
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hermes-server"
+# Same upstream image, same digest pin, both archs built natively
+# upstream — see hermes-gateway/config.yaml for the full verification.
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+# init: false — wraps upstream's own Docker image, which already ships
+# its own s6-overlay supervisor and expects to own PID 1. Same reasoning
+# as hermes-gateway/hermes-agent.
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# A real port, not ingress: `hermes serve` is a JSON-RPC/WebSocket API
+# for machine clients (Hermes Desktop, or any other remote client that
+# speaks the same protocol) — there's no browser page for HA's ingress
+# iframe to embed, so ingress has no meaning here. Confirmed directly:
+# `hermes serve --host 0.0.0.0 --port <n>` with no credentials fails
+# closed with the exact same auth-gate error `hermes dashboard` gives —
+# same underlying auth subsystem (dashboard.basic_auth / the
+# HERMES_DASHBOARD_BASIC_AUTH_* env vars), so username/password below
+# are genuinely required and genuinely enforced, unlike hermes-agent
+# (which dropped them because THAT add-on binds loopback).
+ports:
+  "9119/tcp": 9119
+ports_description:
+  "9119/tcp": >-
+    Hermes headless backend (JSON-RPC/WebSocket) — point Hermes Desktop's
+    "Remote gateway" setting at http://<host>:9119 and sign in with the
+    username/password configured below. Never remap this to 80 or 443 —
+    Home Assistant itself owns those on this host.
+options:
+  username: null
+  password: null
+  session_secret: ""
+  extra_env: []
+schema:
+  # Same null+required pattern as hermes-agent's v1 design (see git
+  # history / hermes-agent/DOCS.md "v1 history" section for the full
+  # reasoning) — an empty-string default would satisfy schema
+  # validation and let the add-on start with no real password.
+  username: str
+  password: password
+  # Optional: without this, sessions are signed with a random per-boot
+  # secret and every remote client is logged out on every add-on
+  # restart. run.sh auto-generates and persists one to
+  # /data/.dashboard_secret if left blank.
+  session_secret: password?
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)
