@@ -17,6 +17,82 @@ adds a translation shim.
   survives add-on restarts/updates and is genuinely user-editable —
   there's no baked-in model list to fight.
 
+## Ingress — investigated, a real mechanism exists, NOT shipped
+
+LiteLLM has an admin UI (`/ui`, a Next.js app — confirmed by requesting
+it directly: real `LiteLLM Dashboard` HTML, not a 404) alongside `/v1`.
+The standing rule for this repo is every add-on with a web UI gets a
+sidebar via ingress, so this was investigated properly, not skipped.
+
+**What's verified working**: unlike Open WebUI's `PUBLIC_BASE_PATH`
+(tested and found to have no effect), litellm's equivalent —
+`SERVER_ROOT_PATH` — genuinely works:
+
+```
+$ docker run -d -p 14301:4000 -e LITELLM_MASTER_KEY=sk-test \
+    -e SERVER_ROOT_PATH=/api/hassio_ingress/testtoken12345 \
+    ghcr.io/berriai/litellm:v1.83.14-stable
+
+$ curl -o /dev/null -w '%{http_code}\n' http://127.0.0.1:14301/ui/
+404
+$ curl -o /dev/null -w '%{http_code}\n' \
+    http://127.0.0.1:14301/api/hassio_ingress/testtoken12345/ui/
+200
+$ curl http://127.0.0.1:14301/api/hassio_ingress/testtoken12345/ui/ \
+    | grep -o 'href="[^"]*"' | head -3
+href="/api/hassio_ingress/testtoken12345/_next/static/media/....woff2"
+href="/api/hassio_ingress/testtoken12345/_next/static/chunks/....css"
+```
+Confirmed in litellm's own source
+(`grep -n SERVER_ROOT_PATH /app/litellm/proxy/proxy_server.py`, inside
+the running image): when set, litellm expects **incoming requests to
+still carry the prefix** and serves everything — including rewritten
+asset `href`/`src` values — under that mount point. This is the
+opposite convention from `X-Forwarded-Prefix` (which assumes the proxy
+already stripped the prefix and just wants the app to know it for
+constructing links) — litellm wants the actual, non-stripped path.
+
+**The blocker**: Home Assistant Supervisor's ingress proxy strips the
+`/api/hassio_ingress/<token>/` prefix before forwarding to the add-on —
+confirmed by reading Supervisor's own `ingress.py` handler directly
+(`path = request.match_info.get("path", "")` then
+`f"http://{app.ip_address}:{app.ingress_port}/{path}"` — the token is
+consumed by the route matcher and never reaches the forwarded URL).
+litellm's `SERVER_ROOT_PATH` mode needs the opposite: the prefix
+*present* on every incoming request. Setting `SERVER_ROOT_PATH` and
+relying on Supervisor's default forwarding would produce a 404 on every
+request, exactly like the unprefixed test above.
+
+**A real fix exists in principle, not implemented**: Supervisor exposes
+each add-on's own assigned mount path back to itself via the Supervisor
+API — `GET http://supervisor/addons/self/info` (using the container's
+own injected `SUPERVISOR_TOKEN`) returns an `ingress_entry` field with
+the add-on's full external ingress URL. In principle, `run.sh` could
+call this at boot, extract the prefix, set `SERVER_ROOT_PATH` to match,
+and pair it with an nginx layer that reads the *same* prefix from the
+`X-Ingress-Path` header on each request and re-prepends it before
+proxying to litellm (undoing Supervisor's strip, since litellm wants it
+back). This is a real, documented HA Supervisor feature — not a guess —
+but **it was not built or tested**: verifying it requires a live
+Supervisor instance to confirm `ingress_entry`'s exact shape and that
+the self-info call actually succeeds from inside a running add-on
+container, and this repo's task explicitly forbids installing onto the
+only Supervisor available (192.168.1.143). Per this repo's own hard
+rule — "do not ship `ingress: true` on any add-on you have not driven
+end to end" — implementing untested code for a feature shipped ON is
+worse than documenting a real path forward and shipping it OFF.
+
+**Also unverified, and would have mattered if the above had been
+attempted**: litellm's proxy server source references `WebSocket`
+handling (`proxy_server.py`, `route_llm_request.py`) — whether the
+admin UI itself depends on a WS connection (vs. only the realtime/audio
+proxy routes) was not established, which would have been a second thing
+to drive end-to-end before shipping ingress.
+
+**Conclusion**: this add-on keeps its direct port only. If a future
+maintainer has real Supervisor access to verify the `ingress_entry`
+self-discovery step, the pieces above are the starting point.
+
 ## Why `master_key` is required with no default
 
 Verified directly, not assumed: this image ships with **zero

@@ -1,0 +1,55 @@
+name: "Uptime Kuma"
+version: "1.0.0"
+slug: "uptime_kuma"
+description: >-
+  louislam/uptime-kuma — a self-hosted uptime/status monitoring
+  dashboard (HTTP(s), TCP, DNS, Docker container, and browser-based
+  monitors, notifications on 90+ services). Wraps upstream's published
+  Docker image, unmodified except for the persistent-data-dir redirect.
+  A real published port, not an ingress sidebar — verified directly
+  that its frontend serves absolute root-relative asset paths
+  (`/assets/...`) with no documented base-path/reverse-proxy-subpath
+  env var, the same failure class that kept litellm's `/ui/` and
+  9router's dashboard off ingress in this repo. See DOCS.md.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/uptime-kuma"
+# Official image, real multi-arch manifest (amd64/arm64/armv7) —
+# verified via `docker manifest inspect`. amd64 additionally confirmed
+# by actually running it; arm64 is this repo's native build arch. See
+# DOCS.md.
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+# init: false — the upstream image's own ENTRYPOINT is `dumb-init --`,
+# a real, dedicated PID-1-safe init already handling zombie reaping and
+# signal forwarding correctly (unlike thclaws's bare binary, which
+# needed Supervisor's own --init for exactly this reason — see
+# thclaws/config.yaml for that contrast). run.sh below re-execs into
+# dumb-init at the end rather than replacing it, so this property is
+# preserved.
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# A real port, not ingress. Verified directly (not assumed): the served
+# setup-wizard page references `/assets/index-*.js`, `/assets/index-*.css`,
+# `/apple-touch-icon.png`, `/manifest.json` — all root-relative,
+# absolute paths, exactly the pattern that breaks under Supervisor's
+# ingress-strips-the-prefix behavior. Checked for a `BASE_URL`-style
+# escape hatch (none found: not in the image's env, not in
+# server/database.js's other env-var reads) before concluding this.
+# See DOCS.md for the full transcript.
+ports:
+  "3001/tcp": 3001
+ports_description:
+  "3001/tcp": >-
+    Uptime Kuma's own web UI. First visit runs its own setup wizard
+    (create an admin username/password there — this add-on has no
+    credential options of its own, see README). Never remap this to
+    80 or 443 — Home Assistant itself owns those on this host.
+options:
+  extra_env: []
+schema:
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

@@ -3,9 +3,9 @@
 Runs [BerriAI's LiteLLM](https://github.com/BerriAI/litellm) proxy — a
 single OpenAI-compatible `/v1` endpoint in front of 100+ LLM providers
 (OpenAI, Anthropic, Gemini, Bedrock, OpenRouter, local Ollama, and
-more). Point `hermes-gateway`, Open WebUI, or anything else that speaks
-the OpenAI API at this add-on's `/v1` endpoint instead of juggling
-per-provider keys and SDKs directly.
+more), plus its own admin UI at `/ui/`. Point `hermes-gateway`, Open
+WebUI, or anything else that speaks the OpenAI API at this add-on's
+`/v1` endpoint instead of juggling per-provider keys and SDKs directly.
 
 ## Quick start
 
@@ -32,12 +32,28 @@ per-provider keys and SDKs directly.
 | `database_url` | password | *(empty)* | Optional. A Postgres connection string, only needed for LiteLLM's virtual-key/spend-tracking features. Not bundled — point this at your own Postgres (e.g. a separate add-on) if you want it. |
 | `extra_env` | list of `KEY=VALUE` | `[]` | Provider API keys and any other env-based tuning — referenced from `config.yaml` via `os.environ/VAR_NAME`. Malformed entries are logged and skipped. |
 
-## Networking
+## Networking — a published port serves BOTH audiences, no sidebar (yet)
 
-Maps `4000/tcp` directly (LiteLLM's own default port) — this is an API
-proxy other services call, not a browser UI, so ingress doesn't apply
-here. **Never remap this to 80 or 443** — Home Assistant itself owns
-those on this host.
+Maps `4000/tcp` directly. **This one port serves two different
+audiences, both real**:
+
+- **Machine clients** — `hermes-gateway`, `hermes-server`, Open WebUI,
+  or anything else that speaks the OpenAI API — call
+  `http://<host>:4000/v1` directly.
+- **Humans** — LiteLLM ships a real admin UI at
+  `http://<host>:4000/ui/` (sign in with the same master key). This
+  add-on does **not** put it behind Home Assistant's ingress sidebar,
+  even though the standing rule for this repo is "web UI → sidebar."
+  It was investigated properly (not skipped) — a real path-prefix
+  mechanism exists (`SERVER_ROOT_PATH`, verified working) but shipping
+  it needs a Supervisor-API self-discovery step this session couldn't
+  verify against a live instance. See `DOCS.md` for the full
+  investigation and exactly what's missing. **Don't disable this port
+  thinking the admin UI is redundant with a sidebar that doesn't exist
+  yet** — right now, this port is the only way to reach either surface.
+
+**Never remap this to 80 or 443** — Home Assistant itself owns those on
+this host.
 
 ## Persistence
 

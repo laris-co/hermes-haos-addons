@@ -2,12 +2,17 @@ name: "LiteLLM Proxy"
 version: "1.0.0"
 slug: "litellm"
 description: >-
-  BerriAI's LiteLLM proxy — a single OpenAI-compatible /v1 endpoint in
-  front of 100+ LLM providers (OpenAI, Anthropic, Gemini, Bedrock,
-  OpenRouter, local Ollama, ...). Point hermes-gateway's
-  openrouter_api_key-style config, Open WebUI, or anything else that
-  speaks the OpenAI API at this add-on instead of juggling per-provider
-  keys directly. Wraps BerriAI's published Docker image, pinned by
+  BerriAI's LiteLLM proxy — a single OpenAI-compatible /v1 endpoint,
+  plus its own admin UI at /ui/, in front of 100+ LLM providers
+  (OpenAI, Anthropic, Gemini, Bedrock, OpenRouter, local Ollama, ...).
+  Point hermes-gateway's openrouter_api_key-style config, Open WebUI, or
+  anything else that speaks the OpenAI API at this add-on instead of
+  juggling per-provider keys directly. No ingress yet: a real path-
+  prefix mechanism was found and verified (SERVER_ROOT_PATH), but
+  shipping it needs a Supervisor-API self-discovery step that could not
+  be tested against a live instance this session — see DOCS.md. The
+  published port serves both audiences (API clients + the admin UI) in
+  the meantime. Wraps BerriAI's published Docker image, pinned by
   digest (v1.83.14-stable, satisfies >= 1.83.10 — images cosign-signed
   since v1.83.0).
 url: "https://github.com/laris-co/hermes-haos-addons/tree/main/litellm"

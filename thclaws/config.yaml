@@ -1,0 +1,72 @@
+name: "thCLAWS"
+version: "1.0.0"
+slug: "thclaws"
+description: >-
+  thClaws (github.com/thClaws/thClaws) — a native Rust AI coding-agent
+  workspace, dual-licensed MIT/Apache-2.0, running its own `--serve` web
+  mode (the same agent engine over HTTP/WebSocket, normally reached via
+  an SSH tunnel — here reached through Home Assistant's ingress sidebar
+  instead). NOT a lightweight wrapper: the only official Linux release
+  binary unconditionally links a full GTK/WebKit/GStreamer dependency
+  stack even in serve mode (confirmed via `readelf`/`ldd`, contradicts
+  upstream's own "CLI mode needs no GUI deps" claim for headless
+  servers) — this image is ~750 MB. Needs at least one LLM provider
+  credential (Anthropic, OpenAI, or OpenRouter — all three verified
+  directly) to be useful. See DOCS.md for the full investigation.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/thclaws"
+# Both release targets (x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu)
+# are real, checksummed GitHub Release assets for the pinned version —
+# see Dockerfile. Verified natively on BOTH archs during development
+# (this repo's build Mac is arm64; amd64 was verified under QEMU
+# emulation — see DOCS.md for which specific checks were native vs
+# emulated).
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+# init: true — unlike hermes-agent (which reuses upstream's own
+# s6-overlay-based Docker image as its base), thClaws ships as a bare
+# binary with no init system of its own. This image is built from a
+# plain debian:13-slim base, so there is no pre-existing supervisor to
+# hang a second service off of. Two cooperating processes run here
+# (nginx + thclaws) via a plain run.sh (nginx backgrounded, thclaws
+# exec'd last) — `init: true` gives Docker's own built-in tini as the
+# container's real PID 1, which reaps zombies for the whole pid
+# namespace regardless of which process spawned them. See DOCS.md for
+# why a full s6-overlay install was judged disproportionate here.
+init: true
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# ingress: true, no ports: block. Verified end to end (2026-08-24):
+# thclaws --serve binds 127.0.0.1 by default (upstream's own --help
+# text: "only safe... behind auth... reverse proxy" — this add-on's
+# ingress design IS that recommended deployment shape, not a
+# workaround). The served page is fully self-contained (zero absolute
+# asset refs — verified: 0 matches for src="/..." or href="/..." in the
+# rendered HTML), so Supervisor's ingress-prefix-stripping never breaks
+# an asset path the way it does for litellm's /ui/ or 9router's
+# dashboard. WebSocket upgrade at /ws verified with a real HTTP/1.1 101
+# Switching Protocols, including under a simulated ingress Host/Origin
+# pair. See DOCS.md for the full transcript.
+ingress: true
+ingress_port: 8342
+panel_icon: mdi:robot-industrial
+panel_title: thCLAWS
+options:
+  # All three verified directly with real fake-key 401s from the actual
+  # provider APIs (Anthropic, OpenAI, OpenRouter) — see DOCS.md. None is
+  # individually required (a user only needs one), so run.sh enforces
+  # the real constraint: at least one of these three, OR a provider key
+  # supplied via extra_env, or the add-on refuses to start.
+  anthropic_api_key: ""
+  openai_api_key: ""
+  openrouter_api_key: ""
+  extra_env: []
+schema:
+  anthropic_api_key: password?
+  openai_api_key: password?
+  openrouter_api_key: password?
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

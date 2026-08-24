@@ -96,9 +96,11 @@ unofficial distribution channel — stated plainly rather than buried.
 | [`hermes-gateway-lite`](hermes-gateway-lite/) | `hermes gateway run` | Same, built minimal from pinned source. Smaller, but `TERMINAL_ENV=local` — see its README before installing. |
 | [`hermes-agent-lite`](hermes-agent-lite/) | `hermes dashboard` | Same, built minimal from pinned source. Same `TERMINAL_ENV=local` tradeoff, and it matters more here since the Chat tab is this add-on's whole point. |
 | [`hermes-server`](hermes-server/) | `hermes serve` | Headless JSON-RPC/WebSocket backend for Hermes Desktop's "remote gateway" — a real published port + required credentials (no ingress; there's no browser page for HA to embed). Wraps upstream's published Docker image. |
-| [`litellm`](litellm/) | LiteLLM proxy | OpenAI-compatible `/v1` endpoint in front of 100+ LLM providers. Real published port + required master key (LiteLLM has no auth by default — verified). |
+| [`litellm`](litellm/) | LiteLLM proxy | OpenAI-compatible `/v1` endpoint + admin UI (`/ui/`) in front of 100+ LLM providers. Real published port + required master key (LiteLLM has no auth by default — verified). No ingress yet — a real path-prefix mechanism exists (verified) but needs a Supervisor-API step this session couldn't test live; see DOCS.md. |
 | ~~`9router`~~ | 9Router | 🚫 **Built, NOT published.** A deeper advisory pass found 19 total (6 CRITICAL, 11 HIGH), two CRITICAL with no patch at all. Kept in the repo, deliberately excluded from the Add-on Store (`config.yaml` renamed to `config.yaml.disabled`) — see `9router/NOT_PUBLISHED.md`. |
 | [`open-webui`](open-webui/) | Open WebUI | Browser chat UI over the OpenAI-compatible API — pairs with `litellm`. ⚠️ Heaviest add-on here (~1.66 GB / ~660-970 MiB idle) and no ingress (verified its frontend has no HA path-prefix support) — real published port instead. |
+| [`thclaws`](thclaws/) | `thclaws --serve` | Native Rust AI coding-agent workspace. Ingress sidebar (verified: loopback bind by default, real 101 WebSocket upgrade, no absolute asset paths to break). ⚠️ ~1.06 GB — the brief assumed a light CLI-only binary existed; verified directly that it doesn't (the one official Linux binary hard-links a full GTK/WebKit/GStreamer stack in every mode). See its README before installing. |
+| [`uptime-kuma`](uptime-kuma/) | Uptime Kuma | Self-hosted uptime/status dashboard for watching this repo's other add-ons (or anything else). Real published port, not ingress — verified its frontend uses absolute asset paths with no reverse-proxy-subpath support. No credential options; its own setup wizard creates the admin account. |
 
 Within each pair, the two add-ons are faces of the same upstream
 project — this mirrors upstream's own `docker-compose.yml`, which runs
@@ -262,6 +264,8 @@ hermes-server/                # full — hermes serve, headless backend, real po
 litellm/                      # BerriAI LiteLLM proxy — OpenAI-compatible /v1
 9router/                      # BUILT, NOT PUBLISHED — see 9router/NOT_PUBLISHED.md
 open-webui/                   # Open WebUI — heaviest add-on here, no ingress, read its README
+thclaws/                       # thClaws AI coding agent — ingress sidebar, ~1.06 GB, read its README
+uptime-kuma/                   # Uptime Kuma status dashboard — real port, no ingress, read its README
 ```
 Each add-on directory: `config.yaml` (options/schema/ports/arch),
 `Dockerfile`, `run.sh` (options.json → env, then exec into hermes),
