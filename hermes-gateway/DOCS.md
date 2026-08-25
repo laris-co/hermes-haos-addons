@@ -36,6 +36,26 @@ Supervisor's own tini-style init on top would fight it.
 Only non-empty values are exported — an unset option never overwrites a
 hermes default with an empty string.
 
+### Gateway model persistence bridge (1.0.1)
+
+Upstream revision `057dcdf2` documents `HERMES_INFERENCE_MODEL` for one-shot
+and TUI invocations, but the gateway's `_resolve_gateway_model()` reads only
+`model.default`/`model.model` from persistent `config.yaml`. A restart could
+therefore load a stale model even when the provider environment was correct.
+
+After exporting `extra_env`, `run.sh` now persists these non-secret routing
+overrides with the pinned image's own `hermes config set` command:
+
+| Env override | Persisted key |
+|---|---|
+| `HERMES_INFERENCE_PROVIDER` | `model.provider` |
+| `HERMES_INFERENCE_MODEL` | `model.default` |
+| `OPENROUTER_BASE_URL` (or `CUSTOM_BASE_URL`) | `model.base_url` |
+
+Credentials are intentionally excluded from this bridge. For an OpenRouter-
+compatible mirror such as 9Router, `openrouter_api_key` remains a Supervisor
+password option and is exported only as `OPENROUTER_API_KEY`.
+
 ## Why no required options
 
 Verified: `hermes gateway run` starts cleanly with a completely empty

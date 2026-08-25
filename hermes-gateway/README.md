@@ -35,6 +35,26 @@ This is one of two add-ons in this repository — see the
 | `api_server_key` | password | *(empty)* | **Required if `api_server_enabled` is true** — the add-on refuses to start otherwise (checked before handing off to hermes, with a clear log line). |
 | `extra_env` | list of `KEY=VALUE` | `[]` | Escape hatch for the many other integrations hermes supports (WhatsApp, Email, Matrix, Teams, Google Chat, other model providers — see upstream's `.env.example`) that don't have a dedicated option here yet. Malformed entries are logged and skipped, not silently dropped. |
 
+### OpenAI-compatible gateways such as 9Router
+
+The pinned Hermes gateway keeps its active model in persistent
+`config.yaml`; setting a provider key alone does not change that saved model.
+This wrapper therefore treats these non-secret `extra_env` entries as
+declarative boot-time model settings as well as runtime overrides:
+
+```yaml
+openrouter_api_key: "<gateway client key>"
+extra_env:
+  - OPENROUTER_BASE_URL=http://your-router:20128/v1
+  - HERMES_INFERENCE_PROVIDER=openrouter
+  - HERMES_INFERENCE_MODEL=glm/glm-5.3
+```
+
+On every start, the wrapper writes the provider, model, and base URL into
+Hermes's persisted config before launching the gateway. The API key remains
+only in the password-typed Supervisor option/environment and is never copied
+into `config.yaml`.
+
 ## Ports
 
 `8642/tcp` is declared but **unmapped by default** (`null`) — only relevant

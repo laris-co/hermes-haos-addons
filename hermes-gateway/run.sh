@@ -133,5 +133,34 @@ PY
     fi
 fi
 
+# Gateway model routing is deliberately config-backed upstream. In the pinned
+# Hermes release, HERMES_INFERENCE_MODEL is honored by one-shot/TUI invocations
+# but `hermes gateway run` reads model.default only from config.yaml. Treat the
+# same declarative env overrides as boot-time config inputs here so a Supervisor
+# restart cannot resurrect a stale provider/model from persistent /data.
+#
+# This writes only non-secret routing metadata. Provider credentials remain in
+# environment/password-typed Supervisor options and are never copied into
+# config.yaml.
+hermes_config_set() {
+    key="$1"
+    value="$2"
+    if [ -n "$value" ]; then
+        /opt/hermes/.venv/bin/hermes config set "$key" "$value" >/dev/null
+    fi
+}
+
+hermes_config_set model.provider "${HERMES_INFERENCE_PROVIDER:-}"
+hermes_config_set model.default "${HERMES_INFERENCE_MODEL:-}"
+
+# Keep the saved route intelligible in `hermes config show` and gateway status.
+# Runtime still receives this env var, which is required by Hermes's OpenRouter
+# mirror resolver when the hostname is not openrouter.ai (such as local 9Router).
+if [ -n "${OPENROUTER_BASE_URL:-}" ]; then
+    hermes_config_set model.base_url "$OPENROUTER_BASE_URL"
+elif [ -n "${CUSTOM_BASE_URL:-}" ]; then
+    hermes_config_set model.base_url "$CUSTOM_BASE_URL"
+fi
+
 echo "[hermes-gateway] handing off to upstream entrypoint: $*"
 exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"
