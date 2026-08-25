@@ -66,18 +66,17 @@ if (typeof createServerAdapter !== "function") {
 const adapterModule = createServerAdapter() as ServerAdapterModule;
 ```
 
-The vendored adapter's own `src/index.ts` (unmodified) exports a plain
-object instead:
+The original v0.1 adapter exported only a plain object:
 
 ```ts
 export const thclawsLocalAdapter: ServerAdapterModule = { type: "thclaws_local", ... };
 export default thclawsLocalAdapter;
 ```
 
-No `createServerAdapter` export at all — loading this package as-is
-through Paperclip's real loader would throw. Fixed with one small file
-this repo adds on top (`adapter/src/paperclip-entry.ts`, NOT part of
-the vendored source):
+No `createServerAdapter` export at all — loading v0.1 as-is through
+Paperclip's real loader would throw. The v0.2 source now exports the
+factory itself. This repo keeps its stable `paperclip-entry.ts` entry
+point as a compatibility layer for existing installations:
 
 ```ts
 import { thclawsLocalAdapter } from "./index.js";
@@ -99,6 +98,24 @@ import("./dist/paperclip-entry.js").then(async (m) => {
 createServerAdapter type: function
 adapter type field: thclaws_local
 ```
+
+## Adapter v0.2 workflow contract
+
+The bundled adapter now maps Paperclip's heartbeat lifecycle to
+thClaws' persistent print-mode sessions:
+
+1. A fresh task runs `thclaws -p --accept-all ...` and captures the
+   `[session] saved <id>` status emitted on stderr.
+2. The adapter returns `{sessionId, sessionParams:{sessionId,cwd,model}}`
+   through Paperclip's adapter result/session codec.
+3. A later heartbeat for that task receives the stored params and runs
+   `thclaws -p ... --resume <id>` only if cwd and model still match.
+4. A cwd/model change starts fresh rather than loading unrelated state.
+
+The environment check also calls the configured OpenAI-compatible
+`GET /models` endpoint with the configured bearer key. A missing or
+stale key is now a failing **Test now** result, rather than a warning
+followed by three guaranteed 401 retries during assigned work.
 
 ## Live proof against the real Paperclip server (not a simulation)
 

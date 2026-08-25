@@ -1,5 +1,5 @@
 name: "Paperclip [EXPERIMENTAL]"
-version: "1.0.0"
+version: "1.1.0"
 slug: "paperclip"
 description: >-
   EXPERIMENTAL — may be withdrawn. Wraps the official
@@ -11,9 +11,9 @@ description: >-
   monorepo, none of which the thclaws integration path uses. Upstream's
   own words, not softened: "Not a single-agent tool... If you have one
   agent, you probably don't need Paperclip. If you have twenty — you
-  definitely do." The thclaws adapter is a minimal v1 (one-shot
-  `thclaws -p --accept-all`, no session resume, no streaming, no Skills
-  tab) built from scratch, NOT the retired official
+  definitely do." The thclaws adapter runs task-scoped, resumable
+  `thclaws -p --accept-all` sessions and validates gateway auth before
+  work starts. It is built from scratch, NOT the retired official
   @thclaws/paperclip-adapter. Read README.md and DOCS.md before
   installing.
 url: "https://github.com/laris-co/hermes-haos-addons/tree/main/paperclip"

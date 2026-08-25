@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { AdapterExecutionContext, AdapterExecutionResult } from "./types.js";
 import {
   asString,
@@ -17,11 +19,10 @@ import {
   renderPaperclipWakePrompt,
 } from "@paperclipai/adapter-utils/server-utils";
 
-// Minimal v1: no session resume, no remote execution targets, no skill
-// staging. thClaws is invoked non-interactively (`--print`) once per run;
-// full stdout is captured as the reply. See paperclip's in-tree
-// packages/adapters/grok-local for the fuller-featured shape this can grow
-// toward (session resume, remote targets, skill staging).
+// thClaws is invoked non-interactively (`--print`) once per run. Its persisted
+// session id is reported on stderr as `[session] saved <id>`; Paperclip stores
+// that id through sessionParams and supplies it on later heartbeats. This keeps
+// a task's conversation coherent without sharing `last` across agents.
 //
 // Deliberately NOT built against the retired @thclaws/paperclip-adapter —
 // that package was tied to thCompany.ai, a separate commercial product that
@@ -30,12 +31,22 @@ import {
 // (OPENAI_COMPAT_BASE_URL / OPENAI_COMPAT_API_KEY), which survives that
 // retirement unaffected.
 
+function savedSessionId(stderr: string): string | null {
+  const matches = [...stderr.matchAll(/^\[session\]\s+saved\s+(\S+)\s*$/gmu)];
+  return matches.at(-1)?.[1] ?? null;
+}
+
+function lastMeaningfulError(stderr: string): string {
+  const lines = stderr.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return [...lines].reverse().find((line) => !line.startsWith("[session]")) ?? lines.at(-1) ?? "";
+}
+
 export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult> {
-  const { runId, agent, config, context, onLog, onMeta, onSpawn, authToken } = ctx;
+  const { runId, agent, runtime, config, context, onLog, onMeta, onSpawn, authToken } = ctx;
 
   const command = asString(config.command, "thclaws");
   const model = asString(config.model, "").trim();
-  const cwd = asString(config.cwd, process.cwd());
+  const cwd = path.resolve(asString(config.cwd, process.cwd()));
   await ensureAbsoluteDirectory(cwd, { createIfMissing: true });
 
   const envConfig = parseObject(config.env);
@@ -51,6 +62,22 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   if (baseUrl) env.OPENAI_COMPAT_BASE_URL = baseUrl;
   if (apiKey) env.OPENAI_COMPAT_API_KEY = apiKey;
 
+  const runtimeSession = parseObject(runtime.sessionParams);
+  const runtimeSessionId = asString(runtimeSession.sessionId, runtime.sessionId ?? "").trim();
+  const runtimeSessionCwd = asString(runtimeSession.cwd, "").trim();
+  const runtimeSessionModel = asString(runtimeSession.model, "").trim();
+  const canResumeSession =
+    runtimeSessionId.length > 0 &&
+    (runtimeSessionCwd.length === 0 || path.resolve(runtimeSessionCwd) === cwd) &&
+    (runtimeSessionModel.length === 0 || runtimeSessionModel === model);
+
+  if (runtimeSessionId && !canResumeSession) {
+    await onLog(
+      "stdout",
+      `[paperclip] thClaws session "${runtimeSessionId}" does not match cwd/model; starting a fresh session.\n`,
+    );
+  }
+
   const promptTemplate = asString(config.promptTemplate, DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE);
   const templateData = {
     agentId: agent.id,
@@ -61,12 +88,25 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     run: { id: runId, source: "on_demand" },
     context,
   };
-  // No session resume in v1, so this is always a fresh session — the wake
-  // prompt always carries the full execution contract (see
-  // renderPaperclipWakePrompt's resumedSession doc comment).
-  const wakePrompt = renderPaperclipWakePrompt(context.paperclipWake, { resumedSession: false });
+  const wakePrompt = renderPaperclipWakePrompt(context.paperclipWake, { resumedSession: canResumeSession });
   const renderedPrompt = renderTemplate(promptTemplate, templateData);
-  const prompt = joinPromptSections([wakePrompt, renderedPrompt]);
+  const handoffPrompt = asString(context.paperclipSessionHandoffMarkdown, "").trim();
+  const instructionsPath = asString(config.instructionsFilePath, "").trim();
+  let instructions = "";
+  if (instructionsPath && !canResumeSession) {
+    const resolvedInstructionsPath = path.resolve(cwd, instructionsPath);
+    try {
+      instructions = await fs.readFile(resolvedInstructionsPath, "utf8");
+    } catch (error) {
+      await onLog(
+        "stderr",
+        `[paperclip] Could not read thClaws instructions "${resolvedInstructionsPath}": ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    }
+  }
+  const prompt = canResumeSession && wakePrompt
+    ? joinPromptSections([wakePrompt, handoffPrompt])
+    : joinPromptSections([instructions, wakePrompt, handoffPrompt, renderedPrompt]);
 
   const timeoutSec = asNumber(config.timeoutSec, 0);
   const graceSec = asNumber(config.graceSec, 15);
@@ -81,6 +121,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   const args = ["-p", "--accept-all"];
   if (model) args.push("-m", model.startsWith("oai/") ? model : `oai/${model}`);
+  if (canResumeSession) args.push("--resume", runtimeSessionId);
   args.push(prompt);
 
   if (onMeta) {
@@ -89,9 +130,21 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       command: resolvedCommand,
       cwd,
       commandArgs: [...args.slice(0, -1), `<prompt ${prompt.length} chars>`],
-      commandNotes: ["Prompt is passed to thclaws as a trailing positional argument with --print --accept-all for unattended execution."],
+      commandNotes: [
+        "Prompt is passed to thclaws as a trailing positional argument with --print --accept-all for unattended execution.",
+        canResumeSession
+          ? `Resuming the Paperclip task's thClaws session ${runtimeSessionId}.`
+          : "Starting a fresh thClaws session; its saved id will be returned to Paperclip.",
+      ],
       env: loggedEnv,
       prompt,
+      promptMetrics: {
+        promptChars: prompt.length,
+        wakePromptChars: wakePrompt.length,
+        instructionsChars: instructions.length,
+        handoffChars: handoffPrompt.length,
+      },
+      context,
     });
   }
 
@@ -116,20 +169,27 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const failed = (proc.exitCode ?? 0) !== 0;
   const stdout = proc.stdout ?? "";
   const stderr = proc.stderr ?? "";
-  const firstErrorLine = stderr.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? "";
+  const sessionId = savedSessionId(stderr) ?? (canResumeSession ? runtimeSessionId : null);
+  const sessionParams = sessionId ? { sessionId, cwd, ...(model ? { model } : {}) } : null;
+  const errorLine = lastMeaningfulError(stderr);
 
   return {
     exitCode: proc.exitCode,
     signal: proc.signal,
     timedOut: false,
-    errorMessage: failed ? (firstErrorLine || `thclaws exited with code ${proc.exitCode ?? -1}`) : null,
+    errorMessage: failed ? (errorLine || `thclaws exited with code ${proc.exitCode ?? -1}`) : null,
+    sessionId,
+    sessionParams,
+    sessionDisplayId: sessionId,
     model: model || null,
     provider: "thclaws",
     biller: "thclaws",
+    billingType: "unknown",
     summary: failed ? null : stdout.trim(),
     resultJson: {
       stdout,
       stderr,
+      resumedSession: canResumeSession,
     },
   };
 }

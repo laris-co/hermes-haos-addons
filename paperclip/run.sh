@@ -131,7 +131,7 @@ cat > /data/adapter-plugins.json <<'JSON'
   {
     "packageName": "@soul-brews-studio/thclaws-paperclip-adapter",
     "localPath": "/opt/thclaws-adapter",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "type": "thclaws_local",
     "installedAt": "2026-08-24T00:00:00.000Z"
   }

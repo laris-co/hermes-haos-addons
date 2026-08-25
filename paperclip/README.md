@@ -39,17 +39,22 @@ stopped being true.
 ## What the thclaws adapter actually does (and doesn't)
 
 The adapter (`@soul-brews-studio/thclaws-paperclip-adapter`) is a
-**from-scratch v1, not the retired official `@thclaws/paperclip-adapter`**
+**from-scratch implementation, not the retired official `@thclaws/paperclip-adapter`**
 (that package was tied to thCompany.ai, a discontinued commercial
 product — see thClaws' own `CHANGELOG.md` v0.110.0). Concretely, that
 means:
 
 - **Has**: spawns `thclaws -p --accept-all -m oai/<model> <prompt>` as
-  one-shot, non-interactive runs, once per Paperclip task. Full stdout
-  becomes the reply.
-- **Does NOT have**: session resume, remote execution targets, skill
-  staging, streaming, a Skills tab, or the 21-provider model surface
-  the retired official package had. Don't expect any of that here.
+  non-interactive runs. Full stdout becomes the reply.
+- **Has**: task-scoped session continuity. The adapter captures
+  `[session] saved <id>` and returns it through Paperclip's session
+  contract; later heartbeats use that exact `--resume <id>` only when
+  cwd/model still match.
+- **Has**: a real authenticated `GET /models` environment probe, a
+  declarative adapter configuration form, and Paperclip instructions
+  bundle support.
+- **Does NOT have yet**: remote execution targets, skill staging/a
+  Skills tab, or the retired package's curated 21-provider picker.
 
 **Two gotchas, from the adapter's own README, worth knowing before you
 rely on this**:
@@ -57,12 +62,9 @@ rely on this**:
 1. thclaws needs an `oai/` model prefix — a bare model id fails with
    `unknown model provider`. The adapter auto-prefixes if you leave it
    off.
-2. **A green run can return the wrong answer.** If the wake prompt
-   isn't passed correctly, thclaws can silently resume a stale session
-   and answer the *previous* question — while still exiting 0. In the
-   adapter authors' own words: **"exit status alone is not evidence of
-   correctness."** Always check the actual reply content, not just
-   whether the run succeeded.
+2. **Never add `--resume last`.** The adapter deliberately uses the
+   task-specific session id Paperclip persisted. `last` can cross
+   agent/task boundaries in a shared working directory.
 
 ## Quick start
 
@@ -77,9 +79,12 @@ rely on this**:
    - `baseUrl` (required) — an OpenAI-compatible endpoint. Point this
      at this repo's own `litellm` or `9router` add-on, or any other
      OpenAI-compatible gateway.
-   - `apiKey` (optional) — sent as `OPENAI_COMPAT_API_KEY`.
-   - `model` (optional) — passed to thclaws via `-m`.
-4. Run the agent from Paperclip's task system.
+   - `apiKey` — sent as `OPENAI_COMPAT_API_KEY`.
+   - `model` — passed to thclaws via `-m`.
+4. Click **Test now**. This now verifies the gateway and bearer key,
+   not merely that the fields exist.
+5. Run the agent from Paperclip's task system. Later heartbeats for
+   the same task resume its thClaws session automatically.
 
 ## Options
 

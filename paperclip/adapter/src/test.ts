@@ -56,6 +56,43 @@ export async function testEnvironment(
     });
   }
 
+  if (baseUrl) {
+    try {
+      const headers: Record<string, string> = {};
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+      const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, {
+        headers,
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) {
+        checks.push({
+          code: response.status === 401 || response.status === 403
+            ? "thclaws_gateway_auth_failed"
+            : "thclaws_gateway_probe_failed",
+          level: "error",
+          message: `Gateway model probe failed with HTTP ${response.status}.`,
+          hint: response.status === 401 || response.status === 403
+            ? "Set the agent's apiKey to a key authorized by this gateway."
+            : "Verify the base URL and gateway health.",
+        });
+      } else {
+        const payload = await response.json() as { data?: unknown[] };
+        checks.push({
+          code: "thclaws_gateway_ready",
+          level: "info",
+          message: `Gateway authentication succeeded; ${Array.isArray(payload.data) ? payload.data.length : 0} model(s) reported.`,
+        });
+      }
+    } catch (error) {
+      checks.push({
+        code: "thclaws_gateway_unreachable",
+        level: "error",
+        message: "Could not reach the configured OpenAI-compatible gateway.",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   try {
     await ensureAbsoluteDirectory(cwd);
     checks.push({
