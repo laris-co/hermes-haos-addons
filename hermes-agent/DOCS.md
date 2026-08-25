@@ -150,7 +150,10 @@ engages. They've been removed from `options`/`schema` entirely rather
 than left in as options that silently do nothing (the exact
 misleading-security-toggle failure class this whole packaging effort
 has tried to avoid). `extra_env` is kept as the one remaining option, for
-forward-compatible tuning.
+forward-compatible tuning. v1.2.0 additionally exposes the inference route as
+dedicated options: a password-redacted OpenRouter-compatible key plus base URL,
+provider, and model. These configure the embedded Chat PTY at boot; the secret
+never needs to appear in the plaintext `extra_env` list.
 
 ## Verification log — v1.1.3 ingress (2026-08-25)
 

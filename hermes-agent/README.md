@@ -35,8 +35,9 @@ This is one of two add-ons in this repository — see the
 
 ## Quick start
 
-1. Install and start the add-on. There is nothing to configure — no
-   username, no password.
+1. Install and start the add-on. There is no separate dashboard username or
+   password. To use Chat, configure a model route in the add-on options (the
+   9Router example below is the route used on catlab).
 2. Open it from **Home Assistant's own sidebar** (it registers itself
    there via ingress — look for "Hermes Agent").
 3. Sign-in is whatever getting to that sidebar already required: your
@@ -81,7 +82,17 @@ transcript.
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
+| `openrouter_api_key` | password | empty | OpenRouter-compatible bearer key. Use this redacted field for 9Router; do not put the key in `extra_env`. |
+| `openrouter_base_url` | URL | empty | OpenRouter-compatible `/v1` endpoint, e.g. `http://192.168.1.143:20128/v1`. |
+| `inference_provider` | string | empty | Provider name, normally `openrouter` for 9Router. |
+| `inference_model` | string | empty | Wire model ID, e.g. `glm/glm-5.3`. |
 | `extra_env` | list of `KEY=VALUE` | `[]` | Escape hatch for advanced tuning — same pattern as `hermes-gateway`. Malformed entries are logged and skipped. |
+
+The four model-route fields are exported into the embedded PTY and also seed
+Hermes' saved `model.*` metadata at boot. The dedicated key field is deliberately
+password-typed; Supervisor redacts it. A stale `OPENROUTER_API_KEY` or
+`OPENROUTER_BASE_URL` saved from the dashboard is removed so it cannot override
+the current add-on configuration after restart.
 
 ## Persistence
 

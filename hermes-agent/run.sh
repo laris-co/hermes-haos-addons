@@ -44,6 +44,14 @@ print(val)
 PY
 }
 
+export_if_set() {
+    env_name="$1"
+    value="$2"
+    if [ -n "$value" ]; then
+        export "$env_name=$value"
+    fi
+}
+
 # --- Escape hatch: arbitrary KEY=VALUE pairs, same pattern (and same
 # regex re-validation reasoning) as hermes-gateway/run.sh.
 if [ -f "$OPTIONS_FILE" ]; then
@@ -76,6 +84,91 @@ PY
         IFS="$old_ifs"
     fi
 fi
+
+# Dedicated model-route options are applied AFTER extra_env so the typed,
+# password-redacted Supervisor fields remain authoritative.  In particular,
+# never make users put OPENROUTER_API_KEY in extra_env: Supervisor displays
+# arbitrary list values in plaintext, while `password?` stays redacted.
+configured_openrouter_key="$(get_opt openrouter_api_key)"
+configured_openrouter_base_url="$(get_opt openrouter_base_url)"
+configured_inference_provider="$(get_opt inference_provider)"
+configured_inference_model="$(get_opt inference_model)"
+
+export_if_set OPENROUTER_API_KEY "$configured_openrouter_key"
+export_if_set OPENROUTER_BASE_URL "$configured_openrouter_base_url"
+export_if_set HERMES_INFERENCE_PROVIDER "$configured_inference_provider"
+export_if_set HERMES_INFERENCE_MODEL "$configured_inference_model"
+
+# Hermes loads /data/.env with override semantics.  A key/base URL saved from
+# the dashboard must not silently replace the current Supervisor options after
+# a restart.  Remove only the competing assignments; the live secret stays in
+# the process environment and never enters argv or a generated file.
+remove_persistent_override() {
+    env_name="$1"
+    configured_value="$2"
+    env_file="/data/.env"
+    [ -n "$configured_value" ] || return 0
+    [ -f "$env_file" ] || return 0
+    if [ -L "$env_file" ]; then
+        echo "[hermes-agent] WARNING: refusing to edit symlinked $env_file" >&2
+        return 0
+    fi
+    if ! /command/s6-setuidgid hermes /opt/hermes/.venv/bin/python - "$env_file" "$env_name" <<'PY'
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+path = Path(sys.argv[1])
+name = sys.argv[2]
+pattern = re.compile(rf"^\s*(?:export\s+)?{re.escape(name)}\s*=")
+original = path.read_text(encoding="utf-8")
+lines = original.splitlines(keepends=True)
+filtered = "".join(line for line in lines if not pattern.match(line))
+if filtered == original:
+    raise SystemExit(0)
+
+fd, tmp_name = tempfile.mkstemp(prefix=".env.haos-", dir=path.parent)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(filtered)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.chmod(tmp_name, 0o600)
+    os.replace(tmp_name, path)
+finally:
+    try:
+        os.unlink(tmp_name)
+    except FileNotFoundError:
+        pass
+PY
+    then
+        echo "[hermes-agent] WARNING: could not clear stale $env_name override from $env_file" >&2
+    fi
+}
+
+remove_persistent_override OPENROUTER_API_KEY "$configured_openrouter_key"
+remove_persistent_override OPENROUTER_BASE_URL "$configured_openrouter_base_url"
+
+# Seed Hermes' saved model metadata as well as the live environment.  The
+# embedded PTY/TUI inherits the env route immediately; config persistence keeps
+# the Models page and future sessions intelligible instead of showing an old
+# claude-opus default beside a working GLM route.
+hermes_config_set() {
+    key="$1"
+    value="$2"
+    if [ -n "$value" ]; then
+        /opt/hermes/.venv/bin/hermes config set "$key" "$value" >/dev/null
+    fi
+}
+
+hermes_config_set model.provider "$configured_inference_provider"
+hermes_config_set model.default "$configured_inference_model"
+hermes_config_set model.base_url "$configured_openrouter_base_url"
+
+unset configured_openrouter_key configured_openrouter_base_url
+unset configured_inference_provider configured_inference_model
 
 echo "[hermes-agent] handing off to upstream entrypoint: $* (dashboard bound to loopback; reachable via HA ingress only — see DOCS.md)"
 exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"
