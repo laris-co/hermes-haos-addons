@@ -1,0 +1,25 @@
+name: "Catlab Flow"
+version: "1.0.0"
+slug: "catlab_flow"
+description: >-
+  A React Flow diagram of catlab's real MQTT topology — DBK and FloodBoy
+  devices, the fleet broker, the scoped bridge, and the local consumers. Every
+  node is a config file or a verified subscribe test, not live polling.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/catlab-flow"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:graph-outline
+panel_title: Catlab Flow
+panel_admin: false
+stage: experimental
+options: {}
+schema: {}

@@ -1,0 +1,10 @@
+{
+  "name": "kit4kids-rules",
+  "private": true,
+  "scripts": {
+    "build": "bun build src/app.ts --outfile=build/app.js --minify --target=browser"
+  },
+  "dependencies": {
+    "blockly": "13.2.1"
+  }
+}

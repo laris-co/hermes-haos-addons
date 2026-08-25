@@ -1,0 +1,12 @@
+{
+  "name": "catlab-flow",
+  "private": true,
+  "scripts": {
+    "build": "bun build src/app.tsx --outdir=build --minify --target=browser"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "reactflow": "11.11.4"
+  }
+}

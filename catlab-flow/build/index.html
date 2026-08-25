@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>catlab-flow</title>
+  <link rel="stylesheet" href="app.css">
+  <style>html,body,#root{margin:0;height:100%;background:#0d1117}</style>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- type=module: bun's browser bundle emits import.meta, which is a hard
+       SyntaxError in a classic script. Measured: "Cannot use 'import.meta'
+       outside a module" at app.js:235 — the bundle threw before any of its
+       own code ran, so nothing rendered and no error surfaced in-page. -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>

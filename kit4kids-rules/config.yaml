@@ -1,0 +1,25 @@
+name: "Kit4Kids Rules"
+version: "1.0.0"
+slug: "kit4kids_rules"
+description: >-
+  A Blockly rule builder for the Kit4Kids classroom kit — drag blocks to build
+  a PM2.5 threshold rule, and see the real ESPHome lambda it compiles to. No
+  device access; purely educational.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/kit4kids-rules"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:puzzle
+panel_title: Kit4Kids Rules
+panel_admin: false
+stage: experimental
+options: {}
+schema: {}
