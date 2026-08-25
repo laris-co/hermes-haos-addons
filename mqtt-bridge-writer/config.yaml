@@ -1,0 +1,48 @@
+name: "MQTT Bridge Writer"
+version: "1.0.0"
+slug: "mqtt_bridge_writer"
+description: >-
+  Renders a scoped mosquitto bridge.conf from this add-on's options into
+  /share/mosquitto/, so core_mosquitto (customize.active: true) can bridge
+  named topics from an external broker. Never renders a bare "#" subscription.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/mqtt-bridge-writer"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+# The whole mechanism: write access to /share, where core_mosquitto's
+# customize.folder looks for *.conf to fold into its own mosquitto.conf.
+map:
+  - share:rw
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:transit-connection-variant
+panel_title: MQTT Bridge
+panel_admin: true
+stage: experimental
+options:
+  connection_name: "catlab-to-larisco"
+  remote_host: "mqtt.laris.co"
+  remote_port: 1883
+  remote_username: "nat"
+  remote_password: ""
+  # One topic per line, direction implicit "in". NEVER a bare "#" — enforced
+  # again in code, not just documented, because a bare # once measured at
+  # ~109 GB/day against a guest with single-digit GB free.
+  topics:
+    - "DUSTBOY/DBK/#"
+    - "FloodBoy/#"
+    - "DustBoy2025/+/lwt"
+    - "DustBoy2025/+/sensor/mqtt_json_data/state"
+schema:
+  connection_name: str
+  remote_host: str
+  remote_port: port
+  remote_username: str
+  remote_password: password
+  topics: [str]
