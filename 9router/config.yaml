@@ -6,7 +6,7 @@
 # DIRECTORY before installing — it states exactly what is and is not
 # known about this image.
 name: "9Router"
-version: "1.1.0"
+version: "1.2.0"
 slug: "nine_router"
 description: >-
   ⚠️ READ THE SECURITY WARNING IN README.md FIRST. decolua's 9Router —

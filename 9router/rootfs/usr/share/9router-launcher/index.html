@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>9Router</title>
+<style>
+  :root { color-scheme: dark; }
+  html,body { height:100%; margin:0; }
+  body {
+    display:flex; align-items:center; justify-content:center;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:#0a0a0a; color:#e6e3dc; text-align:center; padding:24px;
+  }
+  .card { max-width:460px; }
+  h1 { font-size:20px; letter-spacing:.02em; margin:0 0 6px; }
+  .v { color:#7c7a73; font-size:12px; margin-bottom:20px; }
+  p { color:#9a978f; font-size:13.5px; line-height:1.6; margin:0 0 22px; }
+  a.btn {
+    display:inline-block; text-decoration:none; font-weight:600; font-size:14px;
+    padding:11px 22px; border-radius:8px; background:#f0653a; color:#fff;
+  }
+  a.btn:hover { background:#ff7448; }
+  .alt { display:block; margin-top:14px; font-size:12px; color:#7c7a73; }
+  .alt a { color:#9a978f; }
+  code { color:#cbc8c0; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>9Router</h1>
+    <div class="v">opens in a full browser tab</div>
+    <p>
+      9Router is a single-page app that can't run inside Home Assistant's sidebar
+      frame (its navigation escapes the ingress path). It runs on its own port
+      instead, with the full dashboard, <code>/v1</code> API, and provider OAuth.
+    </p>
+    <a id="go" class="btn" href="#" target="_blank" rel="noopener">Open 9Router &nbsp;&#8599;</a>
+    <span class="alt">
+      or open in this tab: <a id="same" href="#" target="_top" rel="noopener">9Router dashboard</a>
+    </span>
+    <p class="alt" id="url"></p>
+  </div>
+<script>
+  (function () {
+    // The launcher runs inside the ingress iframe, whose origin IS the Home
+    // Assistant host the user reached HA on (catlab.local, an IP, whatever).
+    // So location.hostname is exactly the right host to reach the published
+    // :20128 port on — no hardcoded hostname, works for .local and IP alike.
+    var PORT = 20128;
+    var url = location.protocol + "//" + location.hostname + ":" + PORT + "/dashboard";
+    var go = document.getElementById("go");
+    var same = document.getElementById("same");
+    go.href = url; same.href = url;
+    document.getElementById("url").textContent = url;
+    // Best-effort auto-open in the same tab (HA's iframe allows top navigation by
+    // user activation; a scripted attempt is harmless if the sandbox blocks it —
+    // the buttons are the reliable path).
+    try { if (window.top && window.top !== window.self) window.top.location.replace(url); } catch (e) {}
+  })();
+</script>
+</body>
+</html>

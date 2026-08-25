@@ -104,87 +104,35 @@ Confirmed multi-arch via `docker manifest inspect` (amd64 + arm64).
   one `curl /login` (both present). Not a bug, just a timing detail
   worth knowing if you're checking whether the add-on "really started."
 
-## Networking — the ingress asset-path problem, and the fix
+## Networking — why the app is on a published port, not ingress
 
-**2026-08-25: this is now solved by an nginx sidecar in the add-on.** The
-measurements below still describe the underlying behaviour of the upstream app
-and are kept because they are what the fix is built on. Four rewrites are needed
-and each covers a case the others miss — all four verified against the running
-image behind a simulated `X-Ingress-Path`:
+**2026-08-25: this add-on serves the SPA on a published port (`ports: 20128`) and
+uses the ingress panel only as a launcher.** An earlier version tried to proxy the
+dashboard through HA's ingress with an nginx sidecar rewriting HTML/CSS/JS/fetch
+and the History API. It got the first paint but navigation still broke, and the
+reason is architectural, not a missing rewrite:
 
-| # | Case | Fix | Verified |
-|---|---|---|---|
-| 1 | `GET /` -> `307 Location: /dashboard` (absolute, escapes the mount) | `proxy_redirect` + `absolute_redirect off` | `location: /api/hassio_ingress/<token>/dashboard` |
-| 2 | 20 root-relative `src`/`href` on the page | `sub_filter` on HTML | 0 root-relative refs remain |
-| 3 | webpack's baked `.p="/_next/"` — dynamic chunks | `sub_filter` on JS | `.p="/api/hassio_ingress/<token>/_next/"` |
-| 4 | `fetch()`/XHR to root-relative API paths | injected runtime shim | shim present with the live prefix |
+- 9Router is a Next.js App-Router SPA that performs **hard `window.location`
+  redirects to root-relative paths** (after login it navigates to `/dashboard` at
+  the site root). Under HA's dynamic ingress prefix (`/api/hassio_ingress/<token>/`)
+  that escapes the mount and HA answers its own bare `404: Not Found`.
+- It builds **absolute API URLs from `window.location.origin`** in ~21 places
+  (OAuth authorize/device-code, the `/v1` endpoint display, the CLI-tool cards).
+- `window.location` assignment **cannot be intercepted by a reverse proxy**, and
+  an OAuth `redirect_uri` can't round-trip through a per-session token path.
 
-Case 3 is the one that would be easy to miss: rewriting only the HTML gets a
-correct first paint and then fails on the first route change, which looks like
-an intermittent app bug rather than a proxy problem.
+So the app runs at a root path on port **20128**, where the full dashboard, the
+`/v1` API, and provider OAuth all work — the same way the upstream image runs. The
+ingress port (**20129**) serves a single static launcher page
+(`rootfs/usr/share/9router-launcher/index.html`) that opens the app on 20128 using
+the host the viewer reached HA on (`location.hostname`), so the sidebar entry
+still does something useful. Verified locally: the launcher is served for every
+ingress path; `:20128/login` → 200; `:20128/` → 307 `/dashboard`.
 
-Case 4 cannot be done by text substitution — `"/api/` appears in too many
-innocuous contexts in a bundle to rewrite blindly — so the sidecar injects a
-small script before `</head>` that patches `fetch`, `XMLHttpRequest.open`, and
-the `src`/`href` setters. Every patch is a no-op if the URL is already prefixed,
-so it composes safely with the `sub_filter` rewrites.
-
-`absolute_redirect off` is not optional: without it nginx expands the rewritten
-`Location` into an absolute URL built from its own listen address, which sends
-the browser to the add-on's internal port. That was observed, not predicted.
-
-### Original measurements (upstream behaviour, unchanged)
-
-
-The dashboard is a Next.js app. Checked whether it's aware of a
-reverse-proxy path prefix the way HA's ingress needs, the same way this
-repo checked hermes's dashboard for `hermes-agent`:
-
-```
-$ curl http://127.0.0.1:20130/login -o noprefix.html
-$ curl http://127.0.0.1:20130/login -H "X-Ingress-Path: /api/hassio_ingress/testtoken12345" -o prefix.html
-$ diff noprefix.html prefix.html
-(no output — byte-identical)
-$ grep -o 'src="[^"]*"\|href="[^"]*"' noprefix.html | head
-href="/_next/static/media/e4af272ccee01ff0-s.p.woff2"
-href="/_next/static/css/8f9ac5a7bd3a79e5.css"
-src="/_next/static/chunks/webpack-c5bac7f02c807729.js"
-...
-```
-Root-relative, no `X-Ingress-Path` (or any header) awareness. Under HA's
-path-prefixed ingress mount, the browser will request `/_next/static/…`
-at the site root — past the ingress mount — which will not reach this
-add-on. **The dashboard may render unstyled and without its JavaScript
-through the sidebar.**
-
-This did **not** change the decision to skip a published port. The
-brief's instruction was explicit — prefer ingress with no published
-port — and the reasoning is about attack surface, not dashboard
-polish: nearly every advisory above is exactly "a header was trusted
-for a security decision in a reverse-proxy deployment," so keeping this
-add-on's only reachable surface behind Supervisor's own ingress
-authentication (rather than adding a directly-reachable port) is the
-more defensible default even if the sidebar experience is degraded. A
-future pass could investigate an nginx `sub_filter` rewrite of the
-initial HTML's asset paths (the same general idea as `hermes-agent`'s
-ingress fix), but that would only fix the *visible* page — any
-JavaScript-originated `fetch()` calls to root-relative API paths from
-inside the already-loaded, un-rewritable minified bundles would still
-break, so this was not attempted; a half-working rewrite that LOOKS
-fixed but silently fails specific interactions felt like a worse outcome
-than a clearly-broken, honestly-documented one.
-
-**`/v1/*` for other add-ons**: Home Assistant's own add-on-to-add-on DNS
-convention is `{repo}_{slug}` with underscores converted to hyphens for
-the actual hostname (e.g. `local_xy` → `local-xy`) — confirmed from HA's
-own developer docs on add-on communication. **Not independently
-confirmed for this specific published repo** (the exact `{repo}` prefix
-Supervisor assigns depends on how the repository was added, and this
-add-on has not been installed on a live Supervisor to observe it
-directly — see hermes-gateway's real install on catlab for what "really
-confirmed" looks like by contrast). Check the add-on's own Info page in
-Supervisor for its exact internal hostname rather than trusting a
-guessed value here.
+**Security note:** publishing the port widens the surface to the LAN. It is
+acceptable here because `require_api_key` is on and `initial_password` is
+mandatory, and this is a LAN box. Do NOT point a tunnel at :20128 without further
+hardening — see SECURITY.md.
 
 ## Verification log (2026-08-24)
 
