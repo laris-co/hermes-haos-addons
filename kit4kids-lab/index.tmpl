@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Kit4Kids Lab</title>
+  <style>
+    /* Rendered from a template at container start; the values come from the
+       add-on's Configuration tab. No <script> anywhere — the ingress policy has
+       no script-src, so inline JS would be dropped with no error at all. */
+    :root {
+      --accent: {{ACCENT_COLOR}};
+      --bg: #0d1117;
+      --panel: rgba(17, 23, 32, .84);
+      --ink: #f4f7fb;
+      --muted: #8b98a9;
+      --line: rgba(255, 255, 255, .1);
+      color-scheme: dark;
+      font-family: Inter, "Noto Sans Thai", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f8fb; --panel: rgba(255,255,255,.94); --ink: #16202c;
+        --muted: #5b6b7d; --line: rgba(16,32,48,.12); color-scheme: light;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      min-height: 100vh; padding: 28px 20px 48px; color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 6%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 34%),
+        radial-gradient(circle at 88% 88%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 38%),
+        var(--bg);
+    }
+    main { width: min(860px, 100%); margin: 0 auto; }
+    header {
+      padding: 26px clamp(20px, 4vw, 34px); border: 1px solid var(--line);
+      border-top: 3px solid var(--accent); border-radius: 20px;
+      background: var(--panel); backdrop-filter: blur(16px); margin-bottom: 18px;
+    }
+    .kicker { font-size: 12.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+    h1 { margin: 8px 0 6px; font-size: clamp(25px, 4.4vw, 36px); letter-spacing: -.02em; }
+    header p { margin: 0; color: var(--muted); line-height: 1.6; max-width: 58ch; }
+    section {
+      padding: 20px clamp(18px, 3.4vw, 28px); border: 1px solid var(--line);
+      border-radius: 16px; background: var(--panel); margin-bottom: 14px;
+    }
+    h2 { margin: 0 0 12px; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; width: 34%; }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+    code { padding: 1px 5px; border-radius: 5px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    ol { margin: 0; padding-left: 20px; line-height: 1.85; }
+    ol li::marker { color: var(--accent); font-weight: 700; }
+    .warn { border-left: 3px solid var(--accent); padding-left: 14px; color: var(--muted); line-height: 1.65; font-size: 14px; }
+    footer { margin-top: 20px; text-align: center; font-size: 12.5px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="kicker">Bench card</div>
+      <h1>{{LAB_NAME}} · PM2.5 Lab</h1>
+      <p>
+        ชุดวัดฝุ่นสำหรับห้องเรียน — ESP32-C3 อ่านค่าจาก PMS7003 โชว์บนจอ OLED
+        แล้วส่งขึ้น MQTT ทุกอย่างบนหน้านี้คือของจริงจากบอร์ดที่ประกอบแล้ว
+      </p>
+    </header>
+
+    <section>
+      <h2>ฮาร์ดแวร์ · Hardware</h2>
+      <table>
+        <tr><th>Board</th><td class="mono">ESP32-C3 (esp32-c3-devkitm-1)</td></tr>
+        <tr><th>Sensor</th><td class="mono">PMS7003 — PM1.0 / PM2.5 / PM10</td></tr>
+        <tr><th>UART</th><td><code>rx GPIO6</code> · <code>tx GPIO7</code></td></tr>
+        <tr><th>Control</th><td><code>set GPIO5</code> · <code>reset GPIO8</code></td></tr>
+        <tr><th>Display</th><td class="mono">SSD1306 OLED (I²C)</td></tr>
+        <tr><th>Status</th><td class="mono">RMT LED strip</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>MQTT</h2>
+      <table>
+        <tr><th>Topic root</th><td><code>{{MQTT_PREFIX}}/&lt;device_id&gt;/</code></td></tr>
+        <tr><th>Status (LWT)</th><td><code>{{MQTT_PREFIX}}/&lt;device_id&gt;/status</code> — <span class="mono">online</span> / <span class="mono">offline</span>, retained</td></tr>
+      </table>
+      <p class="warn" style="margin-top:14px">
+        อย่า subscribe <code>#</code> เด็ดขาด — broker ของกองยานเดินข้อมูลราว 109 GB ต่อวัน
+        ระบุ topic จริงเสมอ
+      </p>
+    </section>
+
+    <section>
+      <h2>ลำดับการประกอบ · Build order</h2>
+      <ol>
+        <li>ต่อ PMS7003 เข้า UART ตามตารางด้านบน แล้วเช็กไฟเลี้ยง 5 V ก่อนเสียบ USB</li>
+        <li>ต่อ OLED ผ่าน I²C — สายสลับกันจอจะไม่ขึ้น แต่บอร์ดไม่พัง</li>
+        <li>เปิด Device Builder ในแถบข้าง เลือกอุปกรณ์ แล้วกด Install</li>
+        <li>ครั้งแรกแฟลชผ่าน USB · หลังจากนั้น OTA ผ่าน wifi ได้เลย</li>
+        <li>รอค่าฝุ่นขึ้นบนจอ แล้วค่อยเช็ก MQTT ว่าส่งจริงไหม</li>
+      </ol>
+      <p class="warn" style="margin-top:14px">
+        <strong>“Configuration is valid” ไม่ได้แปลว่า build ผ่าน</strong> — มันไม่ได้ compile
+        C++ สักบรรทัด มีแต่ไฟล์ <code>.bin</code> เท่านั้นที่เป็นหลักฐาน
+      </p>
+    </section>
+
+    <footer>{{LAB_NAME}} · served through Home Assistant ingress · no published port</footer>
+  </main>
+</body>
+</html>
