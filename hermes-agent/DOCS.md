@@ -126,6 +126,16 @@ absolute font/image paths inside CSS. Without it, `/` returns 200 while
 the real browser requests `http://catlab.local/assets/...` and every CSS/JS
 chunk returns 404. v1.1.1 adds the translation.
 
+One more root-relative path remained inside Vite's generated lazy-route
+preload helper. Its dependency table contains `assets/ChatPage-*.js`, but the
+generated URL function prepends `/`, so the first click into Chat/Sessions/etc.
+requested `http://<ha-host>/assets/*` even though the initial page was healthy.
+The lazy `import("./ChatPage-*.js")` itself was already module-relative; only
+the eager dependency preloads were wrong, and their rejected CSS promise
+prevented the lazy import from running. v1.1.2 applies a narrow, fail-closed
+build-time patch so that helper prepends `window.__HERMES_BASE_PATH__`. The
+image build fails unless exactly one known Vite helper is found.
+
 Full nginx config: `rootfs/etc/nginx/hermes-ingress.conf` (same file,
 comments included, is the primary source of truth — this section
 summarizes it).
@@ -140,7 +150,7 @@ misleading-security-toggle failure class this whole packaging effort
 has tried to avoid). `extra_env` is kept as the one remaining option, for
 forward-compatible tuning.
 
-## Verification log — v1.1.1 ingress (2026-08-25)
+## Verification log — v1.1.2 ingress (2026-08-25)
 
 ### Live regression caught by the real sidebar
 
@@ -153,10 +163,13 @@ GET http://catlab.local/assets/index-*.js 404 (Not Found)
 Refused to apply style from http://catlab.local/assets/index-*.css
 ```
 
-That is why a root-page `200` is no longer accepted as UI proof. The v1.1.1
-test must verify that the served HTML contains the live ingress prefix, that
-the referenced CSS/JS chunks return 200 through the same ingress session,
-and that `/api/ws` plus `/api/pty` still upgrade successfully.
+That is why a root-page `200` is no longer accepted as UI proof. v1.1.1 then
+exposed a second regression: the landing page rendered, but clicking Chat or
+refreshing a lazy route loaded Vite dependencies from `/assets/*` on the HA
+host. v1.1.2 must verify that the served HTML contains the live ingress prefix,
+the initial and lazy CSS/JS chunks return 200 through the same ingress session,
+Chat works both by navigation and direct refresh, and `/api/ws` plus `/api/pty`
+still upgrade successfully.
 
 ## Historical local verification — v1.1.0 (2026-08-24)
 

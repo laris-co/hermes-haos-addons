@@ -27,6 +27,15 @@ FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f
 RUN apt-get update && apt-get install -y --no-install-recommends nginx-light \
     && rm -rf /var/lib/apt/lists/*
 
+# Upstream's Vite build uses a root-relative URL for lazy-route preload
+# dependencies even though the lazy import itself is module-relative.  The
+# backend rewrites index.html for X-Forwarded-Prefix, but it cannot rewrite
+# this JavaScript URL at request time; under HA ingress, clicking CHAT (or any
+# other lazy route) therefore tries /assets/* on Home Assistant itself.  Patch
+# the pinned bundle once, fail-closed if the expected upstream shape changes.
+COPY scripts/patch_vite_preload_base.py /addon/patch_vite_preload_base.py
+RUN python3 /addon/patch_vite_preload_base.py /opt/hermes/hermes_cli/web_dist/assets
+
 # Adds one new s6-rc service (nginx-ingress) alongside upstream's own
 # "dashboard" and "main-hermes" services, registered in the same
 # user/contents.d bundle — see rootfs/etc/s6-overlay/s6-rc.d/nginx-ingress/.
