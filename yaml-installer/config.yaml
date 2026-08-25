@@ -1,0 +1,44 @@
+name: "YAML Installer"
+version: "1.0.0"
+slug: "yaml_installer"
+description: >-
+  Pull ESPHome device configs from a git repository into /config/esphome — the
+  de-facto code stays in git, this installs it. Pin a ref, preview what would
+  change, apply with per-file backups. Never touches secrets.yaml.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/yaml-installer"
+arch:
+  - amd64
+  - aarch64
+startup: application
+# boot: auto — a host reboot leaves boot: manual add-ons stopped, and a stopped
+# add-on reads as a failed install when it is nothing of the kind.
+boot: auto
+# HA base image ships s6-overlay and owns PID 1 via ENTRYPOINT ["/init"].
+init: false
+# The whole mechanism: direct write access to /config. This is a real privilege —
+# which is why `target` below is an ALLOWLIST, not a free path.
+map:
+  - config:rw
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:download-box
+panel_title: YAML Installer
+panel_admin: true
+stage: experimental
+options:
+  repo: "https://github.com/dustboy-kit/esp32c3-pm25-monitor"
+  ref: "main"
+  subdir: ""
+  target: "esphome"
+  mode: "safe"
+schema:
+  repo: str
+  ref: str
+  subdir: str
+  # Allowlisted, enforced again in code — an add-on that can write anywhere in
+  # /config can break Home Assistant itself if pointed at the wrong place.
+  target: list(esphome|esphome/packages|www)
+  mode: list(safe|overwrite)
