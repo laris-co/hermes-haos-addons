@@ -113,6 +113,38 @@ printf '[session] saved session-123\\n' >&2
   }
 });
 
+test("execute uses Paperclip's writable agent workspace when cwd is not configured", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "thclaws-paperclip-workspace-test-"));
+  try {
+    const command = path.join(tmp, "fake-thclaws");
+    const pwdFile = path.join(tmp, "pwd.txt");
+    const workspace = path.join(tmp, "agent-home");
+    await fs.mkdir(workspace);
+    await fs.writeFile(command, `#!/bin/sh
+pwd > "$CAPTURE_PWD"
+printf 'ok\\n'
+printf '[session] saved workspace-session\\n' >&2
+`);
+    await fs.chmod(command, 0o755);
+    const ctx = executionContext(tmp, command, { CAPTURE_PWD: pwdFile }, {
+      sessionId: null,
+      sessionParams: null,
+      sessionDisplayId: null,
+      taskKey: null,
+    });
+    delete ctx.config.cwd;
+    ctx.context.paperclipWorkspace = { source: "agent_home", agentHome: workspace };
+    const result = await execute(ctx);
+    assert.equal(result.sessionId, "workspace-session");
+    assert.equal(
+      await fs.realpath((await fs.readFile(pwdFile, "utf8")).trim()),
+      await fs.realpath(workspace),
+    );
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("environment check proves gateway authentication instead of only checking fields", async () => {
   const server = http.createServer((request, response) => {
     if (request.url !== "/v1/models") {

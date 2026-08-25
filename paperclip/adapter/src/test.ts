@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import path from "node:path";
 import type {
   AdapterEnvironmentCheck,
   AdapterEnvironmentTestContext,
@@ -23,7 +26,12 @@ export async function testEnvironment(
   const checks: AdapterEnvironmentCheck[] = [];
   const config = parseObject(ctx.config);
   const command = asString(config.command, "thclaws");
-  const cwd = asString(config.cwd, process.cwd());
+  const configuredCwd = asString(config.cwd, "").trim();
+  const paperclipHome = (process.env.PAPERCLIP_HOME ?? "").trim();
+  const cwd = path.resolve(
+    configuredCwd ||
+    (paperclipHome ? path.join(paperclipHome, "thclaws-workspaces", ctx.companyId, ".environment-test") : process.cwd()),
+  );
   const baseUrl = asString(config.baseUrl, "").trim();
   const apiKey = asString(config.apiKey, "").trim();
 
@@ -94,7 +102,8 @@ export async function testEnvironment(
   }
 
   try {
-    await ensureAbsoluteDirectory(cwd);
+    await ensureAbsoluteDirectory(cwd, { createIfMissing: true });
+    await fs.access(cwd, fsConstants.W_OK);
     checks.push({
       code: "thclaws_cwd_valid",
       level: "info",

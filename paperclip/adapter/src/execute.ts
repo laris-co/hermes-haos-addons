@@ -46,7 +46,18 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   const command = asString(config.command, "thclaws");
   const model = asString(config.model, "").trim();
-  const cwd = path.resolve(asString(config.cwd, process.cwd()));
+  const configuredCwd = asString(config.cwd, "").trim();
+  const workspace = parseObject(context.paperclipWorkspace);
+  const workspaceCwd = asString(workspace.cwd, "").trim();
+  const workspaceSource = asString(workspace.source, "").trim();
+  const agentHome = asString(workspace.agentHome, "").trim();
+  const paperclipHome = (process.env.PAPERCLIP_HOME ?? "").trim();
+  const fallbackCwd = paperclipHome
+    ? path.join(paperclipHome, "thclaws-workspaces", agent.companyId, agent.id)
+    : process.cwd();
+  const useConfiguredInsteadOfAgentHome = workspaceSource === "agent_home" && configuredCwd.length > 0;
+  const effectiveWorkspaceCwd = useConfiguredInsteadOfAgentHome ? "" : workspaceCwd;
+  const cwd = path.resolve(effectiveWorkspaceCwd || configuredCwd || agentHome || fallbackCwd);
   await ensureAbsoluteDirectory(cwd, { createIfMissing: true });
 
   const envConfig = parseObject(config.env);
