@@ -1,10 +1,10 @@
-# THIS FILE IS INTENTIONALLY NAMED config.yaml.disabled, NOT config.yaml.
-# Supervisor requires a real config.yaml to list an add-on — renaming it
-# is how this add-on is kept out of the published Add-on Store while
-# staying in the repo. See NOT_PUBLISHED.md in this directory for why
-# (two unpatched CRITICAL advisories, as of this writing). Do not rename
-# this back to config.yaml without re-checking that NOT_PUBLISHED.md's
-# reasoning still holds.
+# PUBLISHED 2026-08-25 at the repository owner's explicit request, after
+# re-checking the advisories this add-on was originally withheld over:
+# both remain unpatched but their affected ranges (<= 0.4.41 and
+# <= 0.4.71) do not cover the 0.5.55 digest pinned in the Dockerfile.
+# That is not the same as being fixed. READ SECURITY.md IN THIS
+# DIRECTORY before installing — it states exactly what is and is not
+# known about this image.
 name: "9Router"
 version: "1.0.0"
 slug: "nine_router"
@@ -46,7 +46,9 @@ host_network: false
 # requires editing this add-on's config.yaml yourself; it is
 # deliberately not a one-click option.
 ingress: true
-ingress_port: 20128
+# nginx sidecar, not 9Router's own 20128 — the app emits root-relative URLs
+# that need the ingress prefix put back. See rootfs/etc/nginx/.
+ingress_port: 20129
 panel_icon: mdi:router-network
 panel_title: 9Router
 options:

@@ -1,4 +1,52 @@
-# This add-on is built but deliberately NOT published
+# 9Router — security posture
+
+> **2026-08-25 — this add-on was withheld and is now published, at the
+> repository owner's explicit request.** The reasoning that follows is the
+> original withholding note, kept in full because it is still the right thing to
+> read before installing. What changed is recorded here first.
+
+## What changed
+
+The withholding rested on two CRITICAL advisories with no patched version. Both
+are still open (`first_patched_version: null`, neither withdrawn), but their
+**affected ranges do not include the version this add-on now pins**:
+
+| Advisory | Severity | Affected range | Pinned here |
+|---|---|---|---|
+| GHSA-vjc7-jrh9-9j86 | CRITICAL | `<= 0.4.41` | 0.5.55 |
+| GHSA-qvfm-67h2-2qfx | CRITICAL | `<= 0.4.71` | 0.5.55 |
+
+**Being above an affected range is not the same as being fixed.** Neither
+advisory declares a patched version, which usually means later releases are
+unassessed rather than confirmed clean — and this project's own history is of
+the same root cause recurring after being "fixed". Treat 0.5.55 as unaudited,
+not as safe.
+
+## What this add-on does about it
+
+- **No published port.** The only reachable surface is HA's own ingress, so
+  Home Assistant's login is the auth boundary. Compare the deployment already
+  running on the host, which binds `:20128` openly to the LAN — this is the more
+  contained of the two.
+- **`initial_password` has no default** and is a non-optional schema type, so
+  Supervisor refuses to start until a real one is set. Upstream's own default
+  falls back to the literal `123456`, which is the exact weakness behind a
+  documented prior RCE advisory.
+- **`require_api_key` defaults to true**, where upstream leaves `/v1/*` reachable
+  with no credential at all.
+
+## One thing worth knowing that is not a CVE
+
+The dashboard loads Google Analytics from `googletagmanager.com`
+(`G-LC959F603F`) on every page. A self-hosted AI router that reports page views
+to a third party is a privacy property, not a vulnerability — but it is not
+something the upstream README mentions, and it is visible in the served HTML.
+
+---
+
+# Original withholding note (kept in full)
+
+## This add-on was built and deliberately NOT published
 
 If you found this directory expecting an installable add-on: it was
 built, fully documented, and verified — then withheld. This is not an

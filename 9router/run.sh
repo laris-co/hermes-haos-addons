@@ -145,5 +145,27 @@ fi
 # to. Do it ourselves first.
 chown -R node:node /data 2>/dev/null || echo "[9router] WARNING: chown /data failed — continuing" >&2
 
+# --- HA ingress sidecar ---
+# nginx sits in front of 9Router's own port and puts the ingress path prefix
+# back onto the root-relative URLs the Next.js dashboard emits. See
+# /etc/nginx/9router-ingress.conf for the measurements behind each rewrite.
+#
+# It is backgrounded rather than supervised: this add-on has no s6-overlay (see
+# config.yaml's init: true), so if nginx dies nothing restarts it and the whole
+# add-on needs a manual restart. Stated rather than hidden — same tradeoff as
+# the thclaws add-on in this repo.
+mkdir -p /var/lib/nginx/tmp /var/log/nginx
+chown -R node:node /var/lib/nginx 2>/dev/null || true
+if nginx -t -c /etc/nginx/9router-ingress.conf 2>/dev/null; then
+    nginx -c /etc/nginx/9router-ingress.conf &
+    echo "[9router] ingress sidecar listening on 20129 -> 20128"
+else
+    # Fail loud. A silently-absent sidecar means the dashboard loads a blank
+    # page under ingress and looks like an upstream bug.
+    echo "[9router] ERROR: ingress nginx config failed to validate:" >&2
+    nginx -t -c /etc/nginx/9router-ingress.conf >&2 2>&1 || true
+    exit 1
+fi
+
 echo "[9router] exec: /entrypoint.sh $*"
 exec /entrypoint.sh "$@"

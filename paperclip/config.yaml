@@ -1,0 +1,70 @@
+name: "Paperclip [EXPERIMENTAL]"
+version: "1.0.0"
+slug: "paperclip"
+description: >-
+  EXPERIMENTAL — may be withdrawn. Wraps the official
+  ghcr.io/paperclipai/paperclip image (org-chart/task-manager
+  orchestration for teams of AI agents) with thClaws wired in as a
+  selectable agent-runtime adapter. Size up front: ~5.62 GB, almost
+  entirely upstream's own — it bundles FIVE agent CLI toolchains
+  (Claude Code, Codex, OpenCode, Gemini CLI, Kimi Code) plus a compiled
+  monorepo, none of which the thclaws integration path uses. Upstream's
+  own words, not softened: "Not a single-agent tool... If you have one
+  agent, you probably don't need Paperclip. If you have twenty — you
+  definitely do." The thclaws adapter is a minimal v1 (one-shot
+  `thclaws -p --accept-all`, no session resume, no streaming, no Skills
+  tab) built from scratch, NOT the retired official
+  @thclaws/paperclip-adapter. Read README.md and DOCS.md before
+  installing.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/paperclip"
+# Official image, real multi-arch manifest (amd64 + arm64) — verified
+# via `docker manifest inspect`. amd64 additionally confirmed by
+# actually running it; arm64 is this repo's native build/verification
+# arch. See DOCS.md.
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+# init: false — verified directly, not assumed: a real docker-stop
+# timing test against the unmodified upstream image (before this
+# add-on's run.sh existed at all) showed a fast, clean exit (0.9s,
+# ExitCode=0) with no --init present. Node's own SIGTERM handling here
+# is sufficient, unlike thclaws's bare Rust binary (see
+# thclaws/config.yaml for that contrast — same key, opposite reason).
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# A real port, not ingress. Checked properly before deciding, not
+# skipped: verified live that PAPERCLIP_PUBLIC_URL has ZERO effect on
+# served asset paths (byte-identical /assets/index-*.js hrefs with and
+# without it set — same negative result as Open WebUI's
+# PUBLIC_BASE_PATH and litellm's /ui/ investigation), and that a
+# request carrying the ingress-shaped path prefix gets a flat 404 —
+# Paperclip has no reverse-proxy-subpath support at all. See DOCS.md
+# for the exact transcript.
+ports:
+  "3100/tcp": 3100
+ports_description:
+  "3100/tcp": >-
+    Paperclip's own web UI + API. First visit needs Paperclip's own
+    onboarding/bootstrap flow (it starts in `authenticated`/`private`
+    mode — verified live via /api/health, not just a Dockerfile
+    default). Never remap this to 80 or 443 — Home Assistant itself
+    owns those on this host.
+options:
+  # Internal signing secrets, not user credentials — auto-generated and
+  # persisted to /data if left blank (see run.sh). An operator-supplied
+  # value always wins.
+  better_auth_secret: ""
+  tool_action_signing_secret: ""
+  # Optional — only needed for a real external domain. See README.
+  public_url: ""
+  extra_env: []
+schema:
+  better_auth_secret: password?
+  tool_action_signing_secret: password?
+  public_url: url?
+  extra_env:
+    - match(^[A-Za-z_][A-Za-z0-9_]*=.*$)

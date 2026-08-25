@@ -101,6 +101,7 @@ unofficial distribution channel — stated plainly rather than buried.
 | [`open-webui`](open-webui/) | Open WebUI | Browser chat UI over the OpenAI-compatible API — pairs with `litellm`. ⚠️ Heaviest add-on here (~1.66 GB / ~660-970 MiB idle) and no ingress (verified its frontend has no HA path-prefix support) — real published port instead. |
 | [`thclaws`](thclaws/) | `thclaws --serve` | Native Rust AI coding-agent workspace. Ingress sidebar (verified: loopback bind by default, real 101 WebSocket upgrade, no absolute asset paths to break). ⚠️ ~1.06 GB — the brief assumed a light CLI-only binary existed; verified directly that it doesn't (the one official Linux binary hard-links a full GTK/WebKit/GStreamer stack in every mode). See its README before installing. |
 | [`uptime-kuma`](uptime-kuma/) | Uptime Kuma | Self-hosted uptime/status dashboard for watching this repo's other add-ons (or anything else). Real published port, not ingress — verified its frontend uses absolute asset paths with no reverse-proxy-subpath support. No credential options; its own setup wizard creates the admin account. |
+| [`paperclip`](paperclip/) | Paperclip + thclaws adapter | 🧪 **EXPERIMENTAL, may be withdrawn.** Wraps the official 5.62 GB Paperclip image (org-chart/task orchestration for teams of AI agents — upstream's own words: "not a single-agent tool") with thClaws wired in as a selectable agent adapter. Real published port, not ingress (verified). Read its README before installing. |
 
 Within each pair, the two add-ons are faces of the same upstream
 project — this mirrors upstream's own `docker-compose.yml`, which runs
@@ -266,6 +267,7 @@ litellm/                      # BerriAI LiteLLM proxy — OpenAI-compatible /v1
 open-webui/                   # Open WebUI — heaviest add-on here, no ingress, read its README
 thclaws/                       # thClaws AI coding agent — ingress sidebar, ~1.06 GB, read its README
 uptime-kuma/                   # Uptime Kuma status dashboard — real port, no ingress, read its README
+paperclip/                     # EXPERIMENTAL — Paperclip + thclaws adapter, 6.59 GB, read its README
 ```
 Each add-on directory: `config.yaml` (options/schema/ports/arch),
 `Dockerfile`, `run.sh` (options.json → env, then exec into hermes),

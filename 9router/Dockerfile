@@ -19,6 +19,12 @@ FROM decolua/9router@sha256:f00fe389ef41a1999dd0d0275ad0c2955d13d176f7c4c5cb844b
 # up/persists — only the literal path /data is).
 ENV DATA_DIR=/data
 
+# nginx-light is the ingress sidecar (see rootfs/etc/nginx/9router-ingress.conf
+# for the measurements that make it necessary). The base is Alpine 3.24, so apk,
+# not apt-get — and --no-cache keeps the layer from carrying the index.
+RUN apk add --no-cache nginx
+
+COPY rootfs/etc/nginx/9router-ingress.conf /etc/nginx/9router-ingress.conf
 COPY run.sh /addon/run.sh
 RUN chmod 0755 /addon/run.sh
 

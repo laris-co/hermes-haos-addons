@@ -104,7 +104,37 @@ Confirmed multi-arch via `docker manifest inspect` (amd64 + arm64).
   one `curl /login` (both present). Not a bug, just a timing detail
   worth knowing if you're checking whether the add-on "really started."
 
-## Networking — the ingress-asset-path caveat, verified not assumed
+## Networking — the ingress asset-path problem, and the fix
+
+**2026-08-25: this is now solved by an nginx sidecar in the add-on.** The
+measurements below still describe the underlying behaviour of the upstream app
+and are kept because they are what the fix is built on. Four rewrites are needed
+and each covers a case the others miss — all four verified against the running
+image behind a simulated `X-Ingress-Path`:
+
+| # | Case | Fix | Verified |
+|---|---|---|---|
+| 1 | `GET /` -> `307 Location: /dashboard` (absolute, escapes the mount) | `proxy_redirect` + `absolute_redirect off` | `location: /api/hassio_ingress/<token>/dashboard` |
+| 2 | 20 root-relative `src`/`href` on the page | `sub_filter` on HTML | 0 root-relative refs remain |
+| 3 | webpack's baked `.p="/_next/"` — dynamic chunks | `sub_filter` on JS | `.p="/api/hassio_ingress/<token>/_next/"` |
+| 4 | `fetch()`/XHR to root-relative API paths | injected runtime shim | shim present with the live prefix |
+
+Case 3 is the one that would be easy to miss: rewriting only the HTML gets a
+correct first paint and then fails on the first route change, which looks like
+an intermittent app bug rather than a proxy problem.
+
+Case 4 cannot be done by text substitution — `"/api/` appears in too many
+innocuous contexts in a bundle to rewrite blindly — so the sidecar injects a
+small script before `</head>` that patches `fetch`, `XMLHttpRequest.open`, and
+the `src`/`href` setters. Every patch is a no-op if the URL is already prefixed,
+so it composes safely with the `sub_filter` rewrites.
+
+`absolute_redirect off` is not optional: without it nginx expands the rewritten
+`Location` into an absolute URL built from its own listen address, which sends
+the browser to the add-on's internal port. That was observed, not predicted.
+
+### Original measurements (upstream behaviour, unchanged)
+
 
 The dashboard is a Next.js app. Checked whether it's aware of a
 reverse-proxy path prefix the way HA's ingress needs, the same way this

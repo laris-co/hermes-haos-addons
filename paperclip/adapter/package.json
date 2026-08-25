@@ -1,0 +1,31 @@
+{
+  "name": "@soul-brews-studio/thclaws-paperclip-adapter",
+  "version": "0.1.0",
+  "description": "Paperclip adapter for thClaws — spawns the thclaws CLI directly via its OpenAI-compatible surface. Not a fork of the retired @thclaws/paperclip-adapter (which was tied to the discontinued thCompany.ai product); built from scratch against thClaws' generic POST /agent/run and OpenAI-compat surfaces, which survive that retirement unaffected.",
+  "keywords": ["paperclip", "thclaws", "ai-agent", "adapter", "openai-compatible"],
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://github.com/Soul-Brews-Studio/thclaws-paperclip-adapter",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Soul-Brews-Studio/thclaws-paperclip-adapter.git"
+  },
+  "exports": {
+    ".": "./dist/paperclip-entry.js"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@paperclipai/adapter-utils": "2026.817.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
