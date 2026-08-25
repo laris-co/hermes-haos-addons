@@ -311,26 +311,41 @@ uses, fetched and checksum-verified the same way (see
 image's specific combination of installed GTK/WebKit/GStreamer
 packages, not assumed from the standalone add-on's separate build.
 
-## Not verified
+## Live HAOS workflow proof (Catlab, add-on 1.1.1)
 
-- The full onboarding/bootstrap flow (creating the first admin account
-  in the browser) was not driven end to end — confirmed
-  `bootstrapStatus: bootstrap_pending` via `/api/health`, not that
-  completing it works.
-- No agent was actually created with the `thclaws_local` adapter type
-  and run through Paperclip's task system — confirmed the adapter
-  *loads* and is *selectable* (it appears in
-  `{"adapters":["thclaws_local"]}`), not that a full task execution
-  through it succeeds end to end against a real OpenAI-compatible
-  gateway.
-- No real provider credentials or a real `litellm`/`9router` instance
-  were wired up as the adapter's `baseUrl` target.
-- No live HAOS Supervisor install — plain `docker build`/`docker run`
-  only, per this repo's standard caveat, and per team-lead's own offer
-  to verify the plugin-registration mechanism on a real Supervisor
-  (catlab) if it couldn't be confirmed here — it has now been confirmed
-  here, against the real upstream image, so that offer may not be
-  needed, but a live-Supervisor pass would still be the strongest
-  remaining check.
-- Image size measured on this repo's native arm64 build machine only —
+The earlier container-only gaps are now closed against the installed
+HAOS add-on, authenticated Paperclip, and Catlab's real 9Router route.
+No key value was printed during verification.
+
+1. Supervisor rebuilt/updated `a90308c2_paperclip` from 1.0.0 through
+   1.1.0 to 1.1.1 and read it back as `started`.
+2. Paperclip's real adapter Test endpoint returned `status=pass` with
+   `thclaws_gateway_ready`, `thclaws_cwd_valid`, and
+   `thclaws_command_resolvable`. This proves the v0.2 adapter loaded and
+   authenticated `GET /models` through 9Router.
+3. A fresh controlled GLM QA heartbeat returned the exact probe marker,
+   exit code 0, `[session] saved ...`, and a non-empty
+   `sessionIdAfter`.
+4. A second heartbeat returned the marker again, had both
+   `sessionIdBefore` and `sessionIdAfter`, those ids were equal, and
+   stderr contained both `[session] resumed ...` and
+   `[session] saved ...`.
+5. Neither run contained a 401, `save failed`, or adapter failure. The
+   temporary probe prompt was removed and the probe session reset after
+   the test.
+
+The first 1.1.0 live pass found one real integration bug that unit tests
+had not exposed: with no configured `cwd`, the adapter used Paperclip's
+read-only application directory and thClaws ended with
+`[session] save failed: ... Permission denied`. Add-on 1.1.1 fixes the
+default resolution order to use Paperclip's task workspace, configured
+cwd, agent home, or a per-company/per-agent directory under
+`PAPERCLIP_HOME`. A regression test executes a fake thClaws process in
+that resolved agent workspace.
+
+## Still not implemented / verified
+
+- Remote execution targets and Paperclip skill staging/Skills tab are
+  not part of this adapter yet.
+- Image size was measured on this repo's native arm64 build machine only —
   not independently re-measured on native amd64.
