@@ -1,0 +1,27 @@
+name: "Hello World"
+version: "1.0.0"
+slug: "hello_world"
+description: >-
+  A tiny, self-contained Home Assistant sidebar app. It exists to prove the
+  complete repository → Supervisor build → ingress → sidebar path with no
+  published port, credentials, API access, or host privileges.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hello-world"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+# The Home Assistant base image already contains s6-overlay and owns PID 1.
+# Do not add Docker's second init process around it.
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:hand-wave
+panel_title: Hello World
+panel_admin: false
+stage: experimental
+options: {}
+schema: {}
