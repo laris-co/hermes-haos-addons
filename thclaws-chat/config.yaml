@@ -1,5 +1,5 @@
 name: "thCLAWS Chat"
-version: "1.0.0"
+version: "1.0.1"
 slug: "thclaws_chat"
 description: >-
   The built-in thCLAWS chatbot GUI shell as a focused Home Assistant sidebar

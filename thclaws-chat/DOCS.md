@@ -13,6 +13,12 @@ JavaScript:
 4. model/theme events are forwarded using the same envelopes as thCLAWS's
    React `UIView` host.
 
+The host also mirrors `session_load` requests into an outer
+`#session=<id>` hash. On direct load or `hashchange`, it calls the built-in
+chatbot's own `openSession(id)` function after the iframe finishes loading, so
+history rendering and agent continuation still have one implementation. New
+sessions clear the hash; no session content is stored in the URL.
+
 nginx listens on ingress port `8099` and lazily proxies the shell, WebSocket,
 and sandboxed file assets to `a90308c2-thclaws:8342` across Supervisor's
 private add-on network. Only the Supervisor ingress peer (`172.30.32.2`) may

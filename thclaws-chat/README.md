@@ -22,3 +22,14 @@ sessions, models, tools, approvals, and workspace.
 The internal target name `a90308c2-thclaws` is the Supervisor/Docker DNS name
 for this repository's `thclaws` add-on. No host port is published and the
 existing thCLAWS launch mode is unchanged.
+
+## Deep links
+
+Opening a stored chat updates the outer Home Assistant URL to a stable hash:
+
+```text
+http://catlab.local/a90308c2_thclaws_chat#session=sess-...
+```
+
+Copy that URL to return directly to the same thCLAWS session. A bare
+`#sess-...` hash is accepted too. **New chat** clears the hash.

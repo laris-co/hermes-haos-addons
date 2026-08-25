@@ -9,6 +9,56 @@
   let reconnectDelay = 250;
   let reconnectTimer = null;
   let shellReady = false;
+  let deepLinkRequest = 0;
+
+  function routeWindow() {
+    try {
+      if (window.top && window.top.location.origin === location.origin) return window.top;
+    } catch { /* cross-origin embed: keep the hash on this frame */ }
+    return window;
+  }
+
+  function sessionFromHash() {
+    let raw;
+    try {
+      raw = decodeURIComponent(routeWindow().location.hash.replace(/^#/, "").trim());
+    } catch {
+      return "";
+    }
+    const value = raw.startsWith("session=") ? raw.slice("session=".length) : raw;
+    return /^[A-Za-z0-9._:-]{1,200}$/.test(value) ? value : "";
+  }
+
+  function setSessionHash(id) {
+    const target = routeWindow();
+    const next = id ? `#session=${encodeURIComponent(id)}` : "";
+    if (target.location.hash === next) return;
+    target.history.replaceState(
+      target.history.state,
+      "",
+      `${target.location.pathname}${target.location.search}${next}`,
+    );
+  }
+
+  async function openDeepLinkedSession() {
+    const id = sessionFromHash();
+    if (!id || !shellReady) return;
+    const request = ++deepLinkRequest;
+
+    // The built-in chatbot owns transcript rendering. Its classic-script
+    // `openSession` function is the same path its history buttons call; wait
+    // for main.js to finish loading, then use it instead of duplicating session
+    // rendering in this host wrapper.
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (request !== deepLinkRequest) return;
+      const openSession = iframe.contentWindow?.openSession;
+      if (typeof openSession === "function") {
+        try { await openSession(id); } catch { /* shell renders its own error */ }
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
 
   function websocketUrl() {
     const base = location.href.endsWith("/") ? location.href : `${location.href}/`;
@@ -101,6 +151,7 @@
       shellReady = true;
       pushHostState();
       connect();
+      void openDeepLinkedSession();
       return;
     }
 
@@ -113,6 +164,20 @@
 
     if (parentOnly.has(data.type)) return;
 
+    // Keep the outer HA route shareable. Clicking a stored chat updates the
+    // URL without reloading; New chat clears it. Pasting a deep link later
+    // follows the exact same built-in openSession path.
+    if (data.type === "session_load" && typeof data.payload?.loadId === "string") {
+      setSessionHash(data.payload.loadId);
+    } else if (data.type === "session_new") {
+      setSessionHash("");
+    } else if (
+      data.type === "session_delete" &&
+      data.payload?.deleteId === sessionFromHash()
+    ) {
+      setSessionHash("");
+    }
+
     send({
       type: `gui_shell_${data.type}`,
       id: data.requestId,
@@ -123,5 +188,6 @@
   });
 
   window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", pushHostState);
+  routeWindow().addEventListener("hashchange", () => void openDeepLinkedSession());
   connect();
 })();
