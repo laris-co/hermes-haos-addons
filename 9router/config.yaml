@@ -6,7 +6,7 @@
 # DIRECTORY before installing — it states exactly what is and is not
 # known about this image.
 name: "9Router"
-version: "1.0.2"
+version: "1.1.0"
 slug: "nine_router"
 description: >-
   ⚠️ READ THE SECURITY WARNING IN README.md FIRST. decolua's 9Router —
@@ -32,19 +32,27 @@ init: true
 hassio_api: false
 homeassistant_api: false
 host_network: false
-# NO published port, by design — the dashboard is reachable via ingress
-# (HA's own login is the auth boundary for the browser UI), and the
-# /v1/* proxy API is reachable by OTHER add-ons on this same host over
-# Supervisor's internal add-on network (by hostname, no port publish
-# needed) — e.g. hermes-gateway calling this add-on's /v1 endpoint
-# directly. Given this project's own advisory history is almost
-# entirely "a reverse-proxy/header trust decision was wrong," minimizing
-# the externally-reachable surface is the deliberate, conservative
-# choice here — not a UX default that can be casually reversed. See
-# DOCS.md if you still want a published port for an external tool
-# (Claude Code, Cursor, etc. running on a different machine) — that
-# requires editing this add-on's config.yaml yourself; it is
-# deliberately not a one-click option.
+# PUBLISHED PORT — added 2026-08-25 at the owner's request.
+#
+# The original design was portless (see git history / SECURITY.md). It was
+# reversed for a concrete, verified reason: 9Router is a Next.js App-Router SPA
+# that does hard `window.location` redirects to root-relative paths, which escape
+# HA's dynamic ingress path-prefix and hit HA's own "404: Not Found". No reverse
+# proxy can rewrite a client-side window.location assignment, so ingress cannot
+# host this app's navigation reliably. The port serves it at a root path, where
+# it works fully — the same way the existing 9Router on black.local runs.
+#
+# This DOES widen the attack surface to the LAN. It is acceptable here because:
+# require_api_key is on, initial_password is mandatory, and this is a LAN box
+# behind the home router. It is NOT acceptable to then point a tunnel at this
+# port without further hardening — see SECURITY.md.
+#
+# The ingress panel is kept as well: v1.1.0 ships the port (works today), and a
+# follow-up source rebuild makes the sidebar navigation work too.
+ports:
+  20128/tcp: 20128
+ports_description:
+  20128/tcp: "9Router dashboard + /v1 API — direct LAN access (http://<host>:20128)"
 ingress: true
 # nginx sidecar, not 9Router's own 20128 — the app emits root-relative URLs
 # that need the ingress prefix put back. See rootfs/etc/nginx/.
