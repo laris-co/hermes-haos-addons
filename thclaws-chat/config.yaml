@@ -1,0 +1,26 @@
+name: "thCLAWS Chat"
+version: "1.0.0"
+slug: "thclaws_chat"
+description: >-
+  The built-in thCLAWS chatbot GUI shell as a focused Home Assistant sidebar
+  app. It contains no model credentials and runs no second agent: an internal
+  reverse proxy connects it to the already-running thCLAWS add-on, preserving
+  thCLAWS sessions, tools, approvals, models, memory, and streaming responses.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/thclaws-chat"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:message-processing
+panel_title: thCLAWS Chat
+panel_admin: false
+stage: experimental
+options: {}
+schema: {}
