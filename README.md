@@ -92,6 +92,7 @@ unofficial distribution channel — stated plainly rather than buried.
 | Add-on | Runs | Use it for |
 |---|---|---|
 | [`hello-world`](hello-world/) | Static nginx page | Minimal, ingress-only Home Assistant sidebar example. No published port, credentials, API access, mapped folders, or host privileges. |
+| [`hermes-logs`](hermes-logs/) | Redacted Supervisor log console | Focused ingress-only live logs for `hermes-gateway`, with filter/pause/copy controls plus JSON and text APIs. No published port; the Supervisor token stays server-side. |
 | [`hermes-gateway`](hermes-gateway/) | `hermes gateway run` | Telegram / Discord / Slack / WhatsApp / Email bridge + cron scheduler + optional OpenAI-compatible API server. Wraps upstream's published Docker image. |
 | [`hermes-agent`](hermes-agent/) | `hermes dashboard` | Browser UI with an embedded PTY chat tab. Wraps upstream's published Docker image. |
 | [`hermes-gateway-lite`](hermes-gateway-lite/) | `hermes gateway run` | Same, built minimal from pinned source. Smaller, but `TERMINAL_ENV=local` — see its README before installing. |

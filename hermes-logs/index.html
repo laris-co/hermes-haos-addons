@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Hermes Logs</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="identity">
+        <div class="mark" aria-hidden="true">H</div>
+        <div>
+          <div class="eyebrow">GATEWAY OBSERVABILITY</div>
+          <h1>Hermes Logs</h1>
+        </div>
+      </div>
+      <div class="connection" id="connection" data-state="loading">
+        <span class="pulse"></span>
+        <span id="connectionText">Connecting</span>
+      </div>
+    </header>
+
+    <section class="summary" aria-label="Log summary">
+      <div class="target-card">
+        <span class="label">STREAM</span>
+        <strong id="target">Hermes Gateway</strong>
+        <span class="subtle">Supervisor journal · secret-safe view</span>
+      </div>
+      <div class="metric error"><span id="errorCount">—</span><small>errors</small></div>
+      <div class="metric warning"><span id="warningCount">—</span><small>warnings</small></div>
+      <div class="metric"><span id="lineCount">—</span><small>lines</small></div>
+      <div class="metric"><span id="lastUpdated">—</span><small>updated</small></div>
+    </section>
+
+    <section class="toolbar" aria-label="Log controls">
+      <label class="search-wrap">
+        <span aria-hidden="true">⌕</span>
+        <input id="search" type="search" placeholder="Filter logs" autocomplete="off">
+        <kbd>⌘K</kbd>
+      </label>
+      <div class="levels" role="group" aria-label="Log level">
+        <button class="level active" data-level="all">All</button>
+        <button class="level" data-level="error">Errors</button>
+        <button class="level" data-level="warning">Warnings</button>
+        <button class="level" data-level="info">Info</button>
+      </div>
+      <label class="select-wrap">Lines
+        <select id="lineLimit">
+          <option value="100">100</option>
+          <option value="250">250</option>
+          <option value="500">500</option>
+          <option value="1000">1,000</option>
+        </select>
+      </label>
+      <button id="pause" class="button secondary">Pause</button>
+      <button id="refresh" class="button primary">Refresh</button>
+      <button id="copy" class="icon-button" title="Copy visible logs" aria-label="Copy visible logs">⧉</button>
+    </section>
+
+    <section class="console-card">
+      <div class="console-head">
+        <div class="traffic"><i></i><i></i><i></i></div>
+        <code id="sourceLabel">supervisor://addons/hermes-gateway/logs</code>
+        <span id="visibleCount">0 visible</span>
+      </div>
+      <div id="empty" class="empty" hidden>No log lines match this filter.</div>
+      <ol id="logLines" class="log-lines" aria-live="polite"></ol>
+      <button id="jumpLatest" class="jump-latest" hidden>↓ Latest</button>
+    </section>
+
+    <footer>
+      <span><i class="shield">✓</i> Supervisor token never reaches this browser</span>
+      <span>Common credentials are redacted server-side</span>
+      <a id="rawLink" href="api/logs/raw?lines=250" target="_blank" rel="noreferrer">Raw text API ↗</a>
+    </footer>
+  </main>
+  <script src="app.js" defer></script>
+</body>
+</html>
