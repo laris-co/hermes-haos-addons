@@ -23,26 +23,38 @@ const nodeStyle = (accent: string) => ({
 });
 
 const nodes: Node[] = [
-  { id: "dbk", position: { x: 0, y: 0 }, data: { label: "🧪 Kit4Kids DBK boards\nDBK-001 / -002 / -010" }, style: nodeStyle("#32c999") },
-  { id: "floodboy", position: { x: 0, y: 140 }, data: { label: "🌊 FloodBoy fleet\n44 stations" }, style: nodeStyle("#4f8cff") },
-  { id: "remote", position: { x: 320, y: 70 }, data: { label: "☁️ mqtt.laris.co:1883\nfleet broker" }, style: nodeStyle("#ff8a3d") },
-  { id: "writer", position: { x: 620, y: 70 }, data: { label: "🔧 mqtt-bridge-writer\nrenders bridge.conf\n(bare # refused in code)" }, style: nodeStyle("#ffd089") },
-  { id: "local", position: { x: 920, y: 70 }, data: { label: "🏠 core_mosquitto\ncatlab local broker" }, style: nodeStyle("#7c4dff") },
-  { id: "mqttboard", position: { x: 1220, y: -20 }, data: { label: "📋 mqtt-board\n334 topics" }, style: nodeStyle("#8b98a9") },
-  { id: "haentities", position: { x: 1220, y: 60 }, data: { label: "🔍 ha-entities\nHA state + registry" }, style: nodeStyle("#8b98a9") },
-  { id: "mcp", position: { x: 1220, y: 150 }, data: { label: "🤖 mcp_server\n/api/mcp/assist" }, style: nodeStyle("#8b98a9") },
-  { id: "display", position: { x: 1520, y: 70 }, data: { label: "🖥️ Bigger display\n(esp32-oracle / kru32-oracle\nJC3248W535 — not built yet)" }, style: { ...nodeStyle("#ff6e9c"), borderStyle: "dashed" } },
+  { id: "dbk", position: { x: 0, y: 20 }, data: { label: "🧪 Kit4Kids DBK\nDBK-001 / -002 / -010" }, style: nodeStyle("#32c999") },
+  { id: "floodboy", position: { x: 0, y: 150 }, data: { label: "🌊 FloodBoy\n44 stations" }, style: nodeStyle("#4f8cff") },
+  { id: "ancs", position: { x: 0, y: 280 }, data: { label: "📱 ancs-display\nESP32-S3 · .167" }, style: nodeStyle("#ff6e9c") },
+  { id: "remote", position: { x: 300, y: 90 }, data: { label: "☁️ mqtt.laris.co:1883\nfleet broker · ~109 GB/day" }, style: nodeStyle("#ff8a3d") },
+  // Consumers connect DIRECTLY to the remote broker — verified from their own
+  // options (broker: mqtt://mqtt.laris.co:1883), not through the local one.
+  { id: "mqttboard", position: { x: 640, y: -40 }, data: { label: "📋 mqtt-board\n334 topics · 5 patterns" }, style: nodeStyle("#8b98a9") },
+  { id: "watchboy", position: { x: 640, y: 60 }, data: { label: "👁️ watchboy\nSSE · liveness tiers" }, style: nodeStyle("#8b98a9") },
+  { id: "writer", position: { x: 640, y: 175 }, data: { label: "🔧 mqtt-bridge-writer\nwrites bridge.conf" }, style: nodeStyle("#ffd089") },
+  { id: "local", position: { x: 980, y: 175 }, data: { label: "🏠 core_mosquitto\nlocal broker · logins: []\n⚠ NO consumers yet" }, style: { ...nodeStyle("#7c4dff"), borderStyle: "dashed" } },
+  // ANCS reaches HA over the ESPHome native API — never MQTT.
+  { id: "ha", position: { x: 640, y: 300 }, data: { label: "🏡 Home Assistant\nentity registry" }, style: nodeStyle("#4f8cff") },
+  { id: "mcp", position: { x: 980, y: 300 }, data: { label: "🤖 mcp_server\n/api/mcp/assist" }, style: nodeStyle("#32c999") },
+  { id: "claude", position: { x: 1290, y: 300 }, data: { label: "💬 Claude Code\nGetLiveContext" }, style: nodeStyle("#32c999") },
+  { id: "display", position: { x: 1290, y: 90 }, data: { label: "🖥️ Bigger display\nJC3248W535 — not built" }, style: { ...nodeStyle("#ff6e9c"), borderStyle: "dashed" } },
 ];
 
+const lbl = { fill: "#8b98a9", fontSize: 10.5 };
+
 const edges: Edge[] = [
-  { id: "e-dbk-remote", source: "dbk", target: "remote", label: "DUSTBOY/DBK/#", style: { stroke: "#32c999" }, labelStyle: { fill: "#8b98a9", fontSize: 10.5 } },
-  { id: "e-fb-remote", source: "floodboy", target: "remote", label: "FloodBoy/#", style: { stroke: "#4f8cff" }, labelStyle: { fill: "#8b98a9", fontSize: 10.5 } },
-  { id: "e-remote-writer", source: "remote", target: "writer", label: "reads bridge.conf", labelStyle: { fill: "#8b98a9", fontSize: 10.5 } },
-  { id: "e-writer-local", source: "writer", target: "local", label: "writes /share/mosquitto/*.conf", labelStyle: { fill: "#8b98a9", fontSize: 10.5 } },
-  { id: "e-local-board", source: "local", target: "mqttboard" },
-  { id: "e-local-ha", source: "local", target: "haentities" },
-  { id: "e-local-mcp", source: "local", target: "mcp", style: { strokeDasharray: "4 3" } },
-  { id: "e-board-display", source: "mqttboard", target: "display", style: { strokeDasharray: "4 3", stroke: "#ff6e9c" }, label: "not yet built", labelStyle: { fill: "#ff6e9c", fontSize: 10.5 } },
+  { id: "e1", source: "dbk", target: "remote", label: "DUSTBOY/DBK/#", style: { stroke: "#32c999" }, labelStyle: lbl },
+  { id: "e2", source: "floodboy", target: "remote", label: "FloodBoy/#", style: { stroke: "#4f8cff" }, labelStyle: lbl },
+  // These two bypass the bridge entirely — direct to the fleet broker.
+  { id: "e3", source: "remote", target: "mqttboard", label: "direct", labelStyle: lbl },
+  { id: "e4", source: "remote", target: "watchboy", label: "direct", labelStyle: lbl },
+  { id: "e5", source: "remote", target: "writer", label: "bridged in", labelStyle: lbl },
+  { id: "e6", source: "writer", target: "local", label: "/share/mosquitto/*.conf", labelStyle: lbl },
+  // ancs-display does NOT use MQTT for HA — it is adopted over the native API.
+  { id: "e7", source: "ancs", target: "ha", label: "ESPHome API :6053", style: { stroke: "#ff6e9c" }, labelStyle: lbl },
+  { id: "e8", source: "ha", target: "mcp", label: "exposed entities", labelStyle: lbl },
+  { id: "e9", source: "mcp", target: "claude", label: "Streamable HTTP", style: { stroke: "#32c999" }, labelStyle: lbl },
+  { id: "e10", source: "mqttboard", target: "display", style: { strokeDasharray: "4 3", stroke: "#ff6e9c" }, label: "not built", labelStyle: { fill: "#ff6e9c", fontSize: 10.5 } },
 ];
 
 function App() {
@@ -50,9 +62,11 @@ function App() {
     <div style={{ width: "100vw", height: "100vh", background: "#0d1117" }}>
       <div style={{ position: "absolute", top: 12, left: 16, zIndex: 5, color: "#f4f7fb", fontFamily: "Inter, sans-serif" }}>
         <div style={{ fontSize: 15, fontWeight: 600 }}>🔀 catlab-flow</div>
-        <div style={{ fontSize: 11.5, color: "#8b98a9", maxWidth: 380 }}>
-          The real MQTT topology built tonight — every node is a config file or a
-          verified subscribe test, not live polling (v1). Dashed = not built yet.
+        <div style={{ fontSize: 11.5, color: "#8b98a9", maxWidth: 430 }}>
+          Verified topology — every edge read from an add-on's own options or a real
+          subscribe test. <span style={{ color: "#ffd089" }}>mqtt-board and watchboy
+          connect straight to the fleet broker</span>, so the local broker currently
+          has no consumers. Dashed = not built.
         </div>
       </div>
       <ReactFlow

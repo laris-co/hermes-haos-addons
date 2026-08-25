@@ -1,5 +1,5 @@
 name: "Catlab Flow"
-version: "1.0.0"
+version: "1.1.0"
 slug: "catlab_flow"
 description: >-
   A React Flow diagram of catlab's real MQTT topology — DBK and FloodBoy
