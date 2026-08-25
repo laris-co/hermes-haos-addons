@@ -145,21 +145,21 @@ fi
 # to. Do it ourselves first.
 chown -R node:node /data 2>/dev/null || echo "[9router] WARNING: chown /data failed — continuing" >&2
 
-# --- HA sidebar wrapper ---
-# nginx serves ONE static page on the ingress port (20129). That page fills the
-# sidebar with a nested iframe whose source is the real app on published :20128.
-# It does NOT proxy the SPA — that was tried and cannot work (see the nginx
-# config for why). The nested frame keeps the app at its root origin, where its
-# navigation, APIs, cookies, assets, and provider OAuth work normally.
+# --- HA ingress launcher ---
+# nginx serves ONE static page on the ingress port (20129): a launcher that opens
+# the real app on the published :20128 port. It does NOT proxy the SPA — that was
+# tried and cannot work (see /etc/nginx/9router-ingress.conf for why). The app
+# itself is reached directly on 20128; this only exists so the sidebar entry does
+# something useful when clicked.
 #
 # Backgrounded rather than supervised: this add-on has no s6-overlay (config.yaml
 # init: true), so if nginx dies nothing restarts it. Low risk for a static server.
 if nginx -t -c /etc/nginx/9router-ingress.conf 2>/dev/null; then
     nginx -c /etc/nginx/9router-ingress.conf &
-    echo "[9router] sidebar wrapper on 20129 → embeds the app from :20128"
+    echo "[9router] ingress launcher on 20129 → opens the app on :20128"
 else
     # Fail loud rather than leaving a blank sidebar panel that looks like a bug.
-    echo "[9router] ERROR: sidebar nginx config failed to validate:" >&2
+    echo "[9router] ERROR: launcher nginx config failed to validate:" >&2
     nginx -t -c /etc/nginx/9router-ingress.conf >&2 2>&1 || true
     exit 1
 fi

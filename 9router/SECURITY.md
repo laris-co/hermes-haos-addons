@@ -26,8 +26,8 @@ not as safe.
 
 - **Published LAN port, explicitly not an Internet port.** Port 20128 serves the
   dashboard and `/v1` API because the upstream SPA cannot run beneath HA's
-  dynamic ingress prefix. The HA sidebar embeds this direct origin in a nested
-  frame. Keep the port behind the LAN firewall and do not tunnel it without
+  dynamic ingress prefix. The HA sidebar provides a landing page that opens this
+  direct origin in a new tab. Keep the port behind the LAN firewall and do not tunnel it without
   additional authentication/hardening.
 - **`initial_password` has no default** and is a non-optional schema type, so
   Supervisor refuses to start until a real one is set. Upstream's own default
@@ -36,7 +36,7 @@ not as safe.
 - **`require_api_key` defaults to true**, where upstream leaves `/v1/*` reachable
   with no credential at all.
 - **The dashboard cookie defaults to non-Secure** because the direct LAN origin
-  is HTTP. This is required for login to work in the sidebar embed. Enable the
+  is HTTP. This is required for login on that published port. Enable the
   Secure flag only if port 20128 is actually served over HTTPS.
 
 ## One thing worth knowing that is not a CVE

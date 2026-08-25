@@ -43,8 +43,8 @@
 >   **GHSA-86m2-fcxq-5q7c**, both "unauthenticated access to `/v1` proxy
 >   APIs" via the *same* class of header-trust bug **specifically in a
 >   reverse-proxy deployment** (exactly the shape of deployment a HAOS
->   add-on can create — this is why the ingress panel uses a static wrapper
->   around the direct app rather than reverse-proxying the SPA, and why the port must not be
+>   add-on can create — this is why the ingress panel is a static landing page
+>   rather than a reverse proxy, and why the port must not be
 >   tunnelled without further hardening; see `SECURITY.md`), and
 >   **GHSA-5mj8-gf6m-fhw8** (a spoofed `X-9r-Real-Ip` header bypassing
 >   API-key checks entirely).
@@ -52,9 +52,9 @@
 >   more weak defaults** we do not inherit in this add-on — see
 >   "What this add-on changes from upstream's defaults" below.
 >
-> **This add-on publishes port 20128 to the LAN.** The full dashboard is
-> shown inside Home Assistant's sidebar by framing that direct origin; the
-> `/v1/*` API is on the same port. Do not expose it to the Internet or point
+> **This add-on publishes port 20128 to the LAN.** Home Assistant's sidebar
+> shows a landing page whose primary button opens that direct dashboard in a
+> new tab; the `/v1/*` API is on the same port. Do not expose it to the Internet or point
 > a tunnel at it without additional hardening. Given this project's history,
 > the LAN exposure is a deliberate usability tradeoff rather than a claim
 > that the application is safe to expose broadly.
@@ -80,7 +80,8 @@ in this repo.
 2. Leave **Require API key** on. The dashboard cookie defaults to non-Secure
    because the published LAN port is plain HTTP; enable **Auth cookie secure**
    only if you actually serve port 20128 over HTTPS.
-3. Start the add-on and open it from **Home Assistant's own sidebar**.
+3. Start the add-on, open it from **Home Assistant's own sidebar**, then click
+   **Open 9Router ↗** to launch the dashboard in a new tab.
 4. Log in with the initial password, then change it from the dashboard
    and set up your provider keys.
 5. Other add-ons on this host (e.g. `hermes-gateway` via `extra_env`)
@@ -94,21 +95,16 @@ in this repo.
 |---|---|---|---|
 | `initial_password` | password | *(none — required)* | First-login dashboard password. Change it from the dashboard after first login. |
 | `require_api_key` | bool | `true` | Enforces a Bearer token on `/v1/*`. Upstream defaults this to off; this add-on does not. |
-| `auth_cookie_secure` | bool | `false` | Marks the dashboard auth cookie `Secure`. The default must be false for the plain-HTTP `:20128` LAN origin used by the sidebar embed. Enable only when that port is genuinely served over HTTPS. |
+| `auth_cookie_secure` | bool | `false` | Marks the dashboard auth cookie `Secure`. The default must be false for the plain-HTTP `:20128` LAN origin opened by the landing page. Enable only when that port is genuinely served over HTTPS. |
 | `extra_env` | list of `KEY=VALUE` | `[]` | Provider API keys and any other env-based tuning. Malformed entries are logged and skipped. |
 
-## Networking — published app plus in-sidebar wrapper
+## Networking — published app plus sidebar landing page
 
 Port **20128** serves the unmodified 9Router dashboard and `/v1/*` API at
-a root origin. HA ingress port **20129** serves a static wrapper that embeds
-that origin in a full-size iframe. This avoids forcing the Next.js SPA under
-HA's dynamic ingress prefix, where its root-relative navigation breaks.
-
-The embed is verified on the plain-HTTP LAN path. When Home Assistant itself
-is opened over HTTPS, the browser cannot embed the plain-HTTP port; the wrapper
-shows an explicit new-tab fallback instead of a blank panel. Provider OAuth
-may also require that new-tab escape hatch when an identity provider refuses
-to render in frames.
+a root origin. HA ingress port **20129** serves a static landing page with an
+**Open 9Router ↗** button (`target="_blank"`). This avoids forcing the Next.js
+SPA under HA's dynamic ingress prefix, where its root-relative navigation
+breaks, while keeping the Home Assistant tab open.
 
 **If the sidebar entry doesn't appear after install** (see `SECURITY.md`
 for the security context): `ingress: true` makes an

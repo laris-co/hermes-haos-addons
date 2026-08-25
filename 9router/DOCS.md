@@ -74,7 +74,7 @@ not advisories but real gaps this add-on doesn't inherit:
 | `INITIAL_PASSWORD=123456` | Required, no default — Supervisor blocks Save/Start until set (`options: null` + non-optional `password` schema). |
 | `REQUIRE_API_KEY` off | `true` |
 | `API_KEY_SECRET` / `MACHINE_ID_SALT` = shared static strings | Auto-generated (32 random bytes, `crypto.randomBytes`) and persisted to `/data/.api-key-secret` / `/data/.machine-id-salt` on first boot — not exposed as user-facing options, since there's no reason an operator would want to hand-pick an HMAC secret. |
-| Upstream exposes the app directly | Port 20128 is published to the LAN so the SPA retains a root origin; HA ingress 20129 embeds it in the sidebar. |
+| Upstream exposes the app directly | Port 20128 is published to the LAN so the SPA retains a root origin; HA ingress 20129 provides a landing page that opens it in a new tab. |
 
 ## What this wraps
 
@@ -108,7 +108,7 @@ Confirmed multi-arch via `docker manifest inspect` (amd64 + arm64).
 ## Networking — why the app is on a published port, not ingress
 
 **2026-08-25: this add-on serves the SPA on a published port (`ports: 20128`) and
-uses the ingress panel as a static full-size wrapper around that origin.** An earlier version tried to proxy the
+uses the ingress panel as a static landing page.** An earlier version tried to proxy the
 dashboard through HA's ingress with an nginx sidecar rewriting HTML/CSS/JS/fetch
 and the History API. It got the first paint but navigation still broke, and the
 reason is architectural, not a missing rewrite:
@@ -124,17 +124,14 @@ reason is architectural, not a missing rewrite:
 
 So the app runs at a root path on port **20128**, where the full dashboard, the
 `/v1` API, and provider OAuth all work — the same way the upstream image runs. The
-ingress port (**20129**) serves one static wrapper
-(`rootfs/usr/share/9router-launcher/index.html`) that embeds the app from 20128
-using the host the viewer reached HA on (`location.hostname`). The SPA remains at
-its root origin while the complete UI appears inside the HA sidebar. The wrapper
-checks reachability, fills the panel without a second scrollbar, and retains a
-new-tab escape hatch for HTTPS/mixed-content and provider-OAuth edge cases.
+ingress port (**20129**) serves one static landing page
+(`rootfs/usr/share/9router-launcher/index.html`) that computes the direct URL
+from `location.hostname`. Its primary `target="_blank"` button opens port 20128
+in a new tab, so HA stays open and the SPA retains its root origin. A secondary
+`target="_top"` link intentionally supports same-tab navigation.
 
-Verified live on catlab: HA's outer ingress iframe has no sandbox; 9Router sends
-neither `X-Frame-Options` nor a `frame-ancestors` CSP; its `SameSite=Lax` session
-cookie remains same-site across ports; the authenticated dashboard and Usage page
-both render and navigate inside the nested frame.
+Verified live on catlab: the landing page remains inside HA, the primary action
+creates a second tab at `:20128/dashboard`, and Usage navigates normally there.
 
 **Security note:** publishing the port widens the surface to the LAN. It is
 acceptable here because `require_api_key` is on and `initial_password` is
@@ -209,8 +206,7 @@ node:node
   this specific repo (see the networking section above).
 - No real provider API key or actual completion request was tested —
   only the auth-gate and config/secret mechanics.
-- A real provider OAuth flow inside the nested frame was not exercised. Some
-  identity providers reject framing; use the wrapper's new-tab escape hatch.
+- A real provider OAuth flow was not exercised.
 - Virtual-key/spend-tracking or any provider-fallback feature was not
   exercised.
 - Image size / idle memory not measured.

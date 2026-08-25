@@ -6,7 +6,7 @@
 # DIRECTORY before installing — it states exactly what is and is not
 # known about this image.
 name: "9Router"
-version: "1.3.0"
+version: "1.3.1"
 slug: "nine_router"
 description: >-
   ⚠️ READ THE SECURITY WARNING IN README.md FIRST. decolua's 9Router —
@@ -47,15 +47,14 @@ host_network: false
 # behind the home router. It is NOT acceptable to then point a tunnel at this
 # port without further hardening — see SECURITY.md.
 #
-# Since v1.3.0 the ingress panel is a static wrapper that embeds the working app
-# from its published root origin. The full SPA therefore renders in HA's sidebar
-# without forcing the SPA itself under HA's dynamic ingress path prefix.
+# The ingress panel is a small landing page. Its primary action opens the working
+# app from the published root origin in a new tab, leaving Home Assistant open.
 ports:
   20128/tcp: 20128
 ports_description:
   20128/tcp: "9Router dashboard + /v1 API — direct LAN access (http://<host>:20128)"
 ingress: true
-# nginx serves the static sidebar wrapper here, not the 9Router SPA itself.
+# nginx serves the static landing page here, not the 9Router SPA itself.
 ingress_port: 20129
 panel_icon: mdi:router-network
 panel_title: 9Router
@@ -72,8 +71,8 @@ options:
   # deliberately does not inherit that default.
   require_api_key: true
   # The dashboard is served from a plain-HTTP LAN port. A Secure cookie cannot
-  # be set there, including when the page is embedded in HA, so false is the
-  # functional default. Use true only when :20128 is genuinely served as HTTPS.
+  # be set there, so false is the functional default. Use true only when :20128
+  # is genuinely served as HTTPS.
   auth_cookie_secure: false
   extra_env: []
 schema:
