@@ -42,7 +42,7 @@ This is one of two add-ons in this repository — see the
 3. Sign-in is whatever getting to that sidebar already required: your
    Home Assistant login. There's no separate hermes credential.
 
-## How the sidebar works (v1.1 — read this if you're curious why there's no login)
+## How the sidebar works (v1.1.1 — read this if you're curious why there's no login)
 
 This add-on binds the dashboard to `127.0.0.1` **inside its own
 container** and puts a small nginx in front of it, translating headers
@@ -55,6 +55,13 @@ history). Home Assistant's own login becomes the auth boundary instead,
 same as every other ingress-only add-on (Node-RED, ESPHome Builder,
 etc.) — anyone who can reach your Home Assistant sidebar can open this
 add-on.
+
+The proxy also translates Supervisor's `X-Ingress-Path` header into the
+`X-Forwarded-Prefix` header Hermes understands. That translation keeps the
+dashboard's `/assets/*`, `/api/*`, and WebSocket URLs under the per-session
+ingress path. v1.1.0 missed it: the HTML returned 200 but every JavaScript
+and CSS asset returned 404 in a real HA sidebar. v1.1.1 is the first version
+verified in a live Supervisor/browser, not merely through a root-page curl.
 
 Verified end to end, including the part that's easy to get wrong: a real
 `HTTP/1.1 101 Switching Protocols` on both `/api/ws` and `/api/pty` (the

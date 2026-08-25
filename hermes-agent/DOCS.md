@@ -33,7 +33,7 @@ in `schema` would mean shipping options that look like they add security
 and don't. The `git log` for this file still has the full v1 reasoning
 if this add-on ever needs a non-ingress, direct-port mode again.
 
-## `ingress: true` — the sidebar (v1.1, replaces the direct-port design)
+## `ingress: true` — the sidebar (v1.1.1, replaces the direct-port design)
 
 ### Why the obvious approach (bind 0.0.0.0, add ingress: true) doesn't work
 
@@ -53,7 +53,9 @@ is why v1 shipped a direct port instead:
    hardcodes the exact HA-shaped prefix
    (`/api/hassio_ingress/<64-char-token>/dashboard`) — but tests it via
    the `X-Forwarded-Prefix` header, not `X-Ingress-Path`. Nothing in the
-   codebase translates one into the other.
+   upstream codebase translates one into the other, so the add-on's nginx
+   must do it:
+   `proxy_set_header X-Forwarded-Prefix $http_x_ingress_path;`.
 3. Even if header naming were fixed, the **unauthenticated basic-auth
    login page** — the one v1 used, since OAuth needs an external Nous
    Portal account — is a static HTML/JS blob that hardcodes
@@ -116,6 +118,14 @@ A third guard (`_ws_client_is_allowed`, the actual TCP peer IP) needs no
 fix at all: nginx and hermes share this container's network namespace,
 so a connection to `127.0.0.1:9119` is loopback-sourced by construction.
 
+The proxy has another header responsibility that v1.1.0 missed:
+**`X-Ingress-Path` → `X-Forwarded-Prefix`**. Hermes uses that prefix to
+rewrite the Vite asset URLs in `index.html`, set
+`window.__HERMES_BASE_PATH__` for API/WebSocket requests, and rewrite
+absolute font/image paths inside CSS. Without it, `/` returns 200 while
+the real browser requests `http://catlab.local/assets/...` and every CSS/JS
+chunk returns 404. v1.1.1 adds the translation.
+
 Full nginx config: `rootfs/etc/nginx/hermes-ingress.conf` (same file,
 comments included, is the primary source of truth — this section
 summarizes it).
@@ -130,9 +140,29 @@ misleading-security-toggle failure class this whole packaging effort
 has tried to avoid). `extra_env` is kept as the one remaining option, for
 forward-compatible tuning.
 
-## Verification log — v1.1 ingress (2026-08-24)
+## Verification log — v1.1.1 ingress (2026-08-25)
 
-This is the verification that actually matters for the current design.
+### Live regression caught by the real sidebar
+
+v1.1.0's local root and WebSocket checks passed, but they did not exercise
+Supervisor's path-prefix header. A live install on catlab showed a blank page
+and browser-console failures such as:
+
+```text
+GET http://catlab.local/assets/index-*.js 404 (Not Found)
+Refused to apply style from http://catlab.local/assets/index-*.css
+```
+
+That is why a root-page `200` is no longer accepted as UI proof. The v1.1.1
+test must verify that the served HTML contains the live ingress prefix, that
+the referenced CSS/JS chunks return 200 through the same ingress session,
+and that `/api/ws` plus `/api/pty` still upgrade successfully.
+
+## Historical local verification — v1.1.0 (2026-08-24)
+
+This proved the loopback/auth/WebSocket side of the design, but not the
+Supervisor path-prefix translation. It is preserved as partial evidence,
+not as an end-to-end claim.
 Sections 1-4 further below are **v1 history** (the direct-port,
 username/password design this replaced) — kept for provenance, no
 longer describing what ships today.
@@ -351,16 +381,11 @@ between full and lite is **~4.07x** (measured on `hermes-gateway`/
 `hermes-gateway-lite`, both natively), not the ~4.8x this file
 originally reported from two emulated numbers.
 
-## Not verified
+## Historical gaps (closed for v1.1.1 where noted above)
 
-- No live HAOS Supervisor install of the v1.1 ingress design
-  specifically. The `/api/ws` and `/api/pty` tests above simulate a real
-  browser's Host/Origin under ingress as closely as `curl` allows, but
-  the real proof is Supervisor actually routing a browser through the
-  sidebar panel end to end (real `X-Ingress-Path` header, real cookie
-  auth, real click on the sidebar icon) — not yet done. `hermes-gateway`
-  (a different add-on) has a real Supervisor install on catlab; this one
-  doesn't yet.
+- v1.1.0 had no live HAOS Supervisor install. That gap directly hid the
+  missing prefix translation. v1.1.1 is installed and browser-tested on
+  catlab; the result is recorded in the v1.1.1 section above.
 - `panel_icon: mdi:robot-happy` wasn't checked against a running HA
   frontend to confirm the icon name resolves to something sensible
   (any invalid MDI name typically just renders a blank/default icon in
