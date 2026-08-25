@@ -18,6 +18,35 @@ you change a colour.
 Change an option → **Restart** the add-on. (Rebuild is only needed after bumping
 the ESPHome version in the Dockerfile.)
 
+> ### Known caveat: a changed brand can be hidden by browser cache
+>
+> The rename is appended to the frontend's **content-hashed** bundle
+> (`app.<hash>.js`). Appending changes the file's *contents* but not its
+> *name* — and a hashed asset is served as effectively immutable, because the
+> hash is normally a promise that the bytes never change. This add-on breaks
+> that promise.
+>
+> Consequence: after changing `brand_name` (or any option) and restarting, a
+> browser that already loaded the old bundle keeps showing the **old** brand,
+> while the add-on serves the new one. Verified on a real guest 2026-08-25:
+> the served bundle contained `"brand": "Cat Lab"` while the page still
+> rendered the previous value, and an in-page cache purge did not clear it.
+>
+> Confirm what the add-on is *actually* serving, rather than what a tab shows:
+>
+> ```sh
+> just addon-ingress <ip> <user> <pass> <slug> "app.<hash>.js" | grep -o 'var C={[^}]*}'
+> ```
+>
+> To see the change in a browser: open it in a fresh profile or private window,
+> or hard-reload with cache disabled in devtools. The colours are *not*
+> affected — they live in an inline `<style>` in `index.html`, which is served
+> `no-store`, so palette changes appear immediately.
+>
+> A proper fix is to rewrite `index.html` to reference the bundle with a
+> cache-busting query (`app.<hash>.js?b=<brand-hash>`) so a brand change yields
+> a new URL. Not yet implemented.
+
 Example:
 
 ```yaml
