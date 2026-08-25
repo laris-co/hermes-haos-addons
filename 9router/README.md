@@ -1,17 +1,16 @@
 # 9Router
 
-> ## 🚫 NOT PUBLISHED — built, documented, and deliberately withheld
+> ## ⚠️ PUBLISHED WITH KNOWN SECURITY RISK
 >
-> This add-on is **not installable** from this repository's Add-on
-> Store. It was built, tested, and fully documented, then a deeper
-> pass over upstream's security advisories turned up **19 total: 6
-> CRITICAL, 11 HIGH, 2 medium** — including **two CRITICAL advisories
-> with no patched version at all** as of this writing
-> (GHSA-vjc7-jrh9-9j86: unauthenticated API-key leak; GHSA-qvfm-67h2-2qfx:
-> full credential/database takeover). See `NOT_PUBLISHED.md` in this
-> directory for the complete reasoning. Everything below this notice
-> describes what was built and verified — it's kept for the record, not
-> as an installation guide.
+> This add-on **is installable**, but it was withheld first and published
+> only at the repository owner's explicit request. A deeper pass over
+> upstream's security advisories turned up **19 total: 6 CRITICAL, 11
+> HIGH, 2 medium** — including **two CRITICAL advisories with no patched
+> version at all** as of this writing (GHSA-vjc7-jrh9-9j86:
+> unauthenticated API-key leak; GHSA-qvfm-67h2-2qfx: full
+> credential/database takeover). The pinned 0.5.55 image is above their
+> affected ranges, but that is **not** the same as being fixed. Read
+> `SECURITY.md` in this directory before you install it.
 
 > ## ⚠️ Security history — read this before installing anything
 >
@@ -44,8 +43,9 @@
 >   **GHSA-86m2-fcxq-5q7c**, both "unauthenticated access to `/v1` proxy
 >   APIs" via the *same* class of header-trust bug **specifically in a
 >   reverse-proxy deployment** (exactly the shape of deployment a HAOS
->   add-on is — this is why this add-on is not published at all, not
->   just why it avoids a port; see `NOT_PUBLISHED.md`), and
+>   add-on is — this is why the ingress panel is a launcher rather than
+>   a reverse proxy of the SPA, and why the published port must not be
+>   tunnelled without further hardening; see `SECURITY.md`), and
 >   **GHSA-5mj8-gf6m-fhw8** (a spoofed `X-9r-Real-Ip` header bypassing
 >   API-key checks entirely).
 > - Separately, **upstream's own documented default behavior ships two
@@ -118,8 +118,8 @@ may render unstyled/without its JS through the sidebar. This did not
 change the networking decision above — see `DOCS.md` for the full
 reasoning.
 
-**If this add-on is ever re-enabled** (see `NOT_PUBLISHED.md`) and the
-sidebar entry doesn't appear after install: `ingress: true` makes an
+**If the sidebar entry doesn't appear after install** (see `SECURITY.md`
+for the security context): `ingress: true` makes an
 add-on *eligible* for a sidebar entry, but whether it's shown is
 separate Supervisor runtime state (`ingress_panel`, not a `config.yaml`
 key) that has been observed defaulting to off on most add-ons on a real

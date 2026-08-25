@@ -47,15 +47,14 @@ host_network: false
 # behind the home router. It is NOT acceptable to then point a tunnel at this
 # port without further hardening — see SECURITY.md.
 #
-# The ingress panel is kept as well: v1.1.0 ships the port (works today), and a
-# follow-up source rebuild makes the sidebar navigation work too.
+# The ingress panel is a static launcher in v1.2.0; it opens the working app on
+# the published port instead of proxying the SPA under HA's path prefix.
 ports:
   20128/tcp: 20128
 ports_description:
   20128/tcp: "9Router dashboard + /v1 API — direct LAN access (http://<host>:20128)"
 ingress: true
-# nginx sidecar, not 9Router's own 20128 — the app emits root-relative URLs
-# that need the ingress prefix put back. See rootfs/etc/nginx/.
+# nginx serves a static launcher here, not the 9Router SPA. See rootfs/etc/nginx/.
 ingress_port: 20129
 panel_icon: mdi:router-network
 panel_title: 9Router

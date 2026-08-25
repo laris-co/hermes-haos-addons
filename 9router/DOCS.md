@@ -1,11 +1,12 @@
 # 9Router — details
 
-## THIS ADD-ON IS NOT PUBLISHED — see NOT_PUBLISHED.md
+## Published with explicit security warnings
 
-Everything below was true when written and is kept as the full record
-of what was found and built. The shipping decision it led to — do not
-publish, at all, not just "no port" — is in `NOT_PUBLISHED.md` in this
-same directory. Short version: a still-later, third pass over the
+Everything below is kept as the full record of what was found and built.
+The add-on was initially withheld, then published at the repository owner's
+explicit request after the pinned 0.5.55 image was checked against the known
+patched-version floors. Publication does not erase the remaining risk. A
+still-later, third pass over the
 advisories (prompted by this repo's own maintainer double-checking the
 work below) found the total is **19 advisories: 6 CRITICAL, 11 HIGH, 2
 medium**, and two of the CRITICAL ones — **GHSA-vjc7-jrh9-9j86**
