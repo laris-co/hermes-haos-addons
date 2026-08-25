@@ -1,5 +1,5 @@
 name: "Hello HAOS Oracle"
-version: "1.0.1"
+version: "1.0.2"
 slug: "hello_haos_oracle"
 description: >-
   The guest-side oracle's calling card. A self-contained sidebar app that proves
