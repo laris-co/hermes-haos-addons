@@ -53,7 +53,8 @@ export_if_set() {
     fi
 }
 
-export_if_set OPENROUTER_API_KEY "$(get_opt openrouter_api_key)"
+configured_openrouter_key="$(get_opt openrouter_api_key)"
+export_if_set OPENROUTER_API_KEY "$configured_openrouter_key"
 export_if_set TELEGRAM_BOT_TOKEN "$(get_opt telegram_bot_token)"
 export_if_set TELEGRAM_ALLOWED_USERS "$(get_opt telegram_allowed_users)"
 export_if_set DISCORD_BOT_TOKEN "$(get_opt discord_bot_token)"
@@ -132,6 +133,62 @@ PY
         IFS="$old_ifs"
     fi
 fi
+
+# Hermes deliberately loads the persistent user .env with override=True. Old
+# volumes can therefore contain a stale OPENROUTER_API_KEY assignment that
+# silently replaces the current password-typed Supervisor option — including
+# an empty assignment, which makes 9Router report "Missing Authentication
+# header" even though options.json is correct. When the Supervisor option is
+# populated, make it authoritative by removing only the competing .env
+# assignment. The live key stays in the process environment; it is never
+# written to disk or passed in an argv visible to process listings.
+remove_persistent_override() {
+    env_name="$1"
+    configured_value="$2"
+    env_file="/data/.env"
+    [ -n "$configured_value" ] || return 0
+    [ -f "$env_file" ] || return 0
+    if [ -L "$env_file" ]; then
+        echo "[hermes-gateway] WARNING: refusing to edit symlinked $env_file" >&2
+        return 0
+    fi
+    if ! /command/s6-setuidgid hermes /opt/hermes/.venv/bin/python - "$env_file" "$env_name" <<'PY'
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+path = Path(sys.argv[1])
+name = sys.argv[2]
+pattern = re.compile(rf"^\s*(?:export\s+)?{re.escape(name)}\s*=")
+original = path.read_text(encoding="utf-8")
+lines = original.splitlines(keepends=True)
+filtered = "".join(line for line in lines if not pattern.match(line))
+if filtered == original:
+    raise SystemExit(0)
+
+fd, tmp_name = tempfile.mkstemp(prefix=".env.haos-", dir=path.parent)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(filtered)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.chmod(tmp_name, 0o600)
+    os.replace(tmp_name, path)
+finally:
+    try:
+        os.unlink(tmp_name)
+    except FileNotFoundError:
+        pass
+PY
+    then
+        echo "[hermes-gateway] WARNING: could not clear stale $env_name override from $env_file" >&2
+    fi
+}
+
+remove_persistent_override OPENROUTER_API_KEY "$configured_openrouter_key"
+unset configured_openrouter_key
 
 # Gateway model routing is deliberately config-backed upstream. In the pinned
 # Hermes release, HERMES_INFERENCE_MODEL is honored by one-shot/TUI invocations

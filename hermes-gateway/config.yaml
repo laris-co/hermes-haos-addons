@@ -1,5 +1,5 @@
 name: "Hermes Gateway"
-version: "1.0.1"
+version: "1.0.2"
 slug: "hermes_gateway"
 description: >-
   Nous Research's Hermes Agent, running as the messaging gateway

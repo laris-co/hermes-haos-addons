@@ -55,6 +55,13 @@ Hermes's persisted config before launching the gateway. The API key remains
 only in the password-typed Supervisor option/environment and is never copied
 into `config.yaml`.
 
+On upgraded installations, an old `/data/.env` may still contain a stale
+`OPENROUTER_API_KEY=...` assignment. Hermes loads that file with override
+semantics, so the stale value can otherwise replace the current Supervisor
+option. When `openrouter_api_key` is populated, the wrapper removes only that
+competing assignment; the current key remains process-environment-only and is
+not copied into `.env` or a command argument.
+
 ## Ports
 
 `8642/tcp` is declared but **unmapped by default** (`null`) — only relevant

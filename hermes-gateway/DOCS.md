@@ -56,6 +56,21 @@ Credentials are intentionally excluded from this bridge. For an OpenRouter-
 compatible mirror such as 9Router, `openrouter_api_key` remains a Supervisor
 password option and is exported only as `OPENROUTER_API_KEY`.
 
+### Persistent credential precedence repair (1.0.2)
+
+Hermes loads its persistent user `.env` with `override=True`. A volume created
+by an older setup can therefore contain a stale `OPENROUTER_API_KEY=...`
+assignment that overrides the fresh password-typed Supervisor option. An empty
+stale assignment is especially confusing: the option is present, but the
+upstream request reaches an OpenAI-compatible router with no Authorization
+header.
+
+When `openrouter_api_key` is populated, `run.sh` now removes only that
+competing assignment before s6 starts. It performs the edit as Hermes's
+unprivileged user, refuses a symlinked `.env`, and never writes the live key to
+disk or passes it in process arguments. The existing s6 `with-contenv` path
+then carries the Supervisor option into the gateway process.
+
 ## Why no required options
 
 Verified: `hermes gateway run` starts cleanly with a completely empty
