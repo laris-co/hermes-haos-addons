@@ -1,0 +1,52 @@
+name: "Device Builder (your brand)"
+version: "1.0.0"
+slug: "device_builder_brand"
+description: >-
+  The ESPHome Device Builder with YOUR name, colours and logo — set from the
+  add-on's Configuration tab, no forking and no hand-patching. It runs the
+  official upstream image and applies the branding at start-up, so upgrading
+  ESPHome is just a version bump. Same engine (Apache-2.0 frontend, MIT
+  backend), your brand. Not affiliated with or endorsed by ESPHome or the
+  Open Home Foundation — see DOCS.md for the licence reasoning.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/device-builder-brand"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+# The upstream esphome-hassio image ships its own init/supervisor as PID 1;
+# do not wrap Docker's --init around it.
+init: false
+host_network: true
+hassio_api: true
+auth_api: true
+ingress: true
+# 0 = let the dashboard negotiate its own ingress port, as the stock add-on does.
+ingress_port: 0
+uart: true
+# No `ports:` on purpose. The official ESPHome add-on already claims 6052/tcp on
+# the host; a second claimant collides. This one is ingress-only — open it from
+# the sidebar. (Add a port here only if you are NOT running the stock add-on.)
+map:
+  - config:rw
+panel_icon: mdi:palette-swatch
+panel_title: Device Builder
+options:
+  brand_name: "My Device Builder"
+  tagline: "Create and make your smart devices and automations"
+  primary_color: "#7c4dff"
+  accent_color: "#ff6e9c"
+  logo_svg: ""
+  replace_word: "ESPHome"
+schema:
+  # Shown wherever the frontend says "ESPHome" (header, title, onboarding).
+  brand_name: "str"
+  # Replaces the dashboard subtitle. Leave as-is to keep the upstream wording.
+  tagline: "str?"
+  # Any CSS colour. Drives buttons, header, chips — the whole palette.
+  primary_color: "str"
+  accent_color: "str?"
+  # OPTIONAL raw <svg>…</svg> markup for the logo. Empty = keep upstream logo.
+  logo_svg: "str?"
+  # The word swapped for brand_name. Only change if upstream renames itself.
+  replace_word: "str?"
