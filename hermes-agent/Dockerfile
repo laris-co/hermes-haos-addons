@@ -27,14 +27,16 @@ FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f
 RUN apt-get update && apt-get install -y --no-install-recommends nginx-light \
     && rm -rf /var/lib/apt/lists/*
 
-# Upstream's Vite build uses a root-relative URL for lazy-route preload
-# dependencies even though the lazy import itself is module-relative.  The
-# backend rewrites index.html for X-Forwarded-Prefix, but it cannot rewrite
-# this JavaScript URL at request time; under HA ingress, clicking CHAT (or any
-# other lazy route) therefore tries /assets/* on Home Assistant itself.  Patch
-# the pinned bundle once, fail-closed if the expected upstream shape changes.
-COPY scripts/patch_vite_preload_base.py /addon/patch_vite_preload_base.py
-RUN python3 /addon/patch_vite_preload_base.py /opt/hermes/hermes_cli/web_dist/assets
+# Upstream builds Vite with its default `base: "/"`.  The Python backend can
+# rewrite the initial index.html for X-Forwarded-Prefix, but Vite's lazy-route
+# preload helper remains root-relative and escapes HA ingress on CHAT/etc.
+# Rebuild the already-pinned source with a relative base.  This fixes both the
+# initial document and lazy routes by construction, and produces new content
+# hashes so browsers cannot retain the broken upstream bundle from v1.1.1/2.
+# The published image already contains the exact node_modules used upstream;
+# this does not download or float any dependency.
+RUN cd /opt/hermes/web \
+    && ../node_modules/.bin/vite build --base ./
 
 # Adds one new s6-rc service (nginx-ingress) alongside upstream's own
 # "dashboard" and "main-hermes" services, registered in the same

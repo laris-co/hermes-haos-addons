@@ -132,9 +132,11 @@ generated URL function prepends `/`, so the first click into Chat/Sessions/etc.
 requested `http://<ha-host>/assets/*` even though the initial page was healthy.
 The lazy `import("./ChatPage-*.js")` itself was already module-relative; only
 the eager dependency preloads were wrong, and their rejected CSS promise
-prevented the lazy import from running. v1.1.2 applies a narrow, fail-closed
-build-time patch so that helper prepends `window.__HERMES_BASE_PATH__`. The
-image build fails unless exactly one known Vite helper is found.
+prevented the lazy import from running. v1.1.2 patched that generated helper,
+but modifying a bundle without changing its content-hashed filename meant an
+already-open browser could retain the pre-fix response. v1.1.3 instead rebuilds
+the pinned frontend with Vite `--base ./`. That makes all initial and lazy asset
+URLs relative at generation time and gives the changed bundles new hashes.
 
 Full nginx config: `rootfs/etc/nginx/hermes-ingress.conf` (same file,
 comments included, is the primary source of truth — this section
@@ -150,7 +152,7 @@ misleading-security-toggle failure class this whole packaging effort
 has tried to avoid). `extra_env` is kept as the one remaining option, for
 forward-compatible tuning.
 
-## Verification log — v1.1.2 ingress (2026-08-25)
+## Verification log — v1.1.3 ingress (2026-08-25)
 
 ### Live regression caught by the real sidebar
 
@@ -166,7 +168,7 @@ Refused to apply style from http://catlab.local/assets/index-*.css
 That is why a root-page `200` is no longer accepted as UI proof. v1.1.1 then
 exposed a second regression: the landing page rendered, but clicking Chat or
 refreshing a lazy route loaded Vite dependencies from `/assets/*` on the HA
-host. v1.1.2 must verify that the served HTML contains the live ingress prefix,
+host. v1.1.3 must verify that the served HTML uses relative, newly-hashed assets,
 the initial and lazy CSS/JS chunks return 200 through the same ingress session,
 Chat works both by navigation and direct refresh, and `/api/ws` plus `/api/pty`
 still upgrade successfully.
