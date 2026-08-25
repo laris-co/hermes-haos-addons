@@ -22,4 +22,7 @@ USER hermeslogs
 WORKDIR /opt/hermes-logs
 EXPOSE 8099
 
-CMD ["python3", "server.py"]
+# s6-overlay deliberately sanitizes the initial Docker environment. Import it
+# for this process so Supervisor's generated token reaches the server without
+# ever being copied to a file or command argument.
+CMD ["/usr/bin/with-contenv", "python3", "server.py"]

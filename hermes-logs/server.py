@@ -134,7 +134,7 @@ def classify(line: str) -> str:
 
 
 def fetch_logs(target: str, lines: int) -> str:
-    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    token = os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("HASSIO_TOKEN", "")
     if not token:
         raise LogViewerError("Supervisor access is unavailable", HTTPStatus.SERVICE_UNAVAILABLE)
 

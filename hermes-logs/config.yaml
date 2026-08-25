@@ -1,5 +1,5 @@
 name: "Hermes Logs"
-version: "1.0.0"
+version: "1.0.1"
 slug: "hermes_logs"
 description: >-
   A focused, live, redacted log console for the Hermes Gateway add-on. The
