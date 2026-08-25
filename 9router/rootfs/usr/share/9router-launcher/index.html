@@ -29,7 +29,7 @@
 <body>
   <div class="card">
     <h1>9Router</h1>
-    <div class="v">opens in a full browser tab</div>
+    <div class="v">opens in a new tab</div>
     <p>
       9Router is a single-page app that can't run inside Home Assistant's sidebar
       frame (its navigation escapes the ingress path). It runs on its own port
@@ -37,7 +37,8 @@
     </p>
     <a id="go" class="btn" href="#" target="_blank" rel="noopener">Open 9Router &nbsp;&#8599;</a>
     <span class="alt">
-      or open in this tab: <a id="same" href="#" target="_top" rel="noopener">9Router dashboard</a>
+      stays open in this Home Assistant tab &mdash; opens 9Router in a new one.<br/>
+      prefer the same tab? <a id="same" href="#" target="_top" rel="noopener">open here instead</a>
     </span>
     <p class="alt" id="url"></p>
   </div>
@@ -53,10 +54,12 @@
     var same = document.getElementById("same");
     go.href = url; same.href = url;
     document.getElementById("url").textContent = url;
-    // Best-effort auto-open in the same tab (HA's iframe allows top navigation by
-    // user activation; a scripted attempt is harmless if the sandbox blocks it —
-    // the buttons are the reliable path).
-    try { if (window.top && window.top !== window.self) window.top.location.replace(url); } catch (e) {}
+    // NO automatic navigation. An earlier version auto-navigated the top frame,
+    // which threw the whole Home Assistant tab out into the app ("it go outside").
+    // Clicking the sidebar should keep you IN Home Assistant; the primary button
+    // opens 9Router in a NEW tab (target=_blank), so HA stays put. A user gesture
+    // is required for the new tab anyway (popup blockers), so the button is the
+    // right and only trigger.
   })();
 </script>
 </body>
