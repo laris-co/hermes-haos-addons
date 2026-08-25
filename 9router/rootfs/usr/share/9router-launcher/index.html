@@ -6,60 +6,109 @@
 <title>9Router</title>
 <style>
   :root { color-scheme: dark; }
-  html,body { height:100%; margin:0; }
-  body {
-    display:flex; align-items:center; justify-content:center;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background:#0a0a0a; color:#e6e3dc; text-align:center; padding:24px;
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+  body { background: #0a0a0a; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { display: block; width: 100%; height: 100%; border: 0; background: #0a0a0a; }
+  #external {
+    position: fixed; right: 12px; bottom: 12px; z-index: 3;
+    display: none; width: 34px; height: 34px; place-items: center;
+    border: 1px solid #3d3b38; border-radius: 9px; background: #161616d9;
+    color: #d9d6cf; text-decoration: none; font-size: 18px; line-height: 1;
+    box-shadow: 0 3px 14px #0008;
   }
-  .card { max-width:460px; }
-  h1 { font-size:20px; letter-spacing:.02em; margin:0 0 6px; }
-  .v { color:#7c7a73; font-size:12px; margin-bottom:20px; }
-  p { color:#9a978f; font-size:13.5px; line-height:1.6; margin:0 0 22px; }
-  a.btn {
-    display:inline-block; text-decoration:none; font-weight:600; font-size:14px;
-    padding:11px 22px; border-radius:8px; background:#f0653a; color:#fff;
+  #external:hover, #external:focus-visible { background: #272522; color: #fff; }
+  #status {
+    position: fixed; inset: 0; z-index: 2; display: grid; place-items: center;
+    background: #0a0a0a; color: #a7a49c; font-size: 14px;
   }
-  a.btn:hover { background:#ff7448; }
-  .alt { display:block; margin-top:14px; font-size:12px; color:#7c7a73; }
-  .alt a { color:#9a978f; }
-  code { color:#cbc8c0; }
+  #status[hidden] { display: none; }
+  #status .card { max-width: 440px; padding: 24px; text-align: center; line-height: 1.55; }
+  #status strong { display: block; color: #ece9e2; font-size: 18px; margin-bottom: 8px; }
+  #status a {
+    display: inline-block; margin-top: 18px; padding: 10px 16px;
+    border-radius: 8px; background: #f0653a; color: #fff; font-weight: 600;
+    text-decoration: none;
+  }
 </style>
 </head>
 <body>
-  <div class="card">
-    <h1>9Router</h1>
-    <div class="v">opens in a new tab</div>
-    <p>
-      9Router is a single-page app that can't run inside Home Assistant's sidebar
-      frame (its navigation escapes the ingress path). It runs on its own port
-      instead, with the full dashboard, <code>/v1</code> API, and provider OAuth.
-    </p>
-    <a id="go" class="btn" href="#" target="_blank" rel="noopener">Open 9Router &nbsp;&#8599;</a>
-    <span class="alt">
-      stays open in this Home Assistant tab &mdash; opens 9Router in a new one.<br/>
-      prefer the same tab? <a id="same" href="#" target="_top" rel="noopener">open here instead</a>
-    </span>
-    <p class="alt" id="url"></p>
+  <div id="status" role="status">
+    <div class="card">
+      <strong id="title">Loading 9Router…</strong>
+      <span id="message">Opening the dashboard inside Home Assistant.</span><br />
+      <a id="fallback" href="#" target="_blank" rel="noopener" hidden>Open 9Router in a new tab ↗</a>
+    </div>
   </div>
+  <a id="external" href="#" target="_blank" rel="noopener" title="Open 9Router in a new tab" aria-label="Open 9Router in a new tab">↗</a>
+  <iframe
+    id="app"
+    title="9Router dashboard"
+    allow="clipboard-read; clipboard-write"
+    allowfullscreen
+  ></iframe>
 <script>
   (function () {
-    // The launcher runs inside the ingress iframe, whose origin IS the Home
-    // Assistant host the user reached HA on (catlab.local, an IP, whatever).
-    // So location.hostname is exactly the right host to reach the published
-    // :20128 port on — no hardcoded hostname, works for .local and IP alike.
     var PORT = 20128;
-    var url = location.protocol + "//" + location.hostname + ":" + PORT + "/dashboard";
-    var go = document.getElementById("go");
-    var same = document.getElementById("same");
-    go.href = url; same.href = url;
-    document.getElementById("url").textContent = url;
-    // NO automatic navigation. An earlier version auto-navigated the top frame,
-    // which threw the whole Home Assistant tab out into the app ("it go outside").
-    // Clicking the sidebar should keep you IN Home Assistant; the primary button
-    // opens 9Router in a NEW tab (target=_blank), so HA stays put. A user gesture
-    // is required for the new tab anyway (popup blockers), so the button is the
-    // right and only trigger.
+    var directProtocol = location.protocol === "https:" ? "http:" : location.protocol;
+    var url = directProtocol + "//" + location.hostname + ":" + PORT + "/dashboard";
+    var frame = document.getElementById("app");
+    var status = document.getElementById("status");
+    var title = document.getElementById("title");
+    var message = document.getElementById("message");
+    var fallback = document.getElementById("fallback");
+    var external = document.getElementById("external");
+    var loaded = false;
+
+    fallback.href = url;
+    external.href = url;
+
+    function showFallback(reason) {
+      title.textContent = "Open 9Router on the LAN";
+      message.textContent = reason;
+      fallback.hidden = false;
+      status.hidden = false;
+    }
+
+    if (location.protocol === "https:") {
+      showFallback("The dashboard uses a plain-HTTP LAN port, so browsers cannot embed it inside an HTTPS Home Assistant page.");
+      return;
+    }
+
+    frame.addEventListener("load", function () {
+      loaded = true;
+      status.hidden = true;
+      external.style.display = "grid";
+    });
+
+    frame.addEventListener("error", function () {
+      showFallback("The embedded dashboard could not be reached.");
+    });
+
+    var controller = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (controller) controller.abort();
+      if (!loaded) showFallback("The embedded dashboard did not respond. Check that the add-on is running.");
+    }, 12000);
+
+    // A no-CORS request can prove network reachability without asking 9Router to
+    // expose its API cross-origin. The response is intentionally opaque.
+    fetch(url, {
+      mode: "no-cors",
+      cache: "no-store",
+      signal: controller ? controller.signal : undefined
+    }).then(function () {
+      frame.src = url;
+    }).catch(function () {
+      clearTimeout(timer);
+      showFallback("The embedded dashboard could not be reached. Check that the add-on is running.");
+    });
+
+    frame.addEventListener("load", function () { clearTimeout(timer); });
+
+    // The app stays on its own root origin, so its Next.js navigation, API URLs,
+    // cookies, provider OAuth, and static assets work normally. Home Assistant
+    // only frames that origin; it no longer tries to reverse-proxy the SPA under
+    // its dynamic ingress prefix.
   })();
 </script>
 </body>

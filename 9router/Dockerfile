@@ -25,7 +25,7 @@ ENV DATA_DIR=/data
 RUN apk add --no-cache nginx
 
 COPY rootfs/etc/nginx/9router-ingress.conf /etc/nginx/9router-ingress.conf
-# The static launcher page the ingress port serves (see run.sh / the conf above).
+# The static sidebar wrapper the ingress port serves (see run.sh / the conf above).
 COPY rootfs/usr/share/9router-launcher/ /usr/share/9router-launcher/
 COPY run.sh /addon/run.sh
 RUN chmod 0755 /addon/run.sh

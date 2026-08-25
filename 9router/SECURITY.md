@@ -24,16 +24,20 @@ not as safe.
 
 ## What this add-on does about it
 
-- **No published port.** The only reachable surface is HA's own ingress, so
-  Home Assistant's login is the auth boundary. Compare the deployment already
-  running on the host, which binds `:20128` openly to the LAN — this is the more
-  contained of the two.
+- **Published LAN port, explicitly not an Internet port.** Port 20128 serves the
+  dashboard and `/v1` API because the upstream SPA cannot run beneath HA's
+  dynamic ingress prefix. The HA sidebar embeds this direct origin in a nested
+  frame. Keep the port behind the LAN firewall and do not tunnel it without
+  additional authentication/hardening.
 - **`initial_password` has no default** and is a non-optional schema type, so
   Supervisor refuses to start until a real one is set. Upstream's own default
   falls back to the literal `123456`, which is the exact weakness behind a
   documented prior RCE advisory.
 - **`require_api_key` defaults to true**, where upstream leaves `/v1/*` reachable
   with no credential at all.
+- **The dashboard cookie defaults to non-Secure** because the direct LAN origin
+  is HTTP. This is required for login to work in the sidebar embed. Enable the
+  Secure flag only if port 20128 is actually served over HTTPS.
 
 ## One thing worth knowing that is not a CVE
 

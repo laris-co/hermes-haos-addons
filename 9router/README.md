@@ -43,8 +43,8 @@
 >   **GHSA-86m2-fcxq-5q7c**, both "unauthenticated access to `/v1` proxy
 >   APIs" via the *same* class of header-trust bug **specifically in a
 >   reverse-proxy deployment** (exactly the shape of deployment a HAOS
->   add-on is — this is why the ingress panel is a launcher rather than
->   a reverse proxy of the SPA, and why the published port must not be
+>   add-on can create — this is why the ingress panel uses a static wrapper
+>   around the direct app rather than reverse-proxying the SPA, and why the port must not be
 >   tunnelled without further hardening; see `SECURITY.md`), and
 >   **GHSA-5mj8-gf6m-fhw8** (a spoofed `X-9r-Real-Ip` header bypassing
 >   API-key checks entirely).
@@ -52,15 +52,12 @@
 >   more weak defaults** we do not inherit in this add-on — see
 >   "What this add-on changes from upstream's defaults" below.
 >
-> **This add-on deliberately does not publish a port.** The dashboard is
-> reached through Home Assistant's own sidebar (ingress — HA's login is
-> the auth boundary for the browser UI), and the `/v1/*` proxy API is
-> reachable by other add-ons on this same host over Supervisor's
-> internal network, without needing to be reachable from your LAN or the
-> internet at all. Given this project's specific history — nearly every
-> serious advisory is *exactly* "a reverse-proxy header was trusted for a
-> security decision, and shouldn't have been" — minimizing the externally
-> reachable surface is the responsible default here, not a formality.
+> **This add-on publishes port 20128 to the LAN.** The full dashboard is
+> shown inside Home Assistant's sidebar by framing that direct origin; the
+> `/v1/*` API is on the same port. Do not expose it to the Internet or point
+> a tunnel at it without additional hardening. Given this project's history,
+> the LAN exposure is a deliberate usability tradeoff rather than a claim
+> that the application is safe to expose broadly.
 > **We are not implying the current version is unsafe to run.** We're
 > telling you what it's been, plainly, so you can decide with full
 > information rather than discover it later. See `DOCS.md` for exact
@@ -80,8 +77,9 @@ in this repo.
 1. Set **Initial password** in this add-on's Configuration tab —
    required, with no default, on purpose (upstream's own unset default
    is the literal string `123456`; see `DOCS.md`).
-2. Leave **Require API key** and **Auth cookie secure** at their
-   defaults (`true`) unless you specifically know you need otherwise.
+2. Leave **Require API key** on. The dashboard cookie defaults to non-Secure
+   because the published LAN port is plain HTTP; enable **Auth cookie secure**
+   only if you actually serve port 20128 over HTTPS.
 3. Start the add-on and open it from **Home Assistant's own sidebar**.
 4. Log in with the initial password, then change it from the dashboard
    and set up your provider keys.
@@ -96,27 +94,21 @@ in this repo.
 |---|---|---|---|
 | `initial_password` | password | *(none — required)* | First-login dashboard password. Change it from the dashboard after first login. |
 | `require_api_key` | bool | `true` | Enforces a Bearer token on `/v1/*`. Upstream defaults this to off; this add-on does not. |
-| `auth_cookie_secure` | bool | `true` | Marks the dashboard auth cookie `Secure`. Safe to leave on for the ingress deployment this add-on is built around (HA's frontend is normally HTTPS even though Supervisor's internal hop to the add-on is plain HTTP — the browser's Secure-cookie check is based on the page's own origin scheme, not that internal hop). Only turn off for a plain-HTTP-only LAN setup. |
+| `auth_cookie_secure` | bool | `false` | Marks the dashboard auth cookie `Secure`. The default must be false for the plain-HTTP `:20128` LAN origin used by the sidebar embed. Enable only when that port is genuinely served over HTTPS. |
 | `extra_env` | list of `KEY=VALUE` | `[]` | Provider API keys and any other env-based tuning. Malformed entries are logged and skipped. |
 
-## Networking — no published port, on purpose
+## Networking — published app plus in-sidebar wrapper
 
-No `ports:` block in this add-on. The dashboard is reached via HA's
-sidebar (`ingress: true`); the `/v1/*` API is meant for other add-ons on
-this host to call internally, not for an external tool on a different
-machine. If you specifically need that (e.g. Claude Code running on your
-laptop calling this add-on directly), that requires editing this
-add-on's `config.yaml` yourself to add a `ports:` block — deliberately
-not offered as a one-click option here, given the security history
-above.
+Port **20128** serves the unmodified 9Router dashboard and `/v1/*` API at
+a root origin. HA ingress port **20129** serves a static wrapper that embeds
+that origin in a full-size iframe. This avoids forcing the Next.js SPA under
+HA's dynamic ingress prefix, where its root-relative navigation breaks.
 
-**Known limitation, verified not assumed**: the dashboard's static
-assets (`/_next/static/...`) are root-relative and not aware of HA's
-ingress path prefix — confirmed by diffing two real responses with and
-without an `X-Ingress-Path` header (byte-identical). The dashboard page
-may render unstyled/without its JS through the sidebar. This did not
-change the networking decision above — see `DOCS.md` for the full
-reasoning.
+The embed is verified on the plain-HTTP LAN path. When Home Assistant itself
+is opened over HTTPS, the browser cannot embed the plain-HTTP port; the wrapper
+shows an explicit new-tab fallback instead of a blank panel. Provider OAuth
+may also require that new-tab escape hatch when an identity provider refuses
+to render in frames.
 
 **If the sidebar entry doesn't appear after install** (see `SECURITY.md`
 for the security context): `ingress: true` makes an
