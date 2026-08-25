@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Hello HAOS Oracle</title>
+  <style>
+    /* Rendered from index.tmpl at container start. {{ACCENT_COLOR}} and
+       {{GREETING}} come from /data/options.json, HTML-escaped in run.sh.
+       No <script> anywhere: the ingress CSP is default-src 'none' with no
+       script-src, so inline JS would be dropped silently. CSS only. */
+    :root {
+      --accent: {{ACCENT_COLOR}};
+      --bg: #0d1117;
+      --panel: rgba(17, 23, 32, .82);
+      --ink: #f4f7fb;
+      --muted: #8b98a9;
+      --line: rgba(255, 255, 255, .1);
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f8fb;
+        --panel: rgba(255, 255, 255, .92);
+        --ink: #16202c;
+        --muted: #5b6b7d;
+        --line: rgba(16, 32, 48, .12);
+        color-scheme: light;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      color: var(--ink);
+      /* The accent paints a full-bleed wash, not a hairline. If an option is
+         applied you can see it from across the room; a thin border would let a
+         failed render pass for a success. */
+      background:
+        radial-gradient(circle at 16% 10%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 34%),
+        radial-gradient(circle at 86% 84%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 38%),
+        var(--bg);
+    }
+    main {
+      width: min(680px, 100%);
+      padding: clamp(32px, 7vw, 60px);
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--accent);
+      border-radius: 26px;
+      background: var(--panel);
+      box-shadow: 0 30px 90px rgba(0, 0, 0, .32);
+      backdrop-filter: blur(18px);
+      text-align: center;
+    }
+    .mark { font-size: 46px; line-height: 1; }
+    h1 {
+      margin: 18px 0 6px;
+      font-size: clamp(26px, 4.6vw, 38px);
+      letter-spacing: -.02em;
+    }
+    .greeting {
+      margin: 0 0 22px;
+      font-size: clamp(17px, 2.4vw, 21px);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    p.lede { margin: 0 auto 26px; max-width: 46ch; color: var(--muted); line-height: 1.65; }
+    .proof { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .proof span {
+      font-size: 12.5px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    footer {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      font-size: 12.5px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark">🧰</div>
+    <h1>Hello HAOS Oracle</h1>
+    <p class="greeting">{{GREETING}}</p>
+    <p class="lede">
+      The hypervisor casts the guest; this is one of the rooms inside it. Served
+      through Home Assistant ingress — you are already authenticated, and nothing
+      here listens on a port of its own.
+    </p>
+    <div class="proof" aria-label="App properties">
+      <span>Ingress authenticated</span>
+      <span>No published port</span>
+      <span>Zero secrets</span>
+      <span>boot: auto</span>
+      <span>Options at container start</span>
+    </div>
+    <footer>repository → supervisor → ingress → sidebar</footer>
+  </main>
+</body>
+</html>

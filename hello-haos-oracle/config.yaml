@@ -1,0 +1,37 @@
+name: "Hello HAOS Oracle"
+version: "1.0.0"
+slug: "hello_haos_oracle"
+description: >-
+  The guest-side oracle's calling card. A self-contained sidebar app that proves
+  the repository → Supervisor build → ingress → sidebar path with no published
+  port, no credentials, no API access and no host privileges — and that survives
+  a host reboot.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/hello-haos-oracle"
+arch:
+  - amd64
+  - aarch64
+startup: application
+# boot: auto, deliberately. A host reboot leaves `boot: manual` add-ons stopped,
+# and a stopped add-on reads as a failed install when it is nothing of the kind.
+# Measured 2026-08-25: a reboot took down 8 of 21 add-ons on a real guest, every
+# one of them boot: manual.
+boot: auto
+# The Home Assistant base image already contains s6-overlay and owns PID 1 via
+# its inherited ENTRYPOINT ["/init"]. CMD runs underneath it. Do not add a second
+# init process around it.
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:toolbox
+panel_title: Hello HAOS Oracle
+panel_admin: false
+stage: experimental
+options:
+  greeting: "The workshop is open."
+  accent_color: "#7c4dff"
+schema:
+  greeting: str
+  accent_color: str
