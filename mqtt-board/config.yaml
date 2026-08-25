@@ -1,0 +1,43 @@
+name: "MQTT Board"
+version: "1.0.0"
+slug: "mqtt_board"
+description: >-
+  A drag-and-drop board for live MQTT data. Subscribe to the topics you care
+  about, then drag them from the catalogue into tiles and arrange the board
+  however you like — the layout is saved and shared by everyone who opens it.
+  Tiles show the live value, a sparkline and staleness, so a dead feed looks
+  dead. Deliberately subscribes only to the patterns you list; it will refuse
+  a bare `#` because that can be gigabytes a day on a busy broker.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/mqtt-board"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+# oven/bun image has no s6-overlay, so Docker's built-in tini becomes PID 1
+# and reaps whatever the runtime spawns.
+init: true
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# Ingress-only: no published port, so Home Assistant's own auth gates it.
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:drag-variant
+panel_title: MQTT Board
+options:
+  broker: "mqtt://mqtt.example.com:1883"
+  username: ""
+  password: ""
+  topics:
+    - "sensors/+/state"
+  max_topics: 500
+schema:
+  broker: "str"
+  username: "str?"
+  password: "password?"
+  # One or more subscription patterns. `+` is fine; a bare `#` is rejected.
+  topics:
+    - "str"
+  # Safety valve: stop cataloguing after this many distinct topics.
+  max_topics: "int(10,5000)?"
