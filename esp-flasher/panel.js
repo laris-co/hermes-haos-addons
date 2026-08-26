@@ -13,17 +13,38 @@
 (function () {
   'use strict';
 
-  // ---- 1. never leave the panel -------------------------------------------
+  // ---- 1. stay in the panel by default, but honour explicit intent --------
+  //
+  // A plain click should never leave the panel. A DELIBERATE new-tab gesture
+  // still should: ⌘-click (mac), Ctrl-click (win/linux), middle-click, and
+  // Shift-click are how people say "I want this somewhere else", and silently
+  // swallowing them is worse than the escaping we are fixing.
+  function wantsNewTab(e) {
+    return e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
+  }
+
   // Capture phase, so this runs before the page's own click handlers.
   document.addEventListener('click', function (e) {
+    if (wantsNewTab(e)) return;                 // let the browser do its thing
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
     if (!a) return;
+
+    var href = a.getAttribute('href') || '';
+    // in-page anchors and non-navigating schemes must be left alone
+    if (!href || href.charAt(0) === '#' || /^(javascript|mailto|tel|data|blob):/i.test(href)) return;
+
     var t = (a.getAttribute('target') || '').toLowerCase();
     if (t === '_blank' || t === '_new' || t === '_top' || t === '_parent') {
       e.preventDefault();
       e.stopPropagation();
       window.location.href = a.href;
     }
+  }, true);
+
+  // Middle-click fires auxclick, not click. Let it through untouched — it is
+  // one of the deliberate gestures above.
+  document.addEventListener('auxclick', function (e) {
+    if (e.button === 1) e.stopPropagation();
   }, true);
 
   // window.open -> same-document navigation. Returns a minimal stub rather than
