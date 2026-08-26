@@ -49,14 +49,11 @@
     // in-page anchors and non-navigating schemes must be left alone
     if (!href || href.charAt(0) === '#' || /^(javascript|mailto|tel|data|blob):/i.test(href)) return;
 
-    if (!sameOrigin(a)) {
-      // sub_filter stripped target="_blank" from the proxied HTML, so without
-      // this an off-site link would try to render inside the iframe and fail.
-      e.preventDefault();
-      e.stopPropagation();
-      nativeOpen.call(window, a.href, '_blank', 'noopener');
-      return;
-    }
+    // Off-site links are handled by marking them target="_blank" (see below),
+    // NOT by intercepting here. window.open() from a click handler can still be
+    // treated as a popup and silently blocked; a real target="_blank" anchor
+    // never is. Nothing to do in this handler for them.
+    if (!sameOrigin(a)) return;
 
     var t = (a.getAttribute('target') || '').toLowerCase();
     if (t === '_blank' || t === '_new' || t === '_top' || t === '_parent') {
@@ -127,9 +124,49 @@
     document.body.appendChild(b);
   }
 
+  // ---- 3. off-site links get a real target="_blank" -----------------------
+  // sub_filter strips target="_blank" from the proxied HTML so same-origin
+  // links stay in the panel. That is right for the workshop's own pages and
+  // WRONG for external ones: an ingress panel is an iframe, and most sites
+  // refuse to be framed (github.com sends X-Frame-Options: DENY), so an
+  // off-site link loaded in-panel renders "refused to connect".
+  //
+  // Putting the attribute back on off-site anchors lets the BROWSER open them,
+  // which no popup blocker interferes with — unlike window.open().
+  function markExternal(root) {
+    var links = (root || document).querySelectorAll ? (root || document).querySelectorAll('a[href]') : [];
+    for (var i = 0; i < links.length; i++) {
+      var a = links[i];
+      var href = a.getAttribute('href') || '';
+      if (!href || href.charAt(0) === '#') continue;
+      if (/^(javascript|mailto|tel|data|blob):/i.test(href)) continue;
+      if (sameOrigin(a)) continue;
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    }
+  }
+
+  // The character list and preview are built by the page's own JS after load,
+  // so a one-shot pass would miss them.
+  function watch() {
+    markExternal(document);
+    try {
+      new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var added = muts[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            if (added[j].nodeType === 1) markExternal(added[j]);
+          }
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    } catch (_) { /* observer unsupported — the initial pass still applied */ }
+  }
+
+  function init() { addBack(); watch(); }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', addBack);
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    addBack();
+    init();
   }
 })();
