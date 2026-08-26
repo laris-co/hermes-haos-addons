@@ -37,8 +37,13 @@
   --band-vun:#5d3870;
   --band-haz:#45101a;
   --band:var(--ink-3);
-  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Hoefler Text",Georgia,"Times New Roman",Times,serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  /* Latin faces FIRST, Thai faces after. Font fallback is per glyph, so Latin
+     still sets in Iowan Old Style and only Thai glyphs fall through to the Thai
+     faces at the tail. Naming a Noto face first would have quietly replaced the
+     Latin face across the whole record. No webfont link anywhere in this file:
+     the page has to open from a USB stick on a school wall with no network. */
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Hoefler Text",Georgia,"Times New Roman",Times,"Noto Serif Thai","Noto Sans Thai","IBM Plex Sans Thai",Sarabun,Thonburi,"Leelawadee UI",Tahoma,serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono","IBM Plex Sans Thai",monospace;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;max-width:100%}
@@ -75,6 +80,27 @@ body{
 .runhead .rh-r{margin-left:auto;display:flex;align-items:center;gap:.5rem;color:var(--ink-3)}
 .runhead .rh-r .stamp{font-variant-numeric:tabular-nums lining-nums;letter-spacing:.08em}
 .rule-thin{border:0;border-top:1px solid var(--rule);margin:0 0 clamp(1rem,2.4vw,1.8rem)}
+
+/* The edition selector. A journal names its edition in the running head, so that
+   is where the language lives — hairline-ruled off the state, set at the running
+   head's own size. It must be reachable, not loud: the reading is the loud thing.
+   The inactive side is grey, the active side is inked and underscored in vermilion. */
+.lang{
+  display:inline-flex;align-items:baseline;gap:.1rem;flex:none;
+  border-left:1px solid var(--rule);padding-left:.72rem;margin-left:.1rem;
+}
+.lang-b{
+  font:inherit;font-size:1em;font-weight:inherit;line-height:inherit;letter-spacing:inherit;
+  background:none;border:0;border-radius:0;padding:0 .16em;margin:0;
+  color:var(--ink-4);cursor:pointer;
+}
+.lang-b:hover{color:var(--ink-2)}
+.lang-b[lang="th"]{font-variant-caps:normal;letter-spacing:0;font-size:1.2em}
+.lang-b[aria-pressed="true"]{
+  color:var(--ink);font-weight:600;box-shadow:inset 0 -1px 0 var(--accent);
+}
+.lang-b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lang-sep{color:var(--rule-2)}
 .state-dot{width:.42rem;height:.42rem;border-radius:50%;background:var(--ink-4);display:inline-block;flex:none}
 [data-conn="connected"] .state-dot{background:var(--band-good)}
 [data-conn="connecting"] .state-dot,[data-conn="reconnecting"] .state-dot{background:var(--band-mod)}
@@ -151,20 +177,36 @@ figcaption{
   padding:clamp(.75rem,1.5vw,1.15rem) clamp(.8rem,1.6vw,1.25rem) clamp(.85rem,1.6vw,1.2rem);
   display:flex;flex-direction:column;gap:.32rem;min-width:0;
 }
+/* Hatched paper: this plate is not reporting. `stale` was deliberately left out
+   of this list and kept plain paper, which put an expired reading on the same
+   ground as a current one — and at ?demo=mixed the expired figure was also the
+   LARGER of the two (96.1 against 78.4, both at 73.36px), so the biggest number
+   on the wall was the one that is not today's air. An expired reading is not a
+   reading; it belongs on the same hatch as the rest. */
 .plate[data-state="offline"],.plate[data-state="waiting"],
-.plate[data-state="unknown"],.plate[data-state="fault"]{
+.plate[data-state="unknown"],.plate[data-state="fault"],
+.plate[data-state="stale"]{
   background:
     repeating-linear-gradient(45deg,transparent 0 7px,rgba(25,23,18,.045) 7px 8px),
     var(--paper-2);
 }
+/* …and it steps down in size, not only in colour. Colour alone is the weakest
+   signal a wall display has: from across a room a muted number reads as quieter,
+   which is heard as calmer. */
+.plate[data-state="stale"] .p-num{font-size:clamp(1.3rem,15cqi,3rem);color:var(--ink-3)}
+.plate[data-state="stale"] .p-unit{color:var(--ink-3)}
 .p-head{display:flex;align-items:baseline;gap:.5rem;min-width:0}
 .p-id{
   font-size:clamp(.9rem,1.3vw,1.05rem);font-weight:600;letter-spacing:.01em;
   overflow-wrap:anywhere;min-width:0;
 }
 .p-tag{
-  margin-left:auto;flex:none;font-size:.66rem;letter-spacing:.13em;
-  font-variant-caps:all-small-caps;color:var(--ink-3);
+  /* flex:0 1 auto, not flex:none. The state word is one short Latin word in the
+     English edition and one unbreakable Thai run in the Thai one; an unshrinkable
+     chip would have pushed the plate wider than its grid column. */
+  margin-left:auto;flex:0 1 auto;font-size:.66rem;letter-spacing:.13em;
+  font-variant-caps:all-small-caps;color:var(--ink-3);text-align:right;
+  overflow-wrap:anywhere;min-width:0;
   border:1px solid var(--rule-2);border-radius:2px;padding:.02rem .34rem;
 }
 .plate[data-state="live"] .p-tag{color:var(--band);border-color:currentColor}
@@ -177,7 +219,18 @@ figcaption{
      reads as 163, or as 1633, from the far side of a room. */
   white-space:nowrap;
 }
-.p-num[data-long="1"]{font-size:clamp(1.5rem,15cqi,3rem);white-space:normal;overflow-wrap:anywhere}
+/* The escape hatch for a payload too long to fit: it steps the size down and
+   lets the string wrap. What it does NOT do any more is `overflow-wrap:anywhere`.
+   That declaration permits a break at any character — including between the "3"
+   and the "." of a reading — and it is the exact declaration that once shipped
+   "163.3" broken across two lines on this fleet's wall. The step-down below
+   already removes the overflow pressure on its own; `anywhere` was insurance
+   against a case the step-down had already handled, bought with the one failure
+   mode this whole file is written to prevent. The wrap between WORDS that a long
+   non-numeric payload needs is what `white-space:normal` gives, and that is
+   enough. (Reachable only above 7 characters, which ?demo= cannot produce — it
+   truncates to one decimal — so this branch is for a malformed wire payload.) */
+.p-num[data-long="1"]{font-size:clamp(1.5rem,15cqi,3rem);white-space:normal}
 .p-num[data-kind="word"]{
   font-size:clamp(1.15rem,13cqi,2.05rem);font-style:italic;font-weight:400;
   letter-spacing:0;white-space:normal;color:var(--ink-2);
@@ -457,6 +510,83 @@ kbd{
   font-family:var(--mono);font-size:.86em;border:1px solid var(--rule-2);
   border-bottom-width:2px;padding:0 .28em;border-radius:2px;color:var(--ink-2);
 }
+
+/* ============================================================================
+   THE THAI EDITION
+
+   Thai has no spaces between words. A space in Thai is a phrase or clause
+   boundary — the comma and the full stop of this writing system — so no space
+   in a Thai string below is ever "fixed", and none is ever added inside a word.
+   The browser can only find a Thai line break with the language declared, which
+   is why the script writes <html lang> before it writes any text. Everything in
+   this block is the consequence of those two facts.
+
+   1. LEADING. Thai stacks above and below the line (สั้ ญู). 1.2 clips the tone
+      marks outright. Every line-height in this file below 1.5 is raised here for
+      Thai; the ones already at 1.5 or above are left alone.
+   2. TRACKING AND SMALL CAPS are Latin devices. Small capitals do nothing at all
+      to a Thai glyph, and letter-spacing pulls a Thai word into loose rubble, so
+      both are switched off wherever Thai can land. There is still no
+      text-transform in this stylesheet — the µ→M unit error this file was
+      written to prevent is caused by exactly that property, and adding a
+      translation layer is no reason to introduce it.
+   3. BREAKING. A long Thai run offers a narrow column no break opportunity the
+      browser can be sure of, so Thai prose blocks may break anywhere. A READING
+      may not: .p-num, .rd and .stamp keep their nowrap, because "163.3" split
+      across two lines reads as 163, or as 1633, from the far side of a room.
+   ========================================================================== */
+html[lang="th"] .title{line-height:1.34;letter-spacing:0;max-width:26ch;overflow-wrap:anywhere}
+html[lang="th"] .standfirst{line-height:1.62;overflow-wrap:anywhere}
+html[lang="th"] .lede p.body{line-height:1.72;overflow-wrap:anywhere}
+/* The drop capital is a Latin letterform device: a Thai initial glyph carries
+   tone marks that a 3.35em float shears off against the line above. */
+html[lang="th"] .lede p.body:first-letter{
+  float:none;font-size:inherit;line-height:inherit;padding:0;font-weight:inherit;
+}
+html[lang="th"] .verdict{line-height:1.5;letter-spacing:0;max-width:24ch;overflow-wrap:anywhere}
+html[lang="th"] .verdict-sub{line-height:1.62;overflow-wrap:anywhere}
+html[lang="th"] .runhead,
+html[lang="th"] .byline,
+html[lang="th"] .kicker,
+html[lang="th"] .figno,
+html[lang="th"] .p-tag,
+html[lang="th"] .record thead th,
+html[lang="th"] .seg span,
+html[lang="th"] .notes h2,
+html[lang="th"] .colophon,
+html[lang="th"] .slip h2,
+html[lang="th"] .f label{font-variant-caps:normal;letter-spacing:0}
+html[lang="th"] .runhead{line-height:1.55}
+html[lang="th"] .byline{line-height:1.55;overflow-wrap:anywhere}
+html[lang="th"] .p-tag{font-size:.7rem;padding:.1rem .34rem;line-height:1.5}
+/* Only the word form. The numeric figure keeps .92 and its nowrap. */
+html[lang="th"] .p-num[data-kind="word"]{line-height:1.55;overflow-wrap:anywhere}
+html[lang="th"] .p-band{line-height:1.55;overflow-wrap:anywhere}
+html[lang="th"] .p-note{line-height:1.6;overflow-wrap:anywhere}
+html[lang="th"] .record thead th{line-height:1.5;white-space:normal}
+html[lang="th"] .t-adv,
+html[lang="th"] .t-band{line-height:1.6;overflow-wrap:anywhere}
+html[lang="th"] .record tbody td[data-l]::before{font-variant-caps:normal;letter-spacing:0}
+html[lang="th"] figcaption{line-height:1.6;overflow-wrap:anywhere}
+html[lang="th"] .seg div{line-height:1.55;overflow-wrap:anywhere}
+html[lang="th"] .notes ol{line-height:1.68}
+html[lang="th"] .notes li{overflow-wrap:anywhere}
+html[lang="th"] .errata{line-height:1.62;overflow-wrap:anywhere}
+html[lang="th"] .errata .alert::before{content:"แจ้ง  ";font-variant-caps:normal;letter-spacing:0}
+html[lang="th"] .errata .alert[data-l="bad"]::before{content:"แก้ไข  "}
+html[lang="th"] .colophon{line-height:1.62}
+html[lang="th"] .empty{line-height:1.68;overflow-wrap:anywhere}
+html[lang="th"] #fatal p{line-height:1.5;letter-spacing:0;max-width:34ch;overflow-wrap:anywhere}
+html[lang="th"] #fatal .after{line-height:1.62}
+html[lang="th"] .slip p.lead{line-height:1.62}
+html[lang="th"] .hint{line-height:1.62}
+html[lang="th"] .demo-band .db-what,
+html[lang="th"] .demo-band .db-tail{overflow-wrap:anywhere}
+html[lang="th"] body.demo #verdict::before{content:"ตัวอย่าง — "}
+/* The demonstration band is bilingual in BOTH editions, so it is given Thai
+   leading whatever the language is. */
+.demo-band{line-height:1.5}
+.demo-band .db-thai{line-height:1.45}
 </style>
 </head>
 <body>
@@ -465,48 +595,45 @@ kbd{
      exactly one line of script, reached only when the address carries a readable
      ?demo= (see readDemo). A page reading a real broker never shows it, and no
      stored setting can ever turn it on. -->
+<!-- The marker stays BILINGUAL in both editions. A demonstration figure is the one
+     thing on a health display that can hurt a reader, so the warning is never left
+     in a language the person walking past does not read. -->
 <div class="demo-band" id="demo-band" role="note" hidden>
   <span class="db-word">DEMO</span>
   <span class="db-thai" lang="th">&#3605;&#3633;&#3623;&#3629;&#3618;&#3656;&#3634;&#3591;</span>
   <span class="db-what lit" id="demo-what">simulated figures</span>
-  <span class="db-tail">SIMULATED DATA &middot; no broker is connected &middot; nothing on this page
-    is a measurement of real air &middot; &#3652;&#3617;&#3656;&#3651;&#3594;&#3656;&#3588;&#3656;&#3634;&#3592;&#3619;&#3636;&#3591;</span>
+  <span class="db-tail" id="demo-tail"></span>
 </div>
 
 <div class="sheet">
 
   <header class="runhead" id="runhead" data-conn="idle">
-    <span class="rh-l">The Kit4Kids Air Record</span>
-    <span class="rh-c">Fine particulate matter &middot; Chiang Mai</span>
+    <span class="rh-l" id="rh-l">The Kit4Kids Air Record</span>
+    <span class="rh-c" id="rh-c">Fine particulate matter &middot; Chiang Mai</span>
     <span class="rh-r">
       <span class="stamp" id="stamp">&mdash;</span>
       <span class="state-dot"></span><span id="conn-word">not recording</span>
+      <span class="lang" id="lang" role="group"><button type="button" class="lang-b" id="lang-en"
+        data-lang="en" lang="en" aria-pressed="false">EN</button><span class="lang-sep"
+        aria-hidden="true">&middot;</span><button type="button" class="lang-b" id="lang-th"
+        data-lang="th" lang="th" aria-pressed="false">&#3652;&#3607;&#3618;</button></span>
     </span>
   </header>
   <hr class="rule-thin">
 
   <article>
 
-    <h1 class="title">Three rooms, three monitors, one figure worth watching</h1>
-    <p class="standfirst">A continuously updated record of fine particulate matter
-      (PM<span class="sub">2.5</span>) at the Kit4Kids stations, set from the readings the
-      stations publish for themselves.<sup class="fn">3</sup></p>
-    <p class="byline">Stations DBK-001, DBK-002 and DBK-010 &middot; typeset live as the readings arrive</p>
+    <h1 class="title" id="art-title">Three rooms, three monitors, one figure worth watching</h1>
+    <p class="standfirst" id="art-standfirst"></p>
+    <p class="byline" id="art-byline"></p>
 
     <section class="lede">
       <div>
-        <p class="body">Three small monitors sit in three rooms in Chiang Mai. Each measures
-          the mass of fine particles floating in the air around it &mdash; smoke, soot, dust small
-          enough to slip past the nose and settle in a lung &mdash; and publishes that mass, in
-          micrograms per cubic metre, as often as it can. What follows is that publication, set as
-          it arrives.</p>
-        <p class="body plain">Nothing here is averaged, smoothed or filled in. Where a station is
-          silent, the space where its figure would go is left empty and said so;<sup class="fn">2</sup>
-          a dash in this record is never a zero, and a zero is never a stand-in for a monitor that
-          has stopped speaking.</p>
+        <p class="body" id="art-lede-1"></p>
+        <p class="body plain" id="art-lede-2"></p>
       </div>
       <div>
-        <p class="kicker">Should we go outside?</p>
+        <p class="kicker" id="art-kicker">Should we go outside?</p>
         <p class="verdict" id="verdict">Reading the stations&hellip;</p>
         <p class="verdict-sub" id="verdict-sub">This page is opening its connection to the monitors.</p>
       </div>
@@ -514,11 +641,9 @@ kbd{
 
     <figure class="fig-plates">
       <div class="plates" id="plates"></div>
-      <div class="empty" id="empty" hidden><b>The record is empty.</b>
-        <span id="empty-msg">No station has announced itself on this broker yet. Announcements are
-        retained, so they normally replay the instant this page connects.</span></div>
-      <figcaption><span class="figno">Fig. 1</span> &mdash; <span id="cap-1">PM2.5 by station,
-        in micrograms per cubic metre, as published.</span></figcaption>
+      <div class="empty" id="empty" hidden><b id="empty-head">The record is empty.</b>
+        <span id="empty-msg"></span></div>
+      <figcaption><span class="figno" id="fig1-no">Fig. 1</span> &mdash; <span id="cap-1"></span></figcaption>
     </figure>
 
     <div class="deck">
@@ -527,18 +652,17 @@ kbd{
         <table class="record" id="record">
           <thead>
             <tr>
-              <th scope="col">Station</th>
-              <th scope="col">Reading</th>
-              <th scope="col">Band</th>
-              <th scope="col">Outside?</th>
-              <th scope="col">Last heard</th>
+              <th scope="col" id="th-id">Station</th>
+              <th scope="col" id="th-read">Reading</th>
+              <th scope="col" id="th-band">Band</th>
+              <th scope="col" id="th-adv">Outside?</th>
+              <th scope="col" id="th-seen">Last heard</th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>
         </table>
-        <figcaption><span class="figno">Table 1</span> &mdash; <span id="cap-2">The full record,
-          one line per station.</span> Readings are given in micrograms per cubic metre
-          (<span class="lit">&micro;g/m&sup3;</span>) to the precision the station itself reported.</figcaption>
+        <figcaption><span class="figno" id="tab1-no">Table 1</span> &mdash;
+          <span id="cap-2"></span> <span id="tab1-tail"></span></figcaption>
       </figure>
 
       <figure>
@@ -550,49 +674,27 @@ kbd{
             <div class="seg" id="seg"></div>
           </div>
         </div>
-        <figcaption><span class="figno">Fig. 2</span> &mdash; The United States Environmental
-          Protection Agency scale for PM2.5,<sup class="fn">1</sup> drawn with each band given
-          equal width. <span id="cap-3">No figure is reporting, so the scale carries no
-          marker.</span></figcaption>
+        <figcaption><span class="figno" id="fig2-no">Fig. 2</span> &mdash;
+          <span id="fig2-lead"></span> <span id="cap-3"></span></figcaption>
       </figure>
 
     </div>
 
     <section class="notes">
-      <h2>Notes and references</h2>
+      <h2 id="notes-head">Notes and references</h2>
       <ol>
-        <li id="note-1">Breakpoints are those of the United States Environmental Protection Agency
-          for PM2.5: 0&ndash;12.0 good; 12.1&ndash;35.4 moderate; 35.5&ndash;55.4 unhealthy for
-          sensitive groups; 55.5&ndash;150.4 unhealthy; 150.5&ndash;250.4 very unhealthy;
-          250.5 and above hazardous, all in <span class="lit">&micro;g/m&sup3;</span>. See
-          U.S. Environmental Protection Agency, <cite>Technical Assistance Document for the
-          Reporting of Daily Air Quality &mdash; the Air Quality Index (AQI)</cite>, Office of Air
-          Quality Planning and Standards (revised 2024), breakpoint table for PM2.5. Those
-          breakpoints are defined for a 24-hour average; the figures printed here are single
-          instantaneous readings placed on the same scale. That is a simplification, and it is
-          stated rather than hidden: a brief spike reads worse here than the EPA method would
-          score a whole day.</li>
-        <li id="note-2">Readings are published without the retained flag, so a station that is
-          alive but has not spoken since this page opened is printed as <em>awaiting</em> rather
-          than carrying a figure. A figure older than the station&rsquo;s declared expiry is
-          marked expired and is not treated as current. Two of the three stations are ordinarily
-          silent; that is the normal state of this record, not a fault in the page.</li>
-        <li id="note-3">Each station announces itself over MQTT discovery, and the announcement
-          names every one of them <span class="mono">PM2.5</span>. The station identity printed in
-          this record is therefore parsed from the state topic
-          (<span class="mono">dbk/DBK-002/pm2_5</span>), never from the announced name, which
-          cannot tell one room from another.</li>
-        <li id="note-4">This page subscribes only to concrete topics and to three bounded discovery
-          patterns of its own. It never subscribes to a wildcard that arrives in a payload, and
-          never to the whole tree.</li>
+        <li id="note-1"></li>
+        <li id="note-2"></li>
+        <li id="note-3"></li>
+        <li id="note-4"></li>
       </ol>
       <div class="errata" id="errata"></div>
       <div class="colophon" id="colophon">
-        <span>Set live from <b class="lit" id="co-host">&mdash;</b> over MQTT&#8209;over&#8209;WebSocket</span>
-        <span><b id="co-ents">0</b> sensors announced</span>
-        <span><b id="co-subs">0</b> subscriptions</span>
+        <span id="co-from"></span>
+        <span id="co-ents-line"></span>
+        <span id="co-subs-line"></span>
         <span id="co-state">not recording</span>
-        <span id="co-keys">Press <kbd>s</kbd> for broker settings</span>
+        <span id="co-keys"></span>
       </div>
     </section>
 
@@ -603,46 +705,45 @@ kbd{
   <div>
     <hr class="mark-rule">
     <p id="fatal-text"></p>
-    <p class="after">Press <kbd>s</kbd> to change where this page looks.</p>
+    <p class="after" id="fatal-after"></p>
   </div>
 </div>
 
 <div class="overlay" id="settings" hidden>
   <div class="slip">
-    <h2>Broker settings</h2>
-    <p class="lead">Where this record is typeset from. Kept in this browser, on this device, and
-      sent nowhere but to the broker named below.</p>
+    <h2 id="set-head">Broker settings</h2>
+    <p class="lead" id="set-lead"></p>
     <form class="form" id="form" autocomplete="off">
       <div class="f">
-        <label for="f-host">Host</label>
+        <label for="f-host" id="lbl-host">Host</label>
         <input id="f-host" name="host" spellcheck="false" required>
       </div>
       <div class="f">
-        <label for="f-port">WebSocket port</label>
+        <label for="f-port" id="lbl-port">WebSocket port</label>
         <input id="f-port" name="port" inputmode="numeric" required>
       </div>
       <div class="f">
-        <label for="f-user">Username</label>
+        <label for="f-user" id="lbl-user">Username</label>
         <input id="f-user" name="user" spellcheck="false">
       </div>
       <div class="f">
-        <label for="f-pass">Passphrase</label>
+        <label for="f-pass" id="lbl-pass">Passphrase</label>
         <input id="f-pass" name="pass" type="password" autocomplete="off">
       </div>
       <div class="f">
-        <label for="f-filter">Topic prefix</label>
+        <label for="f-filter" id="lbl-filter">Topic prefix</label>
         <input id="f-filter" name="filter" spellcheck="false" placeholder="dbk/">
       </div>
       <div class="f f-check">
         <input id="f-tls" name="tls" type="checkbox">
-        <label for="f-tls">Secure socket (wss)</label>
+        <label for="f-tls" id="lbl-tls">Secure socket (wss)</label>
       </div>
       <div class="f f-check">
         <input id="f-remember" name="remember" type="checkbox">
-        <label for="f-remember">Remember passphrase</label>
+        <label for="f-remember" id="lbl-remember">Remember passphrase</label>
       </div>
       <div class="f acts">
-        <button type="submit">Connect</button>
+        <button type="submit" id="btn-connect">Connect</button>
         <button type="button" class="ghost" id="btn-forget">Forget</button>
         <button type="button" class="ghost" id="btn-close">Close</button>
       </div>
@@ -664,6 +765,623 @@ kbd{
   'use strict';
 
   /* ==========================================================================
+     THE TWO EDITIONS — the translation layer.
+
+     This record is read by children in Chiang Mai during the burning season, and
+     most of them read Thai. It therefore sets in two editions from one set of
+     bytes: nothing below is translated at render time, every string is looked up
+     by key, and switching edition re-typesets the page in place without
+     reloading it and without dropping the line to the broker.
+
+     Three rules govern the table:
+
+       · The Thai in the verdict, band, state, connection and demonstration keys
+         is the fleet's vetted wording, shared character-for-character with the
+         other twenty wall designs. It was written against Thai, not translated
+         out of the English beside it, and it is not "improved" here.
+       · t() can never put the word "undefined" on a wall. A missing key falls
+         back to English and then to the key itself: visible to whoever is
+         editing this file, never blank to whoever is reading it.
+       · Nothing that came off the wire is ever translated. A unit, a station id,
+         a topic and a figure are printed exactly as they arrived, in both
+         editions, and .lit still pins them out of every case-styling rule.
+     ========================================================================== */
+
+  var LANG_KEY = 'air-wall.lang.v1';
+
+  var STR = {
+    en: {
+      'doc.title': 'The Kit4Kids Air Record — PM2.5, Chiang Mai',
+      'head.masthead': 'The Kit4Kids Air Record',
+      'head.sub': 'Fine particulate matter &middot; Chiang Mai',
+      'lang.aria': 'Edition language',
+
+      'art.title': 'Three rooms, three monitors, one figure worth watching',
+      'art.standfirst': 'A continuously updated record of fine particulate matter ' +
+        '(PM<span class="sub">2.5</span>) at the Kit4Kids stations, set from the readings the ' +
+        'stations publish for themselves.<sup class="fn">3</sup>',
+      'art.byline': 'Stations DBK-001, DBK-002 and DBK-010 &middot; typeset live as the readings arrive',
+      'art.lede1': 'Three small monitors sit in three rooms in Chiang Mai. Each measures the mass ' +
+        'of fine particles floating in the air around it — smoke, soot, dust small enough to slip ' +
+        'past the nose and settle in a lung — and publishes that mass, in micrograms per cubic ' +
+        'metre, as often as it can. What follows is that publication, set as it arrives.',
+      'art.lede2': 'Nothing here is averaged, smoothed or filled in. Where a station is silent, ' +
+        'the space where its figure would go is left empty and said so;<sup class="fn">2</sup> ' +
+        'a dash in this record is never a zero, and a zero is never a stand-in for a monitor that ' +
+        'has stopped speaking.',
+      'art.kicker': 'Should we go outside?',
+      'verdict.boot': 'Reading the stations…',
+      'verdictsub.boot': 'This page is opening its connection to the monitors.',
+
+      /* ---- vetted: the answer to the only question a child actually asks ---- */
+      'verdict.good': 'Go outside. The air is clean.',
+      'verdict.moderate': 'Air is okay. Outdoor play is fine.',
+      'verdict.sensitive': 'Sensitive groups take care.',
+      'verdict.unhealthy': 'Unhealthy — stay indoors.',
+      'verdict.verybad': 'Very unhealthy — stay indoors.',
+      'verdict.hazardous': 'Hazardous — stay inside.',
+      'verdict.unknown': 'No reading — air quality unknown.',
+
+      'care.good': 'Nothing needs doing differently today.',
+      'care.moderate': 'Fine for most people; a few will notice it.',
+      'care.sensitive': 'Children with asthma should stay in and play indoors.',
+      'care.unhealthy': 'Keep the windows and doors shut. Indoor games only.',
+      'care.verybad': 'If someone must go out, they need a proper mask.',
+      'care.hazardous': 'Close every window and door and keep them closed.',
+
+      /* ---- vetted: the band names ---- */
+      'band.good': 'Good',
+      'band.moderate': 'Moderate',
+      'band.sensitive': 'Unhealthy for sensitive groups',
+      'band.unhealthy': 'Unhealthy',
+      'band.verybad': 'Very unhealthy',
+      'band.hazardous': 'Hazardous',
+      'band.none': 'Not rated',
+
+      'band.short.good': 'Good',
+      'band.short.moderate': 'Moderate',
+      'band.short.sensitive': 'Sensitive groups',
+      'band.short.unhealthy': 'Unhealthy',
+      'band.short.verybad': 'Very unhealthy',
+      'band.short.hazardous': 'Hazardous',
+
+      /* ---- vetted: what a station is doing ---- */
+      'state.offline': 'offline',
+      'state.noreading': 'no reading',
+      'state.stale': 'stale',
+      'state.waiting': 'waiting',
+      'state.live': 'live',
+      'state.fault': 'sensor fault',
+
+      'plate.faultband': 'below zero — not a reading',
+      'plate.staleband': 'expired, treat as unknown',
+      'plate.dash': '—',
+
+      'note.updated': 'Updated {t}.',
+      'note.silent': 'Reported silent {t}.',
+      'note.waiting': 'Alive, but has not published since this page opened.',
+      'note.availunknown': 'Availability unstated.',
+      'note.templated': 'Raw value; template not applied.',
+      'note.hist': 'Last figure recorded {v} {u}, {t} — history, not now.',
+      'row.silentfor': 'silent {t}',
+
+      /* ---- vetted: how long ago ---- */
+      'time.justnow': 'just now',
+      'time.secondsAgo': '{n}s ago',
+      'time.minutesAgo': '{n}m ago',
+      'time.hoursAgo': '{n}h ago',
+      'time.daysAgo': '{n}d ago',
+      'time.never': 'never',
+
+      'th.station': 'Station',
+      'th.read': 'Reading',
+      'th.band': 'Band',
+      'th.adv': 'Outside?',
+      'th.seen': 'Last heard',
+
+      'fig.1no': 'Fig. 1',
+      'fig.2no': 'Fig. 2',
+      'tab.1no': 'Table 1',
+      'notes.head': 'Notes and references',
+
+      'cap1.lead': 'PM2.5 by station, in micrograms per cubic metre ({u}), as published. {mixed}',
+      'cap1.none': 'No station is on the record yet.',
+      'cap1.nonerep1': 'No station is reporting a current figure; the one on the record is marked ' +
+        'silent, waiting, or expired, and nothing it last said is treated as now.',
+      'cap1.nonerepN': 'No station is reporting a current figure; all {n} are marked silent, ' +
+        'waiting, or expired, and nothing they last said is treated as now.',
+      'cap1.all1': 'The one station on the record is reporting a current figure.',
+      'cap1.allN': 'All {n} stations are reporting a current figure.',
+      'cap1.partial': '{r} of {n} stations reporting a current figure; the other {s} marked ' +
+        'silent, waiting, or expired, and nothing they last said is treated as now.',
+
+      'cap2.empty': 'The record is empty; no station has announced itself.',
+      'cap2.full': 'The full record, one line per station, station order. A line without a figure ' +
+        'carries an em dash: that dash is not a zero, and no zero here stands in for a silent monitor.',
+      'tab1.tail': 'Readings are given in micrograms per cubic metre ' +
+        '(<span class="lit">&micro;g/m&sup3;</span>) to the precision the station itself reported.',
+
+      'fig2.lead': 'The United States Environmental Protection Agency scale for ' +
+        'PM2.5,<sup class="fn">1</sup> drawn with each band given equal width.',
+      'cap3.mark': 'The marker stands at <span class="lit">{v}</span>, the highest figure now ' +
+        'reporting, at station {who}.',
+      'cap3.none': 'No station is reporting a figure, so the scale carries no marker.',
+
+      'sum.figure': '{care} The figure behind that answer is {fig} at station {who}, which the ' +
+        'United States EPA scale calls {band}.<sup class="fn">1</sup>',
+      'sum.part': ' Not reporting: {s} of {n} stations — so this is {scope}, not the whole ' +
+        'school’s air.',
+      'sum.scopeOne': 'one room’s air',
+      'sum.scopeSome': 'part of the school’s air',
+      'sum.nonone': 'No station has announced itself on this broker, so there is nothing to read.',
+      'sum.allsilent1': 'The one station on this record is silent, waiting, or holding a figure ' +
+        'that has expired. Every figure printed below is history and is labelled as such; none of ' +
+        'it describes the air right now.<sup class="fn">2</sup>',
+      'sum.allsilentN': 'All {n} stations are silent, waiting, or holding a figure that has ' +
+        'expired. Every figure printed below is history and is labelled as such; none of it ' +
+        'describes the air right now.<sup class="fn">2</sup>',
+
+      'empty.head': 'The record is empty.',
+      'empty.base': 'No station has announced itself on this broker yet. Announcements are ' +
+        'retained, so they normally replay the instant this page connects.',
+      'empty.connected': 'Connected. Waiting for a retained announcement to describe a station.',
+      'empty.demo': 'Demonstration mode is setting out its stations.',
+      'empty.filtered': '{n} sensors were announced but held out by the topic prefix “{f}”. Clear ' +
+        'that field in the broker settings and reconnect to print every sensor on this broker.',
+
+      'note.1': 'Breakpoints are those of the United States Environmental Protection Agency for ' +
+        'PM2.5: 0&ndash;12.0 good; 12.1&ndash;35.4 moderate; 35.5&ndash;55.4 unhealthy for ' +
+        'sensitive groups; 55.5&ndash;150.4 unhealthy; 150.5&ndash;250.4 very unhealthy; 250.5 and ' +
+        'above hazardous, all in <span class="lit">&micro;g/m&sup3;</span>. See U.S. Environmental ' +
+        'Protection Agency, <cite>Technical Assistance Document for the Reporting of Daily Air ' +
+        'Quality — the Air Quality Index (AQI)</cite>, Office of Air Quality Planning and ' +
+        'Standards (revised 2024), breakpoint table for PM2.5. Those breakpoints are defined for a ' +
+        '24-hour average; the figures printed here are single instantaneous readings placed on the ' +
+        'same scale. That is a simplification, and it is stated rather than hidden: a brief spike ' +
+        'reads worse here than the EPA method would score a whole day.',
+      'note.2': 'Readings are published without the retained flag, so a station that is alive but ' +
+        'has not spoken since this page opened is printed as <em>waiting</em> rather than carrying ' +
+        'a figure. A figure older than the station’s declared expiry is marked expired and is not ' +
+        'treated as current. Two of the three stations are ordinarily silent; that is the normal ' +
+        'state of this record, not a fault in the page.',
+      'note.3': 'Each station announces itself over MQTT discovery, and the announcement names ' +
+        'every one of them <span class="mono">PM2.5</span>. The station identity printed in this ' +
+        'record is therefore parsed from the state topic ' +
+        '(<span class="mono">dbk/DBK-002/pm2_5</span>), never from the announced name, which ' +
+        'cannot tell one room from another.',
+      'note.4': 'This page subscribes only to concrete topics and to three bounded discovery ' +
+        'patterns of its own. It never subscribes to a wildcard that arrives in a payload, and ' +
+        'never to the whole tree.',
+
+      'col.from': 'Set live from <b class="lit" id="co-host">&mdash;</b> over MQTT&#8209;over&#8209;WebSocket',
+      'col.ents': '<b id="co-ents">0</b> sensors announced',
+      'col.subs': '<b id="co-subs">0</b> subscriptions',
+
+      /* ---- vetted: the line to the broker ---- */
+      'conn.idle': 'not recording',
+      'conn.connecting': 'connecting',
+      'conn.connected': 'connected',
+      'conn.retrying': 'reconnecting',
+      'conn.refused': 'The broker refused this connection.',
+      'conn.unreachable': 'Cannot reach the broker.',
+      'conn.hint': 'Press s to enter the details.',
+      'conn.nolib': 'the library did not load',
+      'conn.demo': 'demonstration — no broker',
+
+      'err.1': 'the broker rejected the MQTT protocol version',
+      'err.2': 'the broker rejected this client id',
+      'err.3': 'the broker is unavailable',
+      'err.4': 'the username or passphrase is wrong',
+      'err.5': 'this account is not authorised for the broker',
+
+      'fatal.nolib': 'This page could not load the MQTT library it reads the monitors with, so put ' +
+        'this machine back on a network that can reach unpkg.com and reload.',
+      'fatal.nourl': 'This page could not open a connection to {url}, so press s and check the ' +
+        'address it was given.',
+      'fatal.silent': 'Nothing is arriving from the monitors at {url}, so check that the broker is ' +
+        'switched on, that this machine is on the same network, and that the port is its WebSocket ' +
+        'listener rather than its plain one.',
+      'fatal.silentwhy': 'Nothing is arriving from the monitors at {url} — {why} — so check that ' +
+        'the broker is switched on and reachable from this machine.',
+      'fatal.refused': 'The broker at {label} refused this page — {why} — so press s and enter ' +
+        'details it will accept.',
+
+      'alert.subcap': '<b>Subscription ceiling reached ({max}).</b> Further sensors are left out ' +
+        'of this record so the page cannot flood the broker.',
+      'alert.suberr': '<b>A subscription was rejected.</b> <span class="mono">{topic}</span> — ' +
+        '{why}. The broker’s access rules may not allow it.',
+      'alert.wildcard': '<b>A wildcard subscription was refused.</b> An announcement asked for ' +
+        '<span class="mono">{topic}</span>. Topics arriving over the wire must name one exact ' +
+        'topic; neither <span class="mono">#</span> nor <span class="mono">+</span> is ever ' +
+        'subscribed.',
+      'alert.filter': '<b>{n} sensors held out of this record by the topic prefix.</b> It is ' +
+        'scoped to state topics beginning <span class="mono">{f}</span>. Clear that field in the ' +
+        'broker settings and reconnect to print everything on this broker.',
+      'alert.parse': '<b>{n} malformed announcements ignored.</b> Latest: ' +
+        '<span class="mono">{topic}</span>. The rest of the record is unaffected.',
+      'alert.parseapply': '<b>An announcement could not be applied.</b> {why}',
+      'alert.nodisc': '<b>Connected, but no announcement arrived.</b> Announcements are retained ' +
+        'and replay the instant this page subscribes, so an empty record usually means nothing has ' +
+        'published to <span class="mono">homeassistant/&hellip;/config</span> on this broker yet.',
+      'alert.conn': '<b>The line to the broker dropped.</b> Retrying every four seconds. The ' +
+        'figures below keep their last known state and will age into <em>expired</em>.',
+      'alert.connerr': '<b>Cannot reach the broker</b> at <span class="mono">{url}</span> — {why}. ' +
+        'Retrying every four seconds.',
+      'alert.mixed': '<b>Mixed content.</b> This page is served over HTTPS, so the browser blocks ' +
+        'the plaintext <span class="mono">ws://</span> connection. Tick the secure socket in the ' +
+        'broker settings, or open this file straight from disk.',
+      'alert.demo': '<b>This page is a demonstration and every figure on it is invented.</b> It ' +
+        'was asked for by <span class="mono">?demo=</span> in the address, it is connected to no ' +
+        'broker, and it describes the air in no room. Remove that parameter from the address and ' +
+        'reload to read the monitors. <span lang="th">หน้านี้เป็นตัวอย่าง ไม่ใช่ค่าอากาศจริง</span>',
+      'alert.demounread': '<b>The demonstration parameter was not understood, so nothing is being ' +
+        'simulated.</b> <span class="mono">{raw}</span> is not a figure or a band name. Every ' +
+        'figure below is a real reading from a real monitor. Use <span class="mono">?demo=</span> ' +
+        'with a number, with <span class="mono">good</span>, <span class="mono">moderate</span>, ' +
+        '<span class="mono">sensitive</span>, <span class="mono">unhealthy</span>, ' +
+        '<span class="mono">verybad</span> or <span class="mono">hazardous</span>, or with ' +
+        '<span class="mono">cycle</span> or <span class="mono">mixed</span>.',
+
+      'set.head': 'Broker settings',
+      'set.lead': 'Where this record is typeset from. Kept in this browser, on this device, and ' +
+        'sent nowhere but to the broker named below.',
+      'set.host': 'Host',
+      'set.port': 'WebSocket port',
+      'set.user': 'Username',
+      'set.pass': 'Passphrase',
+      'set.filter': 'Topic prefix',
+      'set.tls': 'Secure socket (wss)',
+      'set.remember': 'Remember passphrase',
+      'set.connect': 'Connect',
+      'set.forget': 'Forget',
+      'set.close': 'Close',
+
+      'hint.store': 'Settings are kept in this browser only, on this device, and the passphrase ' +
+        'only if the box above is ticked.',
+      'hint.nostore': 'This browser blocks local storage, so settings cannot be remembered on ' +
+        'this device.',
+      'hint.savefail': 'This browser refused to save these settings (a private window?). The ' +
+        'connection still works, but they will need entering again next time.',
+      'hint.savedpass': 'Saved in this browser only, on this device — passphrase included. ' +
+        'Nothing is uploaded.',
+      'hint.savednopass': 'Saved in this browser only, on this device. The passphrase was NOT ' +
+        'stored; it will need typing again next time.',
+      'hint.cleared': 'Saved settings cleared from this browser.',
+      'hint.demo': 'Demonstration mode reads no saved setting and writes none. Remove the demo ' +
+        'parameter from the address and reload to return to the monitors.',
+
+      /* ---- vetted: the demonstration marker, bilingual in BOTH editions ---- */
+      'demo.warn': 'SIMULATED DATA, NOT A REAL READING',
+      'demo.at': 'every board faked at',
+      'demo.tail': 'SIMULATED DATA, NOT A REAL READING &middot; no broker is connected &middot; ' +
+        'nothing on this page is a measurement of real air &middot; ' +
+        '<span lang="th">ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง</span>',
+      'demo.host': 'nothing — every figure below is invented',
+      'demo.keys': 'Broker settings are disabled in demonstration mode',
+      'demo.what.mixed': 'Invented fleet: DBK-002 reporting {v}, DBK-001 expired, DBK-010 silent.',
+      'demo.what.cycle': 'Cycling the six bands, four seconds each. Every board faked at {v}.',
+      'demo.what.value': 'every board faked at {v}',
+
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'US EPA PM2.5 scale'
+    },
+
+    th: {
+      'doc.title': 'บันทึกอากาศ Kit4Kids — PM2.5 เชียงใหม่',
+      'head.masthead': 'บันทึกอากาศ Kit4Kids',
+      'head.sub': 'ฝุ่นละอองขนาดเล็ก &middot; เชียงใหม่',
+      'lang.aria': 'ภาษาของฉบับนี้',
+
+      'art.title': 'สามห้อง สามเครื่องวัด ตัวเลขเดียวที่ต้องดู',
+      'art.standfirst': 'บันทึกค่าฝุ่นละอองขนาดเล็ก (PM<span class="sub">2.5</span>) ' +
+        'จากจุดวัดของ Kit4Kids อัปเดตต่อเนื่อง เรียงพิมพ์จากค่าที่แต่ละจุดส่งออกมาเอง' +
+        '<sup class="fn">3</sup>',
+      'art.byline': 'จุดวัด DBK-001 DBK-002 และ DBK-010 &middot; เรียงพิมพ์สดตามค่าที่เข้ามา',
+      'art.lede1': 'เครื่องวัดสามเครื่องตั้งอยู่ในสามห้องที่เชียงใหม่ แต่ละเครื่องวัดน้ำหนักของ' +
+        'ฝุ่นละอองขนาดเล็กที่ลอยอยู่ในอากาศรอบตัว ทั้งควัน เขม่า และฝุ่นที่เล็กพอจะเล็ดลอดจมูก' +
+        'ลงไปค้างในปอด แล้วส่งค่านั้นออกมาเป็นไมโครกรัมต่อลูกบาศก์เมตร บ่อยเท่าที่จะส่งได้ ' +
+        'ข้างล่างนี้คือค่าที่ส่งออกมา เรียงพิมพ์ตามที่เข้ามาจริง',
+      'art.lede2': 'ตรงนี้ไม่มีการเฉลี่ย ไม่มีการเกลี่ยให้เรียบ และไม่มีการเติมค่าที่ขาดหาย ' +
+        'จุดไหนเงียบ ช่องที่ควรมีตัวเลขก็ปล่อยว่างไว้แล้วบอกตรง ๆ ว่าเงียบ' +
+        '<sup class="fn">2</sup> ขีดในบันทึกนี้ไม่เคยแปลว่าศูนย์ ' +
+        'และเลข 0 ก็ไม่ใช่ตัวแทนของเครื่องที่หยุดส่งค่าไปแล้ว',
+      'art.kicker': 'วันนี้ออกไปข้างนอกได้ไหม',
+      'verdict.boot': 'กำลังอ่านค่าจากจุดวัด…',
+      'verdictsub.boot': 'หน้านี้กำลังเปิดการเชื่อมต่อไปยังเครื่องวัด',
+
+      'verdict.good': 'อากาศดี ออกไปเล่นได้เลย',
+      'verdict.moderate': 'อากาศพอใช้ได้ ออกไปข้างนอกได้ตามปกติ',
+      'verdict.sensitive': 'ถ้าแพ้ง่าย เลี่ยงออกข้างนอกไว้ก่อน',
+      'verdict.unhealthy': 'อากาศไม่ดี อยู่ในบ้านดีกว่า',
+      'verdict.verybad': 'อากาศแย่มาก อย่าเพิ่งออกไปข้างนอก',
+      'verdict.hazardous': 'อันตราย อยู่ในบ้าน ปิดประตูหน้าต่างให้หมด',
+      'verdict.unknown': 'ยังไม่มีค่า ไม่รู้ว่าอากาศเป็นยังไง',
+
+      'care.good': 'วันนี้ทำอะไรตามปกติได้เลย',
+      'care.moderate': 'คนส่วนใหญ่ไม่เป็นไร มีบางคนที่จะรู้สึกได้',
+      'care.sensitive': 'เด็กที่เป็นหอบหืดให้อยู่ในบ้าน เล่นในร่มไปก่อน',
+      'care.unhealthy': 'ปิดประตูหน้าต่างไว้ เล่นในร่มอย่างเดียว',
+      'care.verybad': 'ถ้าจำเป็นต้องออกไปจริง ๆ ต้องใส่หน้ากากที่กันฝุ่นได้',
+      'care.hazardous': 'ปิดหน้าต่างและประตูให้หมด แล้วปิดไว้แบบนั้น',
+
+      'band.good': 'ดี',
+      'band.moderate': 'ปานกลาง',
+      'band.sensitive': 'เริ่มมีผลกับคนแพ้ง่าย',
+      'band.unhealthy': 'ไม่ดีต่อสุขภาพ',
+      'band.verybad': 'แย่มาก',
+      'band.hazardous': 'อันตราย',
+      'band.none': 'ไม่มีเกณฑ์',
+
+      'band.short.good': 'ดี',
+      'band.short.moderate': 'ปานกลาง',
+      'band.short.sensitive': 'คนแพ้ง่าย',
+      'band.short.unhealthy': 'ไม่ดี',
+      'band.short.verybad': 'แย่มาก',
+      'band.short.hazardous': 'อันตราย',
+
+      'state.offline': 'ไม่ได้ส่งข้อมูล',
+      'state.noreading': 'ยังไม่มีค่า',
+      'state.stale': 'ค่าเก่า',
+      'state.waiting': 'กำลังรอ',
+      'state.live': 'สด',
+      'state.fault': 'เซ็นเซอร์มีปัญหา',
+
+      'plate.faultband': 'ต่ำกว่าศูนย์ ไม่ใช่ค่าที่ใช้ได้',
+      'plate.staleband': 'หมดอายุแล้ว ให้ถือว่าไม่รู้ค่า',
+      'plate.dash': '—',
+
+      'note.updated': 'อัปเดต {t}',
+      'note.silent': 'แจ้งว่าเงียบ {t}',
+      'note.waiting': 'ยังออนไลน์อยู่ แต่ไม่ได้ส่งค่าเลยตั้งแต่หน้านี้เปิดขึ้นมา',
+      'note.availunknown': 'ไม่ได้บอกว่าออนไลน์อยู่หรือเปล่า',
+      'note.templated': 'ค่าดิบ ยังไม่ได้ผ่าน template',
+      'note.hist': 'ค่าล่าสุดที่บันทึกไว้คือ {v} {u} {t} เป็นค่าย้อนหลัง ไม่ใช่ตอนนี้',
+      'row.silentfor': 'เงียบมา {t}',
+
+      'time.justnow': 'เมื่อกี้',
+      'time.secondsAgo': '{n} วินาทีที่แล้ว',
+      'time.minutesAgo': '{n} นาทีที่แล้ว',
+      'time.hoursAgo': '{n} ชั่วโมงที่แล้ว',
+      'time.daysAgo': '{n} วันที่แล้ว',
+      'time.never': 'ไม่เคย',
+
+      'th.station': 'จุดวัด',
+      'th.read': 'ค่าที่วัดได้',
+      'th.band': 'ระดับ',
+      'th.adv': 'ออกไปข้างนอกได้ไหม',
+      'th.seen': 'ส่งค่าล่าสุด',
+
+      'fig.1no': 'ภาพ 1',
+      'fig.2no': 'ภาพ 2',
+      'tab.1no': 'ตาราง 1',
+      'notes.head': 'หมายเหตุและอ้างอิง',
+
+      'cap1.lead': 'ค่า PM2.5 แยกตามจุดวัด หน่วยไมโครกรัมต่อลูกบาศก์เมตร ({u}) ' +
+        'ตามที่ส่งออกมาจริง {mixed}',
+      'cap1.none': 'ยังไม่มีจุดวัดไหนอยู่ในบันทึกนี้',
+      'cap1.nonerep1': 'ยังไม่มีจุดวัดไหนส่งค่าปัจจุบัน จุดเดียวที่อยู่ในบันทึกขึ้นสถานะเงียบ ' +
+        'กำลังรอ หรือค่าหมดอายุ และค่าล่าสุดที่เคยบอกไว้ก็ไม่นับว่าเป็นค่าตอนนี้',
+      'cap1.nonerepN': 'ยังไม่มีจุดวัดไหนส่งค่าปัจจุบัน ทั้ง {n} จุดขึ้นสถานะเงียบ กำลังรอ ' +
+        'หรือค่าหมดอายุ และค่าล่าสุดที่เคยบอกไว้ก็ไม่นับว่าเป็นค่าตอนนี้',
+      'cap1.all1': 'จุดเดียวที่อยู่ในบันทึกกำลังส่งค่าปัจจุบันอยู่',
+      'cap1.allN': 'ทั้ง {n} จุดกำลังส่งค่าปัจจุบันอยู่',
+      'cap1.partial': 'มี {r} จาก {n} จุดที่กำลังส่งค่าปัจจุบัน อีก {s} จุดขึ้นสถานะเงียบ ' +
+        'กำลังรอ หรือค่าหมดอายุ และค่าล่าสุดของจุดพวกนั้นก็ไม่นับว่าเป็นค่าตอนนี้',
+
+      'cap2.empty': 'บันทึกยังว่าง ยังไม่มีจุดวัดไหนประกาศตัวเข้ามา',
+      'cap2.full': 'บันทึกทั้งหมด จุดวัดละหนึ่งบรรทัด เรียงตามชื่อจุด ' +
+        'บรรทัดที่ไม่มีตัวเลขจะเป็นขีด ขีดนั้นไม่ใช่ศูนย์ ' +
+        'และไม่มีศูนย์ตัวไหนในนี้ที่ยืนแทนเครื่องที่เงียบไป',
+      'tab1.tail': 'ค่าทั้งหมดเป็นไมโครกรัมต่อลูกบาศก์เมตร ' +
+        '(<span class="lit">&micro;g/m&sup3;</span>) ละเอียดเท่าที่จุดวัดรายงานมาเอง',
+
+      'fig2.lead': 'เกณฑ์ PM2.5 ของ US EPA<sup class="fn">1</sup> ' +
+        'วาดโดยให้แต่ละระดับกว้างเท่ากัน',
+      'cap3.mark': 'เครื่องหมายอยู่ที่ <span class="lit">{v}</span> ' +
+        'ค่าสูงสุดที่กำลังส่งอยู่ตอนนี้ จากจุดวัด {who}',
+      'cap3.none': 'ยังไม่มีจุดวัดไหนส่งค่า เกณฑ์นี้เลยไม่มีเครื่องหมาย',
+
+      'sum.figure': '{care} ตัวเลขที่อยู่เบื้องหลังคำตอบนี้คือ {fig} จากจุดวัด {who} ' +
+        'เกณฑ์ PM2.5 ของ US EPA เรียกระดับนี้ว่า {band}<sup class="fn">1</sup>',
+      'sum.part': ' ยังไม่ได้ส่งค่า {s} จาก {n} จุด ตัวเลขนี้จึงเป็น{scope} ไม่ใช่ทั้งโรงเรียน',
+      'sum.scopeOne': 'อากาศของห้องเดียว',
+      'sum.scopeSome': 'อากาศส่วนหนึ่งของโรงเรียน',
+      'sum.nonone': 'ยังไม่มีจุดวัดไหนประกาศตัวเข้ามาที่ broker นี้ เลยยังไม่มีอะไรให้อ่าน',
+      'sum.allsilent1': 'จุดวัดจุดเดียวในบันทึกนี้ตอนนี้เงียบ กำลังรอ หรือถือค่าที่หมดอายุไปแล้ว ' +
+        'ตัวเลขทุกตัวข้างล่างเป็นค่าย้อนหลัง และกำกับไว้ชัดว่าย้อนหลัง ' +
+        'ไม่มีตัวไหนบอกอากาศตอนนี้<sup class="fn">2</sup>',
+      'sum.allsilentN': 'จุดวัดทั้ง {n} จุดตอนนี้เงียบ กำลังรอ หรือถือค่าที่หมดอายุไปแล้ว ' +
+        'ตัวเลขทุกตัวข้างล่างเป็นค่าย้อนหลัง และกำกับไว้ชัดว่าย้อนหลัง ' +
+        'ไม่มีตัวไหนบอกอากาศตอนนี้<sup class="fn">2</sup>',
+
+      'empty.head': 'บันทึกยังว่างอยู่',
+      'empty.base': 'ยังไม่มีจุดวัดไหนประกาศตัวเข้ามาที่ broker นี้ ' +
+        'ปกติ broker จะเก็บประกาศค้างไว้ แล้วส่งซ้ำทันทีที่หน้านี้เชื่อมต่อ',
+      'empty.connected': 'เชื่อมต่อแล้ว กำลังรอประกาศที่ค้างอยู่มาบอกว่ามีจุดวัดอะไรบ้าง',
+      'empty.demo': 'โหมดตัวอย่างกำลังจัดวางจุดวัดของตัวเอง',
+      'empty.filtered': 'มีเซ็นเซอร์ {n} ตัวประกาศเข้ามา แต่โดนกันออกด้วยคำนำหน้าหัวข้อ “{f}” ' +
+        'ล้างช่องนั้นในตั้งค่า broker แล้วเชื่อมต่อใหม่ ถ้าอยากให้พิมพ์ทุกเซ็นเซอร์บน broker นี้',
+
+      'note.1': 'เกณฑ์ที่ใช้คือ breakpoint ของ US EPA สำหรับ PM2.5 คือ 0&ndash;12.0 ดี · ' +
+        '12.1&ndash;35.4 ปานกลาง · 35.5&ndash;55.4 เริ่มมีผลกับคนแพ้ง่าย · ' +
+        '55.5&ndash;150.4 ไม่ดีต่อสุขภาพ · 150.5&ndash;250.4 แย่มาก · 250.5 ขึ้นไป อันตราย ' +
+        'ทุกช่วงเป็นหน่วย <span class="lit">&micro;g/m&sup3;</span> ดู U.S. Environmental ' +
+        'Protection Agency, <cite>Technical Assistance Document for the Reporting of Daily Air ' +
+        'Quality — the Air Quality Index (AQI)</cite>, Office of Air Quality Planning and ' +
+        'Standards (ปรับปรุง 2024) ตาราง breakpoint ของ PM2.5 ' +
+        'เกณฑ์ชุดนี้ตั้งไว้สำหรับค่าเฉลี่ย 24 ชั่วโมง ' +
+        'แต่ตัวเลขที่พิมพ์อยู่ตรงนี้เป็นค่าอ่านครั้งเดียว ณ ขณะนั้น แล้ววางลงบนเกณฑ์เดียวกัน ' +
+        'ตรงนี้เป็นการทำให้ง่ายเข้าไว้ และบอกไว้ตรง ๆ ดีกว่าซ่อน ' +
+        'ค่าที่พุ่งขึ้นแป๊บเดียวจะอ่านดูแย่กว่าที่วิธีของ EPA จะให้คะแนนทั้งวัน',
+      'note.2': 'จุดวัดส่งค่าออกมาโดยไม่ตั้ง retained flag จุดที่ยังออนไลน์อยู่ ' +
+        'แต่ไม่ได้พูดอะไรเลยตั้งแต่หน้านี้เปิด จึงพิมพ์ว่า <em>กำลังรอ</em> แทนที่จะมีตัวเลข ' +
+        'ส่วนค่าที่เก่ากว่าเวลาหมดอายุที่จุดวัดประกาศไว้เอง จะกำกับว่าหมดอายุ ' +
+        'และไม่นับเป็นค่าปัจจุบัน ปกติสองในสามจุดจะเงียบอยู่แล้ว ' +
+        'นั่นคือสภาพปกติของบันทึกนี้ ไม่ใช่ความผิดพลาดของหน้าเว็บ',
+      'note.3': 'จุดวัดแต่ละตัวประกาศตัวเองผ่าน MQTT discovery แล้วประกาศนั้นตั้งชื่อทุกตัวว่า ' +
+        '<span class="mono">PM2.5</span> เหมือนกันหมด ชื่อจุดวัดที่พิมพ์ในบันทึกนี้จึงแกะมาจาก ' +
+        'state topic (<span class="mono">dbk/DBK-002/pm2_5</span>) ' +
+        'ไม่ได้เอามาจากชื่อที่ประกาศ เพราะชื่อนั้นแยกไม่ออกว่าห้องไหนเป็นห้องไหน',
+      'note.4': 'หน้านี้ subscribe เฉพาะหัวข้อที่ระบุชัดเจน กับ discovery pattern ' +
+        'ที่มีขอบเขตของตัวเองอีกสามอันเท่านั้น ไม่เคย subscribe wildcard ที่มากับ payload ' +
+        'และไม่เคย subscribe ทั้ง tree',
+
+      'col.from': 'เรียงพิมพ์สดจาก <b class="lit" id="co-host">&mdash;</b> ผ่าน MQTT&#8209;over&#8209;WebSocket',
+      'col.ents': 'ประกาศเซ็นเซอร์แล้ว <b id="co-ents">0</b> ตัว',
+      'col.subs': 'subscribe อยู่ <b id="co-subs">0</b> หัวข้อ',
+
+      'conn.idle': 'ยังไม่ได้บันทึก',
+      'conn.connecting': 'กำลังเชื่อมต่อ',
+      'conn.connected': 'เชื่อมต่อแล้ว',
+      'conn.retrying': 'กำลังเชื่อมต่อใหม่',
+      'conn.refused': 'เข้าระบบไม่ได้ บัญชีนี้ไม่มีสิทธิ์',
+      'conn.unreachable': 'ติดต่อ broker ไม่ได้',
+      'conn.hint': 'กด s เพื่อใส่ข้อมูลเข้าระบบ',
+      'conn.nolib': 'โหลด library ไม่สำเร็จ',
+      'conn.demo': 'โหมดตัวอย่าง — ไม่มี broker',
+
+      'err.1': 'broker ไม่รับเวอร์ชันของ MQTT protocol',
+      'err.2': 'broker ไม่รับ client id นี้',
+      'err.3': 'broker ไม่พร้อมใช้งาน',
+      'err.4': 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
+      'err.5': 'บัญชีนี้ไม่มีสิทธิ์เข้า broker',
+
+      'fatal.nolib': 'หน้านี้โหลด MQTT library ที่ใช้อ่านค่าจากเครื่องวัดไม่ได้ ' +
+        'ให้เอาเครื่องนี้กลับไปต่อเน็ตที่เข้า unpkg.com ได้ แล้วโหลดหน้านี้ใหม่',
+      'fatal.nourl': 'หน้านี้เปิดการเชื่อมต่อไปที่ {url} ไม่ได้ กด s แล้วเช็กที่อยู่ที่ใส่ไว้',
+      'fatal.silent': 'ไม่มีอะไรเข้ามาจากเครื่องวัดที่ {url} เลย เช็กว่า broker เปิดอยู่ไหม ' +
+        'เครื่องนี้อยู่วงเน็ตเดียวกันไหม แล้ว port ที่ใส่เป็น WebSocket listener ' +
+        'หรือเป็น port ธรรมดา',
+      'fatal.silentwhy': 'ไม่มีอะไรเข้ามาจากเครื่องวัดที่ {url} เลย — {why} — ' +
+        'เช็กว่า broker เปิดอยู่ และเครื่องนี้เข้าถึงได้ไหม',
+      'fatal.refused': 'broker ที่ {label} ปฏิเสธหน้านี้ — {why} — ' +
+        'กด s แล้วใส่ข้อมูลที่ broker ยอมรับ',
+
+      'alert.subcap': '<b>ชน subscription เพดานแล้ว ({max})</b> ' +
+        'เซ็นเซอร์ที่เหลือจะไม่ถูกใส่ในบันทึกนี้ เพื่อไม่ให้หน้านี้ยิงใส่ broker หนักเกินไป',
+      'alert.suberr': '<b>subscription โดนปฏิเสธ</b> <span class="mono">{topic}</span> — {why} ' +
+        'กฎการเข้าถึงของ broker อาจไม่อนุญาต',
+      'alert.wildcard': '<b>ปฏิเสธการ subscribe แบบ wildcard</b> มีประกาศขอ ' +
+        '<span class="mono">{topic}</span> หัวข้อที่มาจากสายต้องระบุหัวข้อเดียวชัด ๆ ' +
+        'ทั้ง <span class="mono">#</span> และ <span class="mono">+</span> ไม่เคย subscribe',
+      'alert.filter': '<b>มีเซ็นเซอร์ {n} ตัวโดนกันออกจากบันทึกนี้ด้วยคำนำหน้าหัวข้อ</b> ' +
+        'บันทึกนี้จำกัดไว้เฉพาะ state topic ที่ขึ้นต้นด้วย <span class="mono">{f}</span> ' +
+        'ล้างช่องนั้นในตั้งค่า broker แล้วเชื่อมต่อใหม่ ถ้าอยากให้พิมพ์ทุกอย่างบน broker นี้',
+      'alert.parse': '<b>ข้ามประกาศที่รูปแบบผิดไป {n} รายการ</b> ล่าสุดคือ ' +
+        '<span class="mono">{topic}</span> ส่วนที่เหลือของบันทึกไม่กระทบ',
+      'alert.parseapply': '<b>ใช้ประกาศนี้ไม่ได้</b> {why}',
+      'alert.nodisc': '<b>เชื่อมต่อแล้ว แต่ยังไม่มีประกาศเข้ามา</b> ' +
+        'ประกาศเป็นแบบเก็บค้างไว้ แล้วเล่นซ้ำทันทีที่หน้านี้ subscribe ' +
+        'บันทึกที่ว่างอยู่จึงมักแปลว่ายังไม่มีอะไรส่งไปที่ ' +
+        '<span class="mono">homeassistant/&hellip;/config</span> บน broker นี้',
+      'alert.conn': '<b>สายไปที่ broker หลุด</b> จะลองใหม่ทุก 4 วินาที ' +
+        'ตัวเลขข้างล่างยังคงสถานะล่าสุดไว้ แล้วจะค่อย ๆ กลายเป็น<em>ค่าหมดอายุ</em>',
+      'alert.connerr': '<b>ติดต่อ broker ไม่ได้</b> ที่ <span class="mono">{url}</span> — {why} ' +
+        'จะลองใหม่ทุก 4 วินาที',
+      'alert.mixed': '<b>Mixed content</b> หน้านี้เสิร์ฟผ่าน HTTPS ' +
+        'เบราว์เซอร์เลยบล็อกการเชื่อมต่อ <span class="mono">ws://</span> แบบไม่เข้ารหัส ' +
+        'ให้ติ๊ก secure socket ในตั้งค่า broker หรือเปิดไฟล์นี้จากดิสก์ตรง ๆ',
+      'alert.demo': '<b>หน้านี้เป็นตัวอย่าง ตัวเลขทุกตัวบนหน้านี้เป็นของสมมติ</b> ' +
+        'มันขึ้นมาเพราะมี <span class="mono">?demo=</span> อยู่ในที่อยู่ ' +
+        'หน้านี้ไม่ได้ต่อกับ broker ไหน และไม่ได้บอกอากาศของห้องไหนทั้งนั้น ' +
+        'ลบพารามิเตอร์นั้นออกแล้วโหลดใหม่ ถึงจะกลับไปอ่านค่าจากเครื่องวัดจริง ' +
+        '<span lang="en">SIMULATED DATA, NOT A REAL READING</span>',
+      'alert.demounread': '<b>อ่านพารามิเตอร์ demo ไม่ออก เลยไม่ได้จำลองอะไรเลย</b> ' +
+        '<span class="mono">{raw}</span> ไม่ใช่ตัวเลขและไม่ใช่ชื่อระดับ ' +
+        'ตัวเลขข้างล่างทุกตัวเป็นค่าจริงจากเครื่องวัดจริง ใช้ ' +
+        '<span class="mono">?demo=</span> กับตัวเลข หรือกับ <span class="mono">good</span> ' +
+        '<span class="mono">moderate</span> <span class="mono">sensitive</span> ' +
+        '<span class="mono">unhealthy</span> <span class="mono">verybad</span> ' +
+        '<span class="mono">hazardous</span> หรือกับ <span class="mono">cycle</span> ' +
+        'และ <span class="mono">mixed</span>',
+
+      'set.head': 'ตั้งค่า broker',
+      'set.lead': 'บันทึกนี้เรียงพิมพ์มาจากที่ไหน ค่าที่ใส่จะเก็บไว้ในเบราว์เซอร์นี้ ' +
+        'บนเครื่องนี้ และไม่ส่งไปที่ไหนนอกจาก broker ที่ระบุข้างล่าง',
+      'set.host': 'Host',
+      'set.port': 'WebSocket port',
+      'set.user': 'ชื่อผู้ใช้',
+      'set.pass': 'รหัสผ่าน',
+      'set.filter': 'คำนำหน้าหัวข้อ',
+      'set.tls': 'เชื่อมต่อแบบเข้ารหัส (wss)',
+      'set.remember': 'จำรหัสผ่านไว้',
+      'set.connect': 'เชื่อมต่อ',
+      'set.forget': 'ลืมค่าที่เก็บไว้',
+      'set.close': 'ปิด',
+
+      'hint.store': 'ค่าที่ตั้งไว้เก็บอยู่ในเบราว์เซอร์นี้เท่านั้น บนเครื่องนี้ ' +
+        'ส่วนรหัสผ่านจะเก็บก็ต่อเมื่อติ๊กช่องข้างบนไว้',
+      'hint.nostore': 'เบราว์เซอร์นี้บล็อก local storage ค่าที่ตั้งไว้เลยจำบนเครื่องนี้ไม่ได้',
+      'hint.savefail': 'เบราว์เซอร์นี้ไม่ยอมบันทึกค่าพวกนี้ (เปิดแบบ private อยู่หรือเปล่า) ' +
+        'การเชื่อมต่อยังใช้ได้ แต่ครั้งหน้าต้องใส่ใหม่',
+      'hint.savedpass': 'บันทึกไว้ในเบราว์เซอร์นี้เท่านั้น บนเครื่องนี้ รวมรหัสผ่านด้วย ' +
+        'ไม่มีอะไรอัปโหลดออกไป',
+      'hint.savednopass': 'บันทึกไว้ในเบราว์เซอร์นี้เท่านั้น บนเครื่องนี้ ' +
+        'ไม่ได้เก็บรหัสผ่านไว้ ครั้งหน้าต้องพิมพ์ใหม่',
+      'hint.cleared': 'ล้างค่าที่เก็บไว้ในเบราว์เซอร์นี้แล้ว',
+      'hint.demo': 'โหมดตัวอย่างไม่อ่านค่าที่เก็บไว้ และไม่เขียนอะไรกลับ ' +
+        'ลบพารามิเตอร์ demo ออกจากที่อยู่แล้วโหลดใหม่ เพื่อกลับไปอ่านค่าจากเครื่องวัด',
+
+      'demo.warn': 'ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง',
+      'demo.at': 'ตั้งค่าทุกบอร์ดเป็น',
+      'demo.tail': 'ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง &middot; ไม่ได้ต่อกับ broker &middot; ' +
+        'ไม่มีอะไรในหน้านี้ที่วัดอากาศจริง &middot; ' +
+        '<span lang="en">SIMULATED DATA, NOT A REAL READING</span>',
+      'demo.host': 'ไม่มี — ตัวเลขทุกตัวข้างล่างเป็นของสมมติ',
+      'demo.keys': 'โหมดตัวอย่างปิดการตั้งค่า broker ไว้',
+      'demo.what.mixed': 'ชุดสมมติ: DBK-002 ส่ง {v} · DBK-001 ค่าหมดอายุ · DBK-010 เงียบ',
+      'demo.what.cycle': 'ไล่ทั้งหกระดับ ระดับละ 4 วินาที ตอนนี้ตั้งค่าทุกบอร์ดเป็น {v}',
+      'demo.what.value': 'ตั้งค่าทุกบอร์ดเป็น {v}',
+
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'เกณฑ์ PM2.5 ของ US EPA'
+    }
+  };
+
+  // ?lang= wins, then what this browser was last told, then what the browser
+  // itself asks for, then English. localStorage is read inside try/catch: a
+  // private window throws on the getter itself, not on the value.
+  function pickLang() {
+    var q = null;
+    try { q = new URLSearchParams(location.search).get('lang'); } catch (e) {}
+    if (q) {
+      q = String(q).trim().toLowerCase();
+      if (q === 'th' || q === 'en') return q;
+    }
+    var saved = null;
+    try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
+    if (saved === 'th' || saved === 'en') return saved;
+    var nav = '';
+    try {
+      nav = String(navigator.language ||
+                   (navigator.languages && navigator.languages[0]) || '');
+    } catch (e) {}
+    if (/^th\b/i.test(nav) || /^th-/i.test(nav)) return 'th';
+    return 'en';
+  }
+
+  var LANG = pickLang();
+
+  // Never returns "undefined". A key with no Thai falls back to the English, a
+  // key with no English falls back to its own name — wrong on a wall, but
+  // legible, and obvious to whoever is editing this file.
+  function t(key, vars) {
+    var s = STR[LANG] ? STR[LANG][key] : undefined;
+    if (typeof s !== 'string') s = STR.en[key];
+    if (typeof s !== 'string') s = key;
+    if (!vars) return s;
+    return s.replace(/\{(\w+)\}/g, function (m, k) {
+      if (!Object.prototype.hasOwnProperty.call(vars, k)) return m;
+      var v = vars[k];
+      // A substitution of the shape {k:'some.key'} is itself a key, resolved here
+      // rather than at the call site. Without it a broker's refusal reason would
+      // be frozen into whichever edition was on screen when it was refused.
+      if (v && typeof v === 'object' && typeof v.k === 'string') return t(v.k);
+      return String(v);
+    });
+  }
+
+  /* ==========================================================================
      DATA LAYER — carried over from tools/mqtt-dashboard.html essentially
      unchanged: discovery expansion, topic indexing, wildcard refusal, value
      parsing, EPA banding, availability and expiry. It is tested; the only new
@@ -671,7 +1389,7 @@ kbd{
      ========================================================================== */
 
   // ---------------------------------------------------------------- config
-  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser cannot speak to the raw TCP listener at
                                         // all; pointing it there fails in a way that looks
@@ -683,22 +1401,22 @@ kbd{
 
   // US EPA PM2.5 AQI breakpoints, micrograms per cubic metre.
   // Single source of truth: drives the plates, the table, the scale and the verdict.
-  // `answer` and `care` are this edition's addition — the plain-language reply to
-  // "should we go outside?", written for a reader who is eight years old.
+  // The words moved out into STR when this file learned to set in two editions;
+  // what stays here is the arithmetic, which is the same in every language. `key`
+  // is the join: band.<key> names it, verdict.<key> answers "should we go
+  // outside?", care.<key> is the sentence a teacher acts on.
   var BANDS = [
-    { max: 12.0,  label: 'Good',                           short: 'Good',             note: 'air is fine',           v: '--band-good', r: '0 – 12.0',
-      answer: 'Yes. Go outside — the air is clean.',            care: 'Nothing needs doing differently today.' },
-    { max: 35.4,  label: 'Moderate',                       short: 'Moderate',         note: 'acceptable',            v: '--band-mod',  r: '12.1 – 35.4',
-      answer: 'Yes, go outside. Take it gently if you cough easily.', care: 'Fine for most people; a few will notice it.' },
-    { max: 55.4,  label: 'Unhealthy for sensitive groups', short: 'Sensitive groups', note: 'sensitive people care', v: '--band-usg',  r: '35.5 – 55.4',
-      answer: 'Go out for a while, but not all day.',            care: 'Children with asthma should stay in and play indoors.' },
-    { max: 150.4, label: 'Unhealthy',                      short: 'Unhealthy',        note: 'limit time outdoors',   v: '--band-unh',  r: '55.5 – 150.4',
-      answer: 'Stay inside today.',                             care: 'Keep the windows and doors shut. Indoor games only.' },
-    { max: 250.4, label: 'Very unhealthy',                 short: 'Very unhealthy',   note: 'stay indoors',          v: '--band-vun',  r: '150.5 – 250.4',
-      answer: 'Stay inside. Everyone.',                         care: 'If someone must go out, they need a proper mask.' },
-    { max: Infinity, label: 'Hazardous',                   short: 'Hazardous',        note: 'stay indoors',          v: '--band-haz',  r: '250.5 +',
-      answer: 'Nobody goes outside.',                           care: 'Close every window and door and keep them closed.' }
+    { key: 'good',      max: 12.0,     v: '--band-good', r: '0 – 12.0' },
+    { key: 'moderate',  max: 35.4,     v: '--band-mod',  r: '12.1 – 35.4' },
+    { key: 'sensitive', max: 55.4,     v: '--band-usg',  r: '35.5 – 55.4' },
+    { key: 'unhealthy', max: 150.4,    v: '--band-unh',  r: '55.5 – 150.4' },
+    { key: 'verybad',   max: 250.4,    v: '--band-vun',  r: '150.5 – 250.4' },
+    { key: 'hazardous', max: Infinity, v: '--band-haz',  r: '250.5 +' }
   ];
+  function bandLabel(b) { return t('band.' + b.key); }
+  function bandShort(b) { return t('band.short.' + b.key); }
+  function bandAnswer(b) { return t('verdict.' + b.key); }
+  function bandCare(b) { return t('care.' + b.key); }
 
   /* ------------------------------------------------------------ demonstration flag
      null on every ordinary load. It is set from the address bar and from nowhere
@@ -772,7 +1490,14 @@ kbd{
   var $ = function (id) { return document.getElementById(id); };
   var plates = $('plates'), rows = $('rows'), record = $('record'),
       empty = $('empty'), errata = $('errata');
-  var emptyBase = $('empty-msg').textContent;
+  // A key, not a sentence. Everything the page says about itself is stored as the
+  // key that produced it, so switching edition can re-say it rather than leaving
+  // a stale English sentence stranded in a Thai page.
+  var emptyKey = 'empty.base';
+  var hintKey = 'hint.store', hintVars = null;
+  var fatalKey = null, fatalVars = null;
+  var connDetailKey = null;
+  var hostKey = null, hostText = '—';
 
   // ---------------------------------------------------------------- helpers
   function css(name) {
@@ -791,16 +1516,18 @@ kbd{
     return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
   }
 
+  // Arabic digits in both editions. Thai readers read a PM2.5 figure and a count
+  // of minutes in Arabic digits; Thai numerals would be a costume, not a courtesy.
   function ago(ts) {
-    if (!ts) return 'never';
+    if (!ts) return t('time.never');
     var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-    if (s < 2) return 'just now';
-    if (s < 60) return s + ' s ago';
+    if (s < 2) return t('time.justnow');
+    if (s < 60) return t('time.secondsAgo', { n: s });
     var m = Math.floor(s / 60);
-    if (m < 60) return m + ' min ago';
+    if (m < 60) return t('time.minutesAgo', { n: m });
     var h = Math.floor(m / 60);
-    if (h < 24) return h + ' h ' + (m % 60) + ' min ago';
-    return Math.floor(h / 24) + ' d ago';
+    if (h < 24) return t('time.hoursAgo', { n: h });
+    return t('time.daysAgo', { n: Math.floor(h / 24) });
   }
 
   // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
@@ -864,7 +1591,17 @@ kbd{
 
   // ---------------------------------------------------------------- errata
   // The dashboard's alert stack, re-set as a journal's notices column.
-  function setAlert(id, level, html) {
+  //
+  // A notice is stored as its key and its (already-escaped) substitutions, never
+  // as the finished sentence. A notice raised in English and still standing when
+  // the edition is switched has to be re-set in Thai — leaving one English
+  // paragraph in the notices column of a Thai page is exactly the half-translated
+  // state this layer exists to prevent.
+  var notices = new Map();          // id -> { level, key, vars }
+
+  function paintAlert(id) {
+    var a = notices.get(id);
+    if (!a) return;
     var el = errata.querySelector('.alert[data-id="' + id + '"]');
     if (!el) {
       el = document.createElement('p');
@@ -873,30 +1610,45 @@ kbd{
       el.setAttribute('data-id', id);
       errata.appendChild(el);
     }
-    el.setAttribute('data-l', level);
-    el.innerHTML = html;
+    el.setAttribute('data-l', a.level);
+    el.innerHTML = t(a.key, a.vars);
   }
+  function setAlert(id, level, key, vars) {
+    notices.set(id, { level: level, key: key, vars: vars || null });
+    paintAlert(id);
+  }
+  function paintAlerts() { notices.forEach(function (_, id) { paintAlert(id); }); }
   function clearAlert(id) {
+    notices.delete(id);
     var el = errata.querySelector('.alert[data-id="' + id + '"]');
     if (el) el.remove();
   }
 
   // ---------------------------------------------------------------- masthead state
-  var CONN_TEXT = {
-    idle: 'not recording', connecting: 'opening the line', connected: 'recording',
-    reconnecting: 'line dropped, retrying', closed: 'not recording',
-    error: 'cannot reach the broker', fatal: 'the line is closed'
+  var CONN_KEY = {
+    idle: 'conn.idle', connecting: 'conn.connecting', connected: 'conn.connected',
+    reconnecting: 'conn.retrying', closed: 'conn.idle',
+    error: 'conn.unreachable', fatal: 'conn.refused', demo: 'conn.demo'
   };
-  function setConn(state, detail) {
+  // detailKey, not detail text: the state word has to survive an edition switch,
+  // and it can only do that if what is remembered is the key.
+  function setConn(state, detailKey) {
     connState = state;
+    connDetailKey = detailKey || null;
     $('runhead').setAttribute('data-conn', state);
-    var word = detail || CONN_TEXT[state] || state;
+    paintConn();
+  }
+  function paintConn() {
+    var word = t(connDetailKey || CONN_KEY[connState] || 'conn.idle');
     $('conn-word').textContent = word;
     $('co-state').textContent = word;
   }
+  // The counters live inside a translated sentence, so the sentence is re-set
+  // first and the numbers written into it afterwards.
   function refreshCounts() {
-    $('co-ents').textContent = String(entities.size);
-    $('co-subs').textContent = String(subs.size);
+    var e = $('co-ents'), s = $('co-subs');
+    if (e) e.textContent = String(entities.size);
+    if (s) s.textContent = String(subs.size);
   }
 
   // ---------------------------------------------------------------- subscribe
@@ -915,9 +1667,7 @@ kbd{
     if (!client && !DEMO) return false;
     if (subs.has(topic)) return true;
     if (subs.size >= MAX_SUBS) {
-      setAlert('subcap', 'warn',
-        '<b>Subscription ceiling reached (' + MAX_SUBS + ').</b> Further sensors are left ' +
-        'out of this record so the page cannot flood the broker.');
+      setAlert('subcap', 'warn', 'alert.subcap', { max: MAX_SUBS });
       return false;
     }
     subs.add(topic);
@@ -927,9 +1677,8 @@ kbd{
       if (err) {
         subs.delete(topic);
         refreshCounts();
-        setAlert('suberr', 'bad',
-          '<b>A subscription was rejected.</b> <span class="mono">' + esc(topic) + '</span> — ' +
-          esc(err.message || String(err)) + '. The broker&rsquo;s access rules may not allow it.');
+        setAlert('suberr', 'bad', 'alert.suberr',
+          { topic: esc(topic), why: esc(err.message || String(err)) });
       }
     });
     return true;
@@ -941,11 +1690,7 @@ kbd{
     // state_topic "+/+/+" delivered ten out of ten unrelated fleet topics in testing.
     // A topic that came off the wire must name one exact topic.
     if (/[#+]/.test(topic)) {
-      setAlert('wildcard', 'warn',
-        '<b>A wildcard subscription was refused.</b> An announcement asked for ' +
-        '<span class="mono">' + esc(topic) + '</span>. Topics arriving over the wire must name ' +
-        'one exact topic; neither <span class="mono">#</span> nor <span class="mono">+</span> ' +
-        'is ever subscribed.');
+      setAlert('wildcard', 'warn', 'alert.wildcard', { topic: esc(topic) });
       return false;
     }
     return subRaw(topic);
@@ -1020,11 +1765,8 @@ kbd{
 
   function noteFilter() {
     if (!activeFilter || filteredOut.size === 0) { clearAlert('filter'); return; }
-    setAlert('filter', 'info',
-      '<b>' + filteredOut.size + ' sensor' + (filteredOut.size === 1 ? '' : 's') +
-      ' held out of this record by the topic prefix.</b> It is scoped to state topics ' +
-      'beginning <span class="mono">' + esc(activeFilter) + '</span>. Clear that field in the ' +
-      'broker settings and reconnect to print everything on this broker.');
+    setAlert('filter', 'info', 'alert.filter',
+      { n: filteredOut.size, f: esc(activeFilter) });
   }
 
   function onDiscovery(dtopic, text) {
@@ -1041,10 +1783,7 @@ kbd{
       cfg = JSON.parse(text);
     } catch (e) {
       parseErrors++;                            // one bad retained message must not kill the page
-      setAlert('parse', 'warn',
-        '<b>' + parseErrors + ' malformed announcement' + (parseErrors === 1 ? '' : 's') +
-        ' ignored.</b> Latest: <span class="mono">' + esc(dtopic) + '</span>. The rest of the ' +
-        'record is unaffected.');
+      setAlert('parse', 'warn', 'alert.parse', { n: parseErrors, topic: esc(dtopic) });
       return;
     }
     if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) { parseErrors++; return; }
@@ -1097,7 +1836,7 @@ kbd{
     // board id parsed out of the state topic; the announced name is demoted to what is
     // being measured. Three stations titled "PM2.5" are three lines that cannot be told
     // apart, which is how one room's air got read as another's.
-    var who = devName || board || uid;
+    var who = board || devName || uid;
     ent.title = who || measure;
     ent.measure = who ? measure : '';
     ent.uid = uid;
@@ -1141,8 +1880,7 @@ kbd{
       try { onDiscovery(topic, text); }
       catch (e) {
         parseErrors++;
-        setAlert('parse', 'warn',
-          '<b>An announcement could not be applied.</b> ' + esc(e.message || ''));
+        setAlert('parse', 'warn', 'alert.parseapply', { why: esc(e.message || '') });
       }
       return;
     }
@@ -1203,18 +1941,20 @@ kbd{
   }
 
   /* ==========================================================================
-     PRESENTATION — the part that is new. Every string below is authored here,
-     so it may be capitalised; ent.unit and ent.value.text come off the wire and
-     are printed verbatim, always.
+     PRESENTATION. Every word below comes out of STR; ent.unit, ent.title and
+     ent.value.text come off the wire and are printed verbatim in both editions,
+     never translated and never case-shifted.
      ========================================================================== */
 
-  var WORD = {
-    offline:  { plate: 'not reporting', tag: 'silent',   adv: 'not reporting' },
-    waiting:  { plate: 'awaiting',      tag: 'awaiting', adv: 'no figure yet' },
-    unknown:  { plate: 'no reading',    tag: 'no value', adv: 'no figure' },
-    fault:    { plate: 'sensor fault',  tag: 'fault',    adv: 'do not use' },
-    stale:    { plate: '',              tag: 'expired',  adv: 'figure expired' }
+  // One vocabulary for a station's state, shared with the other twenty walls, so
+  // a child who learns what ค่าเก่า means on one screen has learned it for all of
+  // them. The earlier build said "silent" in the chip, "not reporting" on the
+  // plate and "no figure yet" in the table for what is one condition.
+  var STATE_KEY = {
+    offline: 'state.offline', waiting: 'state.waiting', unknown: 'state.noreading',
+    fault: 'state.fault', stale: 'state.stale', live: 'state.live'
   };
+  function stateWord(st) { return t(STATE_KEY[st] || 'state.noreading'); }
 
   function buildPlate(ent) {
     var root = document.createElement('div');
@@ -1240,12 +1980,16 @@ kbd{
 
   function buildRow(ent) {
     var root = document.createElement('tr');
+    // data-l carries the column name for the narrow layout, where the table
+    // re-sets as stacked entries and the header row is hidden. It is written
+    // again on every render, so an edition switch relabels the stacked entries
+    // too rather than leaving Thai rows under English labels.
     root.innerHTML =
-      '<td class="t-id" data-l="Station"></td>' +
-      '<td class="t-read" data-l="Reading"><span class="rd"></span> <span class="ru lit"></span></td>' +
-      '<td class="t-band" data-l="Band"></td>' +
-      '<td class="t-adv" data-l="Outside?"></td>' +
-      '<td class="t-seen" data-l="Last heard"></td>';
+      '<td class="t-id"></td>' +
+      '<td class="t-read"><span class="rd"></span> <span class="ru lit"></span></td>' +
+      '<td class="t-band"></td>' +
+      '<td class="t-adv"></td>' +
+      '<td class="t-seen"></td>';
     var r = {
       root: root,
       id: root.querySelector('.t-id'),
@@ -1280,21 +2024,27 @@ kbd{
 
     p.id.textContent = ent.title;
     r.id.textContent = ent.title;
+    r.id.setAttribute('data-l', t('th.station'));
+    r.rd.parentNode.setAttribute('data-l', t('th.read'));
+    r.band.setAttribute('data-l', t('th.band'));
+    r.adv.setAttribute('data-l', t('th.adv'));
+    r.seen.setAttribute('data-l', t('th.seen'));
 
     // ---- the figure itself, on the plate
     if (st === 'live' || st === 'stale' || st === 'fault') {
       p.num.textContent = ent.value.text;                 // exactly what the station said
       p.num.setAttribute('data-kind', ent.value.kind === 'number' ? 'num' : 'word');
       p.unit.textContent = ent.unit;                      // verbatim; never case-shifted
-      // The tag is set in small capitals, so ONLY words authored in this file may go in
-      // it. The announced name (ent.measure) came off the wire and is printed further
-      // down, in a slot carrying no case styling of any kind.
-      p.tag.textContent = st === 'live' ? 'reporting' : WORD[st].tag;
+      // The tag is set in small capitals in the English edition, so only words out
+      // of STR may go in it. Small caps do nothing at all to a Thai glyph and the
+      // Thai edition switches the feature off outright — but neither one is a
+      // text-transform, so nothing here can turn a µ into an M.
+      p.tag.textContent = stateWord(st);
     } else {
-      p.num.textContent = WORD[st] ? WORD[st].plate : 'no reading';
+      p.num.textContent = stateWord(st);
       p.num.setAttribute('data-kind', 'word');
       p.unit.textContent = '';
-      p.tag.textContent = WORD[st] ? WORD[st].tag : 'no value';
+      p.tag.textContent = stateWord(st);
     }
     // Digits never break, so a numeric payload longer than any plausible reading steps
     // down to a size that is allowed to wrap — the escape hatch that stops nowrap from
@@ -1304,36 +2054,35 @@ kbd{
 
     // ---- the band line and the note under the plate
     if (band) {
-      p.band.textContent = band.label;
+      p.band.textContent = bandLabel(band);
     } else if (st === 'fault') {
-      p.band.textContent = 'below zero — not a reading';
+      p.band.textContent = t('plate.faultband');
     } else if (st === 'stale') {
-      p.band.textContent = 'expired, treat as unknown';
+      p.band.textContent = t('plate.staleband');
     } else if (st === 'live') {
       p.band.textContent = ent.measure || '';   // wire text, no case styling on this slot
     } else {
-      p.band.textContent = '—';
+      p.band.textContent = t('plate.dash');
     }
 
     var histText = '';
     if (st !== 'live' && ent.value && ent.value.kind === 'number' && ent.at) {
       // Shown, but plainly labelled as history. An old figure printed as if current is
       // the one lie this record must never tell.
-      histText = 'Last figure recorded ' + ent.value.text + ' ' + ent.unit + ', ' + ago(ent.at) +
-        ' — history, not now.';
+      histText = t('note.hist', { v: ent.value.text, u: ent.unit, t: ago(ent.at) });
     }
     var noteBits = [];
     if (st === 'offline') {
       var seen = ent.availAt ||
         (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0);
-      noteBits.push('Reported silent ' + ago(seen) + '.');
+      noteBits.push(t('note.silent', { t: ago(seen) }));
     } else if (st === 'waiting') {
-      noteBits.push('Alive, but has not published since this page opened.');
+      noteBits.push(t('note.waiting'));
     } else {
-      noteBits.push('Updated ' + ago(ent.at) + '.');
+      noteBits.push(t('note.updated', { t: ago(ent.at) }));
     }
-    if (avail === 'unknown' && st !== 'offline') noteBits.push('Availability unstated.');
-    if (ent.templated) noteBits.push('Raw value; template not applied.');
+    if (avail === 'unknown' && st !== 'offline') noteBits.push(t('note.availunknown'));
+    if (ent.templated) noteBits.push(t('note.templated'));
     p.note.innerHTML = esc(noteBits.join(' ')) +
       (histText ? ' <span class="hist">' + esc(histText) + '</span>' : '');
 
@@ -1347,19 +2096,20 @@ kbd{
       r.rd.className = 'rd dash';
       r.ru.textContent = '';
     }
-    r.band.textContent = band ? band.label
-      : (st === 'fault' ? 'not valid' : (st === 'stale' ? 'expired' : '—'));
+    r.band.textContent = band ? bandLabel(band)
+      : (st === 'fault' ? t('state.fault')
+        : (st === 'stale' ? t('state.stale') : t('band.none')));
     if (band) {
-      r.adv.textContent = band.answer;
+      r.adv.textContent = bandAnswer(band);
       r.adv.className = 't-adv';
     } else {
-      r.adv.textContent = WORD[st] ? WORD[st].adv : 'no figure';
+      r.adv.textContent = stateWord(st);
       r.adv.className = 't-adv none';
     }
     r.seen.textContent = st === 'offline'
-      ? 'silent ' + ago(ent.availAt ||
-          (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0))
-      : (ent.at ? ago(ent.at) : 'never');
+      ? t('row.silentfor', { t: ago(ent.availAt ||
+          (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0)) })
+      : (ent.at ? ago(ent.at) : t('time.never'));
   }
 
   // ---------------------------------------------------------------- the summary
@@ -1383,27 +2133,30 @@ kbd{
 
     if (band && worst) {
       v.style.color = css(band.v);
-      v.textContent = band.answer;
-      vs.innerHTML = band.care + ' The figure behind that answer is ' +
-        '<span class="n">' + esc(worst.value.text) + ' <span class="lit">' + esc(worst.unit) +
-        '</span></span> at station ' + esc(worst.title) + ', which the United States EPA scale ' +
-        'calls <em>' + esc(band.label.toLowerCase()) + '</em>.<sup class="fn">1</sup>' +
-        (silent > 0
-          ? ' ' + silent + ' of the ' + total + ' stations ' + (silent === 1 ? 'is' : 'are') +
-            ' not reporting, so this is ' + (reporting.length === 1 ? 'one room&rsquo;s' : 'part of the school&rsquo;s') +
-            ' air, not the whole school&rsquo;s.'
-          : '');
+      v.textContent = bandAnswer(band);
+      // toLowerCase runs on a band name out of STR, never on anything off the
+      // wire, and it is a no-op on Thai. It is not, and must never become, a CSS
+      // case transform — that is the rule that once turned µg/m³ into mg/m³.
+      var s = t('sum.figure', {
+        care: bandCare(band),
+        fig: '<span class="n">' + esc(worst.value.text) + ' <span class="lit">' +
+             esc(worst.unit) + '</span></span>',
+        who: esc(worst.title),
+        band: '<em>' + esc(bandLabel(band).toLowerCase()) + '</em>'
+      });
+      if (silent > 0) {
+        s += t('sum.part', {
+          s: silent, n: total,
+          scope: t(reporting.length === 1 ? 'sum.scopeOne' : 'sum.scopeSome')
+        });
+      }
+      vs.innerHTML = s;
     } else {
       v.style.color = css('--ink-2');
-      v.textContent = total === 0
-        ? 'We cannot say yet.'
-        : 'We cannot say — no station is sending a figure.';
+      v.textContent = t('verdict.unknown');
       vs.innerHTML = total === 0
-        ? 'No station has announced itself on this broker, so there is nothing to read.'
-        : (total === 1 ? 'The one station on this record is' : 'All ' + total + ' stations are') +
-          ' silent, waiting, or holding a figure that has expired. Every figure printed below is ' +
-          'history and is labelled as such; none of it describes the air right ' +
-          'now.<sup class="fn">2</sup>';
+        ? t('sum.nonone')
+        : t(total === 1 ? 'sum.allsilent1' : 'sum.allsilentN', { n: total });
     }
 
     // Fig. 1 caption — says the mixed state out loud, in words, every time. A station
@@ -1412,30 +2165,20 @@ kbd{
     // measured something and then went quiet.
     var mixed;
     if (total === 0) {
-      mixed = 'No station is on the record yet.';
+      mixed = t('cap1.none');
     } else if (reporting.length === 0) {
-      mixed = 'No station is reporting a current figure; ' + (total === 1
-        ? 'the one on the record is marked silent, waiting, or expired, and nothing it last ' +
-          'said is treated as now.'
-        : 'all ' + total + ' are marked silent, waiting, or expired, and nothing they last ' +
-          'said is treated as now.');
+      mixed = t(total === 1 ? 'cap1.nonerep1' : 'cap1.nonerepN', { n: total });
     } else if (silent === 0) {
-      mixed = (total === 1 ? 'The one station on the record is' : 'All ' + total + ' stations are') +
-        ' reporting a current figure.';
+      mixed = t(total === 1 ? 'cap1.all1' : 'cap1.allN', { n: total });
     } else {
-      mixed = reporting.length + ' of ' + total + ' stations ' +
-        (reporting.length === 1 ? 'is' : 'are') + ' reporting a current figure; the other ' +
-        (silent === 1 ? 'one is' : silent + ' are') + ' marked silent, waiting, or expired, ' +
-        'and nothing they last said is treated as now.';
+      mixed = t('cap1.partial', { r: reporting.length, n: total, s: silent });
     }
-    $('cap-1').innerHTML = 'PM2.5 by station, in micrograms per cubic metre ' +
-      '(<span class="lit">&micro;g/m&sup3;</span>), as published. ' + mixed;
+    $('cap-1').innerHTML = t('cap1.lead', {
+      u: '<span class="lit">&micro;g/m&sup3;</span>', mixed: mixed
+    });
 
     // Table 1 caption.
-    $('cap-2').textContent = total === 0
-      ? 'The record is empty; no station has announced itself.'
-      : 'The full record, one line per station, station order. A line without a figure carries ' +
-        'an em dash: that dash is not a zero, and no zero here stands in for a silent monitor.';
+    $('cap-2').textContent = t(total === 0 ? 'cap2.empty' : 'cap2.full');
 
     // Fig. 2 marker and caption.
     var mark = $('mark');
@@ -1444,12 +2187,13 @@ kbd{
       mark.style.left = scalePos(worst.value.n1).toFixed(2) + '%';
       mark.style.setProperty('--band', css(band.v));
       $('mark-val').textContent = worst.value.text;
-      $('cap-3').innerHTML = 'The marker stands at <span class="lit">' + esc(worst.value.text) +
-        ' ' + esc(worst.unit) + '</span>, the highest figure now reporting, at station ' +
-        esc(worst.title) + '.';
+      $('cap-3').innerHTML = t('cap3.mark', {
+        v: esc(worst.value.text) + ' ' + esc(worst.unit),
+        who: esc(worst.title)
+      });
     } else {
       mark.hidden = true;
-      $('cap-3').textContent = 'No station is reporting a figure, so the scale carries no marker.';
+      $('cap-3').textContent = t('cap3.none');
     }
   }
 
@@ -1479,10 +2223,8 @@ kbd{
     empty.hidden = any;
     if (!any) {
       $('empty-msg').textContent = filteredOut.size
-        ? filteredOut.size + ' sensor' + (filteredOut.size === 1 ? ' was' : 's were') +
-          ' announced but held out by the topic prefix “' + activeFilter + '”. Clear that field ' +
-          'in the broker settings and reconnect to print every sensor on this broker.'
-        : emptyBase;
+        ? t('empty.filtered', { n: filteredOut.size, f: activeFilter })
+        : t(emptyKey);
       summarise();
       return;
     }
@@ -1501,48 +2243,73 @@ kbd{
   }
 
   // ---------------------------------------------------------------- the scale strip
-  (function drawScale() {
+  // Re-drawn rather than re-labelled: six short cells, and rebuilding them is
+  // cheaper than reaching into each one.
+  function drawScale() {
     var host = $('seg');
+    host.textContent = '';
     BANDS.forEach(function (b) {
       var el = document.createElement('div');
-      el.innerHTML = '<span style="color:' + css(b.v) + '">' + esc(b.short) + '</span>' +
-        '<em>' + esc(b.r) + '</em>';
+      el.innerHTML = '<span style="color:' + css(b.v) + '">' + esc(bandShort(b)) + '</span>' +
+        '<em>' + esc(b.r) + '</em>';       // the breakpoints are arithmetic, not prose
       host.appendChild(el);
     });
-  })();
+  }
 
   // ---------------------------------------------------------------- the date line
+  // th-TH gives the Thai edition its own month and weekday names and the Buddhist
+  // year a Thai reader expects on a wall. -u-nu-latn pins the DIGITS to Arabic:
+  // the figures on this page are Arabic numerals and the date must not disagree
+  // with them. A browser with no Thai locale data falls back to its own default
+  // rather than throwing the clock away.
   function stamp() {
     var d = new Date();
-    var day = d.toLocaleDateString(undefined,
-      { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    var t = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-    $('stamp').textContent = day + ' · ' + t;
+    var day, hm;
+    var loc = LANG === 'th' ? 'th-TH-u-nu-latn' : undefined;
+    try {
+      day = d.toLocaleDateString(loc,
+        { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      hm = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch (e) {
+      day = d.toLocaleDateString(undefined,
+        { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      hm = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    $('stamp').textContent = day + ' · ' + hm;
   }
 
   // ---------------------------------------------------------------- failure screen
-  // "The whole screen becomes one calm sentence saying what to do."
-  function setFatal(sentence) {
-    $('fatal-text').textContent = sentence;
+  // "The whole screen becomes one calm sentence saying what to do." The sentence
+  // is kept as a key so the curtain can be re-set without being taken down.
+  function setFatal(key, vars) {
+    fatalKey = key;
+    fatalVars = vars || null;
+    $('fatal-text').textContent = t(key, vars);
     $('fatal').hidden = false;
   }
-  function clearFatal() { $('fatal').hidden = true; }
+  function paintFatal() {
+    $('fatal-after').innerHTML = kbdHint();
+    if (!$('fatal').hidden && fatalKey) $('fatal-text').textContent = t(fatalKey, fatalVars);
+  }
+  function clearFatal() { $('fatal').hidden = true; fatalKey = null; fatalVars = null; }
 
   // ---------------------------------------------------------------- connect
+  // Returns a KEY where the broker gave a code we recognise, and the broker's own
+  // words where it did not. A message off the wire is never translated: inventing
+  // Thai for a string a broker wrote would be inventing what the broker said.
   function describe(err) {
     var code = err && (err.code !== undefined ? err.code : err.reasonCode);
-    var map = {
-      1: 'the broker rejected the MQTT protocol version',
-      2: 'the broker rejected this client id',
-      3: 'the broker is unavailable',
-      4: 'the username or passphrase is wrong',
-      5: 'this account is not authorised for the broker'
-    };
-    if (map[code]) return { text: map[code], fatal: code === 2 || code === 4 || code === 5 };
+    if (code >= 1 && code <= 5) {
+      return { key: 'err.' + code, text: '', fatal: code === 2 || code === 4 || code === 5 };
+    }
     var m = String((err && err.message) || err || 'unknown error');
-    if (/not authoriz|bad user/i.test(m)) return { text: m, fatal: true };
-    return { text: m, fatal: false };
+    if (/not authoriz|bad user/i.test(m)) return { key: null, text: m, fatal: true };
+    return { key: null, text: m, fatal: false };
   }
+  // Into a textContent slot: the broker's own words, unescaped and untranslated.
+  function whyPlain(d) { return d.key ? { k: d.key } : d.text; }
+  // Into an innerHTML slot: escaped, because a broker message is not our markup.
+  function whyHtml(d) { return d.key ? { k: d.key } : esc(d.text); }
 
   function disconnect() {
     manualStop = true;
@@ -1559,9 +2326,8 @@ kbd{
     if (DEMO) return;
 
     if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
-      setConn('fatal', 'the library did not load');
-      setFatal('This page could not load the MQTT library it reads the monitors with, so put ' +
-               'this machine back on a network that can reach unpkg.com and reload.');
+      setConn('fatal', 'conn.nolib');
+      setFatal('fatal.nolib');
       return;
     }
 
@@ -1576,15 +2342,14 @@ kbd{
     var scheme = cfg.tls ? 'wss' : 'ws';
     var url = scheme + '://' + cfg.host + ':' + cfg.port;
     brokerLabel = cfg.host + ':' + cfg.port;
-    $('co-host').textContent = brokerLabel;
+    hostKey = null;                     // a host name is a host name in both editions
+    hostText = brokerLabel;
+    paintHost();
     setConn('connecting');
 
     // A page served over HTTPS cannot open a plaintext ws:// socket.
     if (!cfg.tls && location.protocol === 'https:') {
-      setAlert('mixed', 'warn',
-        '<b>Mixed content.</b> This page is served over HTTPS, so the browser blocks the ' +
-        'plaintext <span class="mono">ws://</span> connection. Tick the secure socket in the ' +
-        'broker settings, or open this file straight from disk.');
+      setAlert('mixed', 'warn', 'alert.mixed');
     }
 
     try {
@@ -1600,8 +2365,7 @@ kbd{
       });
     } catch (e) {
       setConn('fatal');
-      setFatal('This page could not open a connection to ' + url +
-               ', so press s and check the address it was given.');
+      setFatal('fatal.nourl', { url: url });
       return;
     }
 
@@ -1621,14 +2385,10 @@ kbd{
       discoveryTimer = setTimeout(function () {
         // Silent when the prefix is what emptied the record — noteFilter() already says so.
         if (entities.size === 0 && filteredOut.size === 0 && connState === 'connected') {
-          setAlert('nodisc', 'info',
-            '<b>Connected, but no announcement arrived.</b> Announcements are retained and ' +
-            'replay the instant this page subscribes, so an empty record usually means nothing ' +
-            'has published to <span class="mono">homeassistant/&hellip;/config</span> on this ' +
-            'broker yet.');
+          setAlert('nodisc', 'info', 'alert.nodisc');
         }
       }, 4000);
-      emptyBase = 'Connected. Waiting for a retained announcement to describe a station.';
+      emptyKey = 'empty.connected';
       layout();
     });
 
@@ -1641,7 +2401,7 @@ kbd{
       if (!manualStop && connState !== 'fatal') setConn('reconnecting');
     });
     client.on('offline', function () {
-      if (!manualStop && connState !== 'fatal') setConn('reconnecting', 'broker unreachable, retrying');
+      if (!manualStop && connState !== 'fatal') setConn('reconnecting');
     });
 
     // A browser never reveals WHY a WebSocket handshake failed, and for a refused port
@@ -1651,14 +2411,10 @@ kbd{
       if (manualStop || connState === 'fatal') return;
       if (!everConnected) {
         setConn('error');
-        setFatal('Nothing is arriving from the monitors at ' + url +
-                 ', so check that the broker is switched on, that this machine is on the same ' +
-                 'network, and that the port is its WebSocket listener rather than its plain one.');
+        setFatal('fatal.silent', { url: url });
       } else {
-        setConn('reconnecting', 'line dropped, retrying');
-        setAlert('conn', 'warn',
-          '<b>The line to the broker dropped.</b> Retrying every four seconds. The figures below ' +
-          'keep their last known state and will age into <em>expired</em>.');
+        setConn('reconnecting');
+        setAlert('conn', 'warn', 'alert.conn');
       }
     });
 
@@ -1666,20 +2422,17 @@ kbd{
       var d = describe(err);
       if (d.fatal) {
         setConn('fatal');
-        setFatal('The broker at ' + brokerLabel + ' refused this page — ' + d.text +
-                 ' — so press s and enter details it will accept.');
+        setFatal('fatal.refused', { label: brokerLabel, why: whyPlain(d) });
         manualStop = true;
         try { client.end(true); } catch (e) {}
         client = null;
       } else if (!everConnected) {
         setConn('error');
-        setFatal('Nothing is arriving from the monitors at ' + url + ' — ' + d.text +
-                 ' — so check that the broker is switched on and reachable from this machine.');
+        setFatal('fatal.silentwhy', { url: url, why: whyPlain(d) });
       } else {
-        setConn('error', 'cannot reach the broker, retrying');
-        setAlert('conn', 'bad',
-          '<b>Cannot reach the broker</b> at <span class="mono">' + esc(url) + '</span> — ' +
-          esc(d.text) + '. Retrying every four seconds.');
+        setConn('error');
+        setAlert('conn', 'bad', 'alert.connerr',
+          { url: esc(url), why: whyHtml(d) });
       }
     });
   }
@@ -1736,13 +2489,7 @@ kbd{
     parseErrors = 0;
     refreshCounts(); layout();
     var ok = saveStore(storable(cfg));
-    $('store-hint').textContent = !ok
-      ? 'This browser refused to save these settings (a private window?). The connection still ' +
-        'works, but they will need entering again next time.'
-      : cfg.remember
-        ? 'Saved in this browser only, on this device — passphrase included. Nothing is uploaded.'
-        : 'Saved in this browser only, on this device. The passphrase was NOT stored; it will ' +
-          'need typing again next time.';
+    setHint(!ok ? 'hint.savefail' : (cfg.remember ? 'hint.savedpass' : 'hint.savednopass'));
     closeSettings();
     clearFatal();
     connect(cfg);
@@ -1753,17 +2500,25 @@ kbd{
     clearStore();
     fillForm(null);
     $('f-pass').value = '';
-    $('store-hint').textContent = 'Saved settings cleared from this browser.';
+    setHint('hint.cleared');
   });
 
-  // "s" opens the settings; nothing else does, and nothing opens them on load.
+  // "s" opens the settings, "l" turns the page over into the other edition.
+  // "l" is tested BEFORE the demonstration guard: a demonstration wall is exactly
+  // where somebody stands in front of the screen and wants to read it in Thai,
+  // and there is no broker for that key to endanger.
   document.addEventListener('keydown', function (ev) {
-    var t = ev.target, tag = t && t.tagName;
+    var el = ev.target, tag = el && el.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
       if (ev.key === 'Escape') closeSettings();
       return;
     }
     if (ev.key === 'Escape') { closeSettings(); return; }
+    if (ev.key === 'l' || ev.key === 'L') {
+      ev.preventDefault();
+      setLang(LANG === 'th' ? 'en' : 'th');
+      return;
+    }
     if (DEMO) return;   // no broker to configure, and no way to start one from here
     if (ev.key === 's' || ev.key === 'S') {
       ev.preventDefault();
@@ -1859,7 +2614,10 @@ kbd{
     if (slug === 'wi-fi_rssi') return String(board.rssi);
     if (slug === 'uptime') return String(board.up);
     var b = bandFor(pm);
-    return b ? b.label : 'unknown';
+    // The wire's own bytes. A real ESPHome board publishes this level in English
+    // whatever language the wall beside it is set in, so the simulation does too —
+    // translating a payload would be simulating a board that does not exist.
+    return b ? STR.en['band.' + b.key] : 'unknown';
   }
 
   // What each board is doing this instant. Ages are in milliseconds behind now, so
@@ -1889,20 +2647,16 @@ kbd{
 
   // The marker's sentence. It names the mode AND the figure being simulated, so a
   // photograph of the band alone tells a reader what they are looking at.
+  var demoPlanNow = null;              // kept so an edition switch can re-say it
   function demoWhat(plan) {
     function say(pm) {
       var b = bandFor(pm);
-      return demoFix(pm) + ' ' + DEMO_UNIT + (b ? ' (' + b.label + ')' : '');
+      return demoFix(pm) + ' ' + DEMO_UNIT + (b ? ' (' + bandLabel(b) + ')' : '');
     }
-    if (DEMO.mode === 'mixed') {
-      return 'Invented fleet: DBK-002 reporting ' + say(plan[0].pm) +
-             ', DBK-001 expired, DBK-010 silent.';
-    }
-    if (DEMO.mode === 'cycle') {
-      return 'Cycling the six bands, four seconds each. Every station now showing ' +
-             say(plan[0].pm) + '.';
-    }
-    return 'Every station showing an invented ' + say(plan[0].pm) + '.';
+    if (!plan || !plan.length) return '';
+    if (DEMO.mode === 'mixed') return t('demo.what.mixed', { v: say(plan[0].pm) });
+    if (DEMO.mode === 'cycle') return t('demo.what.cycle', { v: say(plan[0].pm) });
+    return t('demo.what.value', { v: say(plan[0].pm) });
   }
 
   // The retained announcements, published once, exactly as they replay on connect.
@@ -1954,30 +2708,32 @@ kbd{
 
     entities.forEach(render);
     summarise();
-    $('demo-what').textContent = demoWhat(plan);
+    demoPlanNow = plan;
+    paintDemo();
     if (DEMO.mode === 'cycle') demoIx++;
+  }
+
+  // The marker is re-set from the plan already on screen, so switching edition
+  // never blanks the warning even for a frame.
+  function paintDemo() {
+    $('demo-what').textContent = demoWhat(demoPlanNow);
+    $('demo-tail').innerHTML = t('demo.tail');
   }
 
   function demoStart() {
     document.documentElement.setAttribute('data-demo', DEMO.mode);
     document.body.classList.add('demo');
-    document.title = 'DEMO — ' + document.title;
     $('demo-band').hidden = false;
+    setDocTitle();
 
     // Nothing about this page is claiming to be connected.
-    setConn('demo', 'demonstration — no broker');
-    $('co-host').textContent = 'nothing — every figure below is invented';
-    $('co-keys').textContent = 'Broker settings are disabled in demonstration mode';
-    $('store-hint').textContent =
-      'Demonstration mode reads no saved setting and writes none. Remove the demo parameter ' +
-      'from the address and reload to return to the monitors.';
-    emptyBase = 'Demonstration mode is setting out its stations.';
+    setConn('demo');
+    hostKey = 'demo.host';
+    paintHost();
+    setHint('hint.demo');
+    emptyKey = 'empty.demo';
 
-    setAlert('demo', 'info',
-      '<b>This page is a demonstration and every figure on it is invented.</b> It was asked for ' +
-      'by <span class="mono">?demo=</span> in the address, it is connected to no broker, and it ' +
-      'describes the air in no room. Remove that parameter from the address and reload to read ' +
-      'the monitors. <span lang="th">หน้านี้เป็นตัวอย่าง ไม่ใช่ค่าอากาศจริง</span>');
+    setAlert('demo', 'info', 'alert.demo');
 
     demoAnnounce();
     demoTick();
@@ -1986,6 +2742,129 @@ kbd{
     // at them — which is what a board publishing every few seconds really does.
     setInterval(demoTick, 4000);
   }
+
+  /* ==========================================================================
+     SETTING THE PAGE IN THE CHOSEN EDITION
+
+     Switching edition RE-TYPESETS; it does not reload. A reload would drop the
+     line to the broker, replay every retained announcement, and blank the wall
+     for a second or two — and a language button is exactly the sort of thing a
+     child presses twice.
+     ========================================================================== */
+
+  function txt(id, key, vars) { var el = $(id); if (el) el.textContent = t(key, vars); }
+  function htm(id, key, vars) { var el = $(id); if (el) el.innerHTML = t(key, vars); }
+
+  // The hint is one vetted sentence in each edition and both name the key as a
+  // bare "s". Wrapping that one letter in <kbd> keeps this design's keycap
+  // without touching a character of the vetted wording; if a future edition has
+  // no standalone "s", the sentence simply prints plain.
+  function kbdHint() {
+    return esc(t('conn.hint')).replace(/(^|\s)s(?=\s|$)/, '$1<kbd>s</kbd>');
+  }
+
+  function paintHost() {
+    var el = $('co-host');
+    if (el) el.textContent = hostKey ? t(hostKey) : hostText;
+  }
+  function setHint(key, vars) {
+    hintKey = key; hintVars = vars || null;
+    $('store-hint').textContent = t(key, vars);
+  }
+  function setDocTitle() {
+    // "DEMO" stays Latin in both editions: it is the token the fleet's index page,
+    // its screenshots and its address bar all use for the same thing.
+    document.title = (DEMO ? 'DEMO — ' : '') + t('doc.title');
+  }
+
+  function paintChrome() {
+    setDocTitle();
+    txt('rh-l', 'head.masthead');
+    htm('rh-c', 'head.sub');
+
+    txt('art-title', 'art.title');
+    htm('art-standfirst', 'art.standfirst');
+    htm('art-byline', 'art.byline');
+    txt('art-lede-1', 'art.lede1');
+    htm('art-lede-2', 'art.lede2');
+    txt('art-kicker', 'art.kicker');
+
+    txt('empty-head', 'empty.head');
+    txt('fig1-no', 'fig.1no');
+    txt('tab1-no', 'tab.1no');
+    txt('fig2-no', 'fig.2no');
+    htm('tab1-tail', 'tab1.tail');
+    htm('fig2-lead', 'fig2.lead');
+
+    txt('th-id', 'th.station');
+    txt('th-read', 'th.read');
+    txt('th-band', 'th.band');
+    txt('th-adv', 'th.adv');
+    txt('th-seen', 'th.seen');
+
+    txt('notes-head', 'notes.head');
+    htm('note-1', 'note.1');
+    htm('note-2', 'note.2');
+    htm('note-3', 'note.3');
+    htm('note-4', 'note.4');
+
+    // The colophon's counters live INSIDE their sentences, so the sentences are
+    // re-set first and refreshCounts() writes the numbers back afterwards.
+    htm('co-from', 'col.from');
+    htm('co-ents-line', 'col.ents');
+    htm('co-subs-line', 'col.subs');
+    paintHost();
+    refreshCounts();
+    $('co-keys').innerHTML = DEMO ? esc(t('demo.keys')) : kbdHint();
+
+    txt('set-head', 'set.head');
+    txt('set-lead', 'set.lead');
+    txt('lbl-host', 'set.host');
+    txt('lbl-port', 'set.port');
+    txt('lbl-user', 'set.user');
+    txt('lbl-pass', 'set.pass');
+    txt('lbl-filter', 'set.filter');
+    txt('lbl-tls', 'set.tls');
+    txt('lbl-remember', 'set.remember');
+    txt('btn-connect', 'set.connect');
+    txt('btn-forget', 'set.forget');
+    txt('btn-close', 'set.close');
+    $('store-hint').textContent = t(hintKey, hintVars);
+
+    $('lang').setAttribute('aria-label', t('lang.aria'));
+    $('lang-en').setAttribute('aria-pressed', LANG === 'en' ? 'true' : 'false');
+    $('lang-th').setAttribute('aria-pressed', LANG === 'th' ? 'true' : 'false');
+  }
+
+  // <html lang> first: it is what lets the browser break a Thai line at a word
+  // boundary and reach for a Thai face, and every measurement below it depends
+  // on that being already true.
+  function applyLang() {
+    document.documentElement.setAttribute('lang', LANG);
+    paintChrome();
+    paintConn();
+    paintAlerts();
+    paintFatal();
+    drawScale();
+    stamp();
+    entities.forEach(render);
+    layout();                 // re-sets the empty notice, then summarises
+    if (DEMO) paintDemo();
+  }
+
+  function setLang(next) {
+    if (next !== 'th' && next !== 'en') return;
+    if (next === LANG) return;
+    LANG = next;
+    try { localStorage.setItem(LANG_KEY, LANG); } catch (e) { /* private window */ }
+    applyLang();
+  }
+
+  $('lang').addEventListener('click', function (ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest('.lang-b') : null;
+    if (!b) return;
+    setLang(b.getAttribute('data-lang'));
+  });
 
   // ---------------------------------------------------------------- boot
   // No configuration screen on load, ever. Stored settings first; then ?u=&p= from the
@@ -2009,7 +2888,6 @@ kbd{
     return cfg;
   }
 
-  stamp();
   var boot = null;
   if (DEMO) {
     // A demonstration never touches the stored broker profile — not to read a host,
@@ -2021,13 +2899,13 @@ kbd{
     fillForm(boot);
     activeFilter = typeof boot.filter === 'string' ? boot.filter.trim() : '';
   }
-  refreshCounts();
-  layout();
-
-  $('store-hint').textContent = !storeWorks
-    ? 'This browser blocks local storage, so settings cannot be remembered on this device.'
-    : 'Settings are kept in this browser only, on this device, and the passphrase only if the ' +
-      'box above is ticked.';
+  // storeWorks is known by now (fillForm has been through loadStore), so the
+  // storage sentence is chosen before the first paint rather than after it.
+  hintKey = storeWorks ? 'hint.store' : 'hint.nostore';
+  // One call sets the whole page in the chosen edition — masthead, article,
+  // table, scale, notices, colophon and settings slip together. It is the same
+  // call the TH/EN buttons and the "l" key make later.
+  applyLang();
 
   if (DEMO) {
     demoStart();
@@ -2036,15 +2914,7 @@ kbd{
     // reading the real monitors, because inventing figures on a health display for a
     // reader who mistyped a parameter is the one outcome that is never acceptable.
     if (DEMO_UNREAD) {
-      setAlert('demo', 'bad',
-        '<b>The demonstration parameter was not understood, so nothing is being simulated.</b> ' +
-        '<span class="mono">' + esc(DEMO_UNREAD) + '</span> is not a figure or a band name. ' +
-        'Every figure below is a real reading from a real monitor. Use ' +
-        '<span class="mono">?demo=</span> with a number, with ' +
-        '<span class="mono">good</span>, <span class="mono">moderate</span>, ' +
-        '<span class="mono">sensitive</span>, <span class="mono">unhealthy</span>, ' +
-        '<span class="mono">verybad</span> or <span class="mono">hazardous</span>, or with ' +
-        '<span class="mono">cycle</span> or <span class="mono">mixed</span>.');
+      setAlert('demo', 'bad', 'alert.demounread', { raw: esc(DEMO_UNREAD) });
     }
     connect(boot);
   }

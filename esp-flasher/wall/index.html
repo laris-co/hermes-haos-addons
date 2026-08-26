@@ -323,12 +323,15 @@ html.demo .rig{border-color:var(--warn-ink);box-shadow:0 0 0 2px var(--warn-hi)}
   display:flex;flex-wrap:wrap;gap:.4rem .95rem;align-items:baseline;
   font-size:.84rem;
 }
-html.demo .readout{border-style:solid;border-color:var(--warn-ink)}
+html.demo .readout{border-style:solid;border-color:var(--warn-hi)}
 .readout .k{font-family:var(--mono);font-size:.64rem;letter-spacing:.16em;color:var(--faint)}
 .readout .band{font-weight:600;color:var(--ink)}
 .readout .rng{font-family:var(--mono);font-size:.79rem;color:var(--dim)}
 .readout .note{flex:1 1 20rem;min-width:0;font-size:.79rem;line-height:1.55;color:var(--dim)}
 .readout .note b{color:var(--ink);font-weight:600}
+.readout .tally{flex:1 1 100%;font-size:.78rem;line-height:1.5;color:var(--dim)}
+.readout .tally:empty{display:none}
+html.demo .readout .tally{color:var(--ink);font-weight:600}
 .pill{
   flex:none;font-family:var(--mono);font-size:.65rem;letter-spacing:.17em;
   padding:.24rem .62rem;border-radius:999px;
@@ -370,6 +373,17 @@ html.demo .pill{
 .idemo .out{flex:none;color:#c9bda4;font-weight:600;font-size:clamp(.71rem,1.2vw,.84rem)}
 .idemo .out b{color:#fdf6e6;font-family:var(--mono);font-weight:700}
 
+/* The no-JavaScript fallback. It is inside <noscript>, so it never renders for a
+   reader who has thumbnails; it exists so that a sheet whose twenty pictures are
+   all written by script does not simply appear broken when script is off. */
+.nojs{
+  border:2px solid var(--rule);padding:clamp(1rem,3vw,1.8rem);
+  font-size:1rem;line-height:1.6;
+}
+.nojs ul{margin:1rem 0;padding-left:1.2rem;columns:2;column-gap:2rem}
+.nojs li{margin:.2rem 0;break-inside:avoid}
+@media (max-width:640px){.nojs ul{columns:1}}
+
 /* Belt and braces: a photograph cropped to a single thumbnail still says DEMO. */
 html.demo .shotwrap{border-color:var(--warn-ink);box-shadow:0 0 0 3px var(--warn-hi)}
 html.demo .shotwrap::after{
@@ -380,11 +394,843 @@ html.demo .shotwrap::after{
   border-top:2px solid var(--warn-ink);border-right:2px solid var(--warn-ink);
   pointer-events:none;                  /* the overlay link still owns every click */
 }
+/* A preview that did NOT take ?demo= is showing real broker data, and must not be
+   wearing a DEMO tab. The sheet checks each one (see verify() in the bench) and says
+   so plainly, because mislabelling a real hazardous reading as a demo is the same
+   class of harm as the reverse. */
+html.demo .shotwrap[data-took="no"]{border-color:var(--ink);box-shadow:none}
+html.demo .shotwrap[data-took="no"]::after{
+  content:"LIVE · ?demo= ignored";   /* typed, not \2014 — a CSS escape eats the space after it */
+  background:var(--ink);color:var(--paper);letter-spacing:.1em;
+  border-top-color:var(--ink);border-right-color:var(--ink);
+}
+
+/* ================================================================= LANGUAGE
+   One quiet pair in the masthead. The sheet has no colour of its own, so the
+   switcher borrows the same rule/ink tokens as everything else and never
+   competes with the twenty previews for attention.
+
+   It is chrome for THIS page and a control for the twenty: pressing TH also
+   re-points every preview at ?lang=th (see the bench), because a Thai contact
+   sheet wrapped around twenty English walls would be the worse of the two
+   half-measures. */
+.mast-top{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:1rem;flex-wrap:wrap;
+}
+.mast-top .eyebrow{margin-bottom:0}
+.langsw{
+  flex:none;display:flex;align-items:center;gap:.1rem;
+  padding:.16rem .3rem;border:1px solid var(--rule-2);border-radius:999px;
+}
+.langsw button{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;line-height:1;
+  background:transparent;border:0;border-radius:999px;padding:.3rem .5rem;
+  color:var(--faint);cursor:pointer;
+}
+.langsw button:hover{color:var(--ink)}
+.langsw button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.langsw button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.langsw .bar{color:var(--rule-2);font-family:var(--mono);font-size:.68rem;line-height:1}
+
+/* ===================================================================== THAI
+   Thai stacks marks above AND below the line (สั้ / ญู), so 1.05–1.2 leading
+   clips them outright. Everything that can hold Thai gets ≥1.5, loses the
+   negative tracking that was tuned for Latin display faces, and loses the
+   wide letter-spacing on the small mono labels — Thai glyphs pull apart into
+   unreadable confetti at .2em.
+
+   Thai also has no spaces between words, so a long string has nowhere for the
+   browser to break: break-word is the only thing standing between a blurb and
+   a horizontal overflow. The numeric ranges are deliberately exempt — breaking
+   "163.3" into "163." and "3" is not a wrapped line, it is a wrong number.
+
+   No webfont is linked. These pages are self-contained and open from file://,
+   so the stack names real Thai system faces and accepts the fallback. */
+html[lang="th"] body,
+html[lang="th"] h1,
+html[lang="th"] .grouphead h2,
+html[lang="th"] .colophon h2,
+html[lang="th"] .rig h2{
+  font-family:'Noto Sans Thai','IBM Plex Sans Thai','Sarabun',
+              ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+html[lang="th"] h1{line-height:1.35;letter-spacing:normal}
+html[lang="th"] .grouphead h2,
+html[lang="th"] .rig h2,
+html[lang="th"] .colophon h2{line-height:1.45;letter-spacing:normal}
+html[lang="th"] .lede,
+html[lang="th"] .facts,
+html[lang="th"] .scale,
+html[lang="th"] .grouphead p,
+html[lang="th"] .key,
+html[lang="th"] .brief,
+html[lang="th"] .by,
+html[lang="th"] .colophon,
+html[lang="th"] .signin,
+html[lang="th"] .rig .why,
+html[lang="th"] .righint,
+html[lang="th"] .readout,
+html[lang="th"] .idemo{
+  line-height:1.7;letter-spacing:normal;
+  overflow-wrap:break-word;word-break:break-word;
+}
+/* the small mono labels: keep the face, drop the tracking */
+html[lang="th"] .eyebrow,
+html[lang="th"] .grouphead .range,
+html[lang="th"] .riglab,
+html[lang="th"] .readout .k,
+html[lang="th"] .pill,
+html[lang="th"] .idemo .tag{letter-spacing:.02em}
+/* numbers must never be broken or re-tracked */
+html[lang="th"] .readout .rng,
+html[lang="th"] .no,
+html[lang="th"] .file,
+html[lang="th"] .num{
+  letter-spacing:normal;overflow-wrap:normal;word-break:normal;
+}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
+
+<script>
+(function () {
+  'use strict';
+  /* ==========================================================================
+     LANGUAGE — the sheet's own t() layer, the same shape the twenty walls use.
+
+     THE STRINGS ARE COPIED, NEVER RE-TRANSLATED. The block marked VETTED below
+     is a byte copy of the table that lives in every wall in this folder. It was
+     authored as Thai against Thai discourse frames — it is not a translation of
+     the English beside it, and the two columns answer the same question the way
+     each language actually asks it. Editing one of those strings here and not
+     in the other twenty-one files is how twenty-two displays start disagreeing
+     about what "อากาศไม่ดี" means. Edit it in ONE place, copy it out.
+
+     The keys under `sheet.` are this page's own chrome and exist nowhere else:
+     headings, blurbs, the band bench, the colophon. Proper nouns stay in Latin
+     in both columns — Munari, Hokusai, the Dynamic Island, visionOS. A
+     designer's name is not a string to be translated.
+
+     Nothing here touches the network, and no credential is ever a string.
+     ====================================================================== */
+  var STR = {
+    en: {
+      /* ---------------------------------------------------------- VETTED */
+      'verdict.good':      'Go outside. The air is clean.',
+      'verdict.moderate':  'Air is okay. Outdoor play is fine.',
+      'verdict.sensitive': 'Sensitive groups take care.',
+      'verdict.unhealthy': 'Unhealthy — stay indoors.',
+      'verdict.verybad':   'Very unhealthy — stay indoors.',
+      'verdict.hazardous': 'Hazardous — stay inside.',
+      'verdict.unknown':   'No reading — air quality unknown.',
+
+      'band.good':      'Good',
+      'band.moderate':  'Moderate',
+      'band.sensitive': 'Unhealthy for sensitive groups',
+      'band.unhealthy': 'Unhealthy',
+      'band.verybad':   'Very unhealthy',
+      'band.hazardous': 'Hazardous',
+      'band.none':      'Not rated',
+
+      'state.offline':   'offline',
+      'state.noreading': 'no reading',
+      'state.stale':     'stale',
+      'state.waiting':   'waiting',
+      'state.live':      'live',
+      'state.fault':     'sensor fault',
+
+      'conn.connecting':  'connecting',
+      'conn.connected':   'connected',
+      'conn.retrying':    'reconnecting',
+      'conn.refused':     'The broker refused this connection.',
+      'conn.unreachable': 'Cannot reach the broker.',
+      'conn.hint':        'Press s to enter the details.',
+
+      'demo.warn': 'SIMULATED DATA, NOT A REAL READING',
+      'demo.at':   'every board faked at',
+
+      'time.justnow':    'just now',
+      'time.secondsAgo': '{n}s ago',
+      'time.minutesAgo': '{n}m ago',
+      'time.hoursAgo':   '{n}h ago',
+
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'US EPA PM2.5 scale',
+
+      /* ------------------------------------------- this sheet's own chrome */
+      'sheet.title':   'Twenty Air Walls — contact sheet',
+      'sheet.eyebrow': 'Kit4Kids · PM2.5 · Chiang Mai',
+      'sheet.h1':      'Twenty walls for one question',
+      'sheet.lede':
+        'Twenty wall displays built on one tested MQTT engine, each answering ' +
+        '<b>“should we go outside?”</b> in plain words before it shows a number. ' +
+        'Ten draw the air; ten photograph it. Every thumbnail below is the real page ' +
+        'running — not a screenshot: live against the lab broker, or, when the bench ' +
+        'below is switched on, every one of them simulating the same reading. Click ' +
+        'one to open it full size.',
+
+      'sheet.fact.boards': 'Boards',
+      'sheet.fact.boards.d':
+        '<b>DBK-001</b>, <b>DBK-002</b>, <b>DBK-010</b> — normally one live and two dark. ' +
+        'Every version draws that mixed state on purpose; none of them lets a zero stand in ' +
+        'for a sensor that has stopped speaking.',
+      'sheet.fact.source': 'Source',
+      'sheet.fact.source.d':
+        'Home Assistant MQTT discovery over WebSocket, port <b>1884</b>. Board identity is ' +
+        'parsed out of <span class="mono">state_topic</span>, never from the discovery name — ' +
+        'that name is <span class="mono">"PM2.5"</span> on all three.',
+      'sheet.fact.previews': 'Previews',
+      'sheet.fact.previews.d':
+        'All twenty are <b>live</b>, not screenshots. Each iframe is ' +
+        '<span class="mono">loading="lazy"</span>, so a wall opens its own broker connection ' +
+        'only when its thumbnail scrolls into view — twenty MQTT connections never open at ' +
+        'once, and reaching the bottom of this page is what brings the last of them up. In ' +
+        'demo mode not one of them opens a connection at all.',
+      'sheet.fact.settings': 'Settings',
+      'sheet.fact.settings.d':
+        'None here for the walls, and none on the walls at startup. Each wall connects by ' +
+        'itself and hides its settings behind pressing <b>s</b>. If the broker wants a login, ' +
+        'open this sheet once with <span class="mono">?u=&amp;p=</span> and every preview ' +
+        'inherits it — the hint is then wiped from the address bar.',
+
+      'sheet.scale':
+        '<b>US EPA PM2.5 scale</b>, µg/m³ — the standard every version bands against: ' +
+        '0–12.0 Good<span class="sep">·</span>12.1–35.4 Moderate<span class="sep">·</span>' +
+        '35.5–55.4 Unhealthy for sensitive groups<span class="sep">·</span>' +
+        '55.5–150.4 Unhealthy<span class="sep">·</span>150.5–250.4 Very unhealthy' +
+        '<span class="sep">·</span>250.5 and above Hazardous.',
+
+      'sheet.lang.label': 'Language',
+
+      /* --------------------------------------------------------- the bench */
+      'sheet.rig.h': 'Band bench — drive all twenty previews at once',
+      'sheet.rig.why':
+        'The only live board reads <b>0 µg/m³</b> and two are dark, so no layout here can be ' +
+        'judged at the readings that matter. Pick a band and every preview is handed the same ' +
+        'simulated value through <code>?demo=</code>. It is <b>ตัวอย่าง — made-up air, never a ' +
+        'measurement</b>: a wall in demo mode opens no broker connection, so a screen can never ' +
+        'carry a real reading and a fake one at the same time. Nothing is remembered; the ' +
+        'choice lives in the address bar and dies with a reload.',
+      'sheet.rig.lab.band':  'BAND',
+      'sheet.rig.lab.exact': 'EXACT',
+      'sheet.rig.live':      'Live',
+      'sheet.rig.mixed':     'Mixed fleet',
+      'sheet.rig.cycle':     'Cycle all six',
+      'sheet.rig.go':        'Show this value',
+      'sheet.rig.hint':
+        'The two that break layouts: <b>163.3</b> once wrapped mid-digit into “163.” and “3”, ' +
+        'and <b>250.5</b> is the first value that is Hazardous rather than Very unhealthy — ' +
+        'five glyphs and a band edge in one string.',
+      'sheet.rig.group':  'EPA band to simulate',
+      'sheet.a.exact':    'exact PM2.5 value to simulate, in micrograms per cubic metre',
+      'sheet.k.band':     'BAND',
+      'sheet.k.range':    'RANGE',
+      'sheet.pill.live':  'PREVIEWS : LIVE',
+      'sheet.pill.demo':  'PREVIEWS : DEMO',
+      'sheet.note.live':
+        'Previews are connected to the broker. Whatever they show is what a sensor actually said.',
+
+      'sheet.range.above': '{v} and above',
+      'sheet.dash':        '—',
+
+      'sheet.bad.empty':   '?demo= was left empty',
+      'sheet.bad.notband': '“{v}” is not a band name or a number',
+      'sheet.bad.say':     '{what}, so every preview is showing the fleet’s usual mixed state instead',
+      'sheet.bad.note':
+        '{what}. The walls refuse to fall back to live air while ?demo= is present, so each one ' +
+        'shows the usual mixed fleet and says why.',
+
+      'sheet.mixed.band': '{band} — on the one board that is talking',
+      'sheet.mixed.say':
+        'every preview is simulating the fleet as it usually is, one board live at 163.3 {unit} ' +
+        '({band}), one asleep with no reading, one whose last word is too old to trust',
+      'sheet.mixed.note':
+        'The state the fleet is in most days and the one layouts get wrong: a three-digit reading ' +
+        'beside a dark board and a stale one. Nothing is averaged and no zero stands in for silence.',
+
+      'sheet.cycle.band': 'all six, in turn',
+      'sheet.cycle.say':  'every preview is walking all six EPA bands in order, about four seconds each',
+      'sheet.cycle.note':
+        'Each wall runs its own clock, so the twenty are not in step — that is what makes a band ' +
+        'change visible as a transition rather than only as a state.',
+
+      'sheet.band.say':  'every preview is simulating {band} air, {range}',
+      'sheet.band.note':
+        'All three boards on every preview are told to read a value from the middle of this band. ' +
+        'Each wall picks its own representative figure, so the exact digits differ between them; ' +
+        'the band does not.',
+
+      'sheet.num.say':  'every board on every preview is publishing {v} {unit} ({band})',
+      'sheet.num.note':
+        'The value goes to the walls as typed, so each one truncates it to one decimal exactly the ' +
+        'way it truncates a sensor payload — {v} classifies as {band}.',
+
+      'sheet.err.empty': 'Type a value first — 163.3 and 250.5 are the two worth trying.',
+      'sheet.err.nan':   '“{v}” is not a PM2.5 reading. Use a number of 0 or more, for example 163.3.',
+
+      'sheet.demo.say':   'Not a measurement — {say}.',
+      'sheet.demo.out':   'choose <b>Live</b> below, or reload without <b>?demo=</b>',
+
+      'sheet.tally.no.one':
+        '1 of {total} previews is ignoring ?demo= and still showing live broker data — it is ' +
+        'tabbed LIVE on the sheet, and what it shows is real',
+      'sheet.tally.no.many':
+        '{n} of {total} previews are ignoring ?demo= and still showing live broker data — each ' +
+        'one is tabbed LIVE on the sheet, and what it shows is real',
+      'sheet.tally.unknown':
+        '{n} could not be checked from here — not scrolled into view yet, or this sheet was ' +
+        'opened from file://, where a preview is a foreign origin. Look for that wall’s own ' +
+        'DEMO bar inside its thumbnail',
+      'sheet.tally.ok':
+        'Verified: all {total} previews took the setting and none of them is connected to the broker',
+
+      /* -------------------------------------------------------- the sign-in */
+      'sheet.signin.h':    'Preview sign-in',
+      'sheet.signin.u':    'username',
+      'sheet.signin.p':    'password',
+      'sheet.signin.go':   'Load previews',
+      'sheet.signin.note':
+        'stays in this browser · the walls also read <code>?u=&amp;p=</code> directly',
+      'sheet.signin.off':
+        'Demo mode is on, so no preview is connecting to anything — a login has nothing to log ' +
+        'into until you choose <b>Live</b> on the bench above.',
+
+      /* --------------------------------------------------------- the groups */
+      'sheet.g1.h': 'The designer set',
+      'sheet.g1.p1':
+        'Ten walls whose ground is <b>drawn, printed or woven</b> — poster paint, woodblock, ' +
+        'Swiss grid, loom, letterpress. There is not one raster image among them; every shape ' +
+        'is CSS and SVG geometry, so each file is its own picture as well as its own display.',
+      'sheet.g1.p2':
+        'Each names a lineage. Seven name it in a comment at the top of the file; three ' +
+        '<span class="dagger">†</span> describe a method rather than a person, and the ' +
+        'attribution below is this sheet’s reading of that method.',
+
+      'sheet.g2.h': 'The glass set',
+      'sheet.g2.p1':
+        'Ten walls where <b>the photograph is the reading</b>. The whole screen is a picture of ' +
+        'what the air outside looks like at the live worst band, cross-faded when a board crosses ' +
+        'an EPA breakpoint, with translucent iOS-style panels floating over it. When no board is ' +
+        'live, none of them shows the clear dawn — an unknown sky must never read as good air.',
+      'sheet.g2.p2':
+        'Each names an <span class="dagger">‡</span> interface grammar rather than a person: ' +
+        'these are studies in a shared visual language, not homages to a designer. Legibility is ' +
+        'the hard requirement here, and every file opens with its own measured contrast argument ' +
+        '— the arithmetic is in the comment at the top of each one.',
+
+      'sheet.key.good':      '<code>img/good.jpg</code> — clear layered dawn, ridges to the far horizon',
+      'sheet.key.moderate':  '<code>img/moderate.jpg</code> — a thin veil softening the far layers',
+      'sheet.key.sensitive': '<code>img/sensitive.jpg</code> — far ridges nearly gone, flat amber light',
+      'sheet.key.unhealthy': '<code>img/unhealthy.jpg</code> — only the nearest ridge, dense ochre-grey air',
+      'sheet.key.verybad':   '<code>img/verybad.jpg</code> — near whiteout, one faint tree line',
+      'sheet.key.hazardous': '<code>img/hazardous.jpg</code> — near-total opacity, a small red disc sun',
+
+      /* ---------------------------------------------------------- the cards */
+      'sheet.a.open':    'Open version {n}, {name}',
+      'sheet.a.preview': 'Live preview of version {n}, {name}',
+
+      'v11.by':    'after Bruno Munari',
+      'v11.brief': 'Each board is a drawn creature in poster paint and ink; the reading is its ' +
+                   'caption, and a sleeping creature is unmistakably not a clean one.',
+      'v12.by':    'type as architecture, after Paula Scher <span class="dagger">†</span>',
+      'v12.brief': 'The worst live reading cropped to fill the room, with the whole wall flooded ' +
+                   'in the colour of its band — readable across a hall before a digit is.',
+      'v13.by':    'after Saul Bass',
+      'v13.brief': 'One ground, one accent, one circle. No table, no card, no third hue — and the ' +
+                   'poster inverts itself for exactly one state, Hazardous.',
+      'v14.by':    'after Hokusai, Thirty-six Views',
+      'v14.brief': 'A four-block woodcut of the air on cream paper. Every other colour is an ' +
+                   'overprint computed from those blocks; the number is a seal in the corner.',
+      'v15.by':    'after Naoto Fukasawa',
+      'v15.brief': 'No numerals at rest: colour is the air, and only clean air breathes. A dark ' +
+                   'board is a motionless void, so an offline fleet can never read as clean.',
+      'v16.by':    'Swiss grid, after Josef Müller-Brockmann <span class="dagger">†</span>',
+      'v16.brief': 'A twelve-column measurement sheet on one baseline, black on paper. The single ' +
+                   'red ink appears only from “Unhealthy for sensitive groups” upward.',
+      'v17.by':    'after Charles &amp; Ray Eames',
+      'v17.brief': 'Every value the boards publish, each with its MQTT topic printed underneath, ' +
+                   'because a joint should be visible. Warmth from rigour, not decoration.',
+      'v18.by':    'after John Maeda, Laws of Simplicity',
+      'v18.brief': 'One sentence, one number, one screen. What was removed is listed in the ' +
+                   'footer, so a subtraction can never be mistaken for an omission.',
+      'v19.by':    'after Anni Albers',
+      'v19.brief': 'The reading sets the sett of the cloth: clean air is an open plain weave, ' +
+                   'dirty air packs the threads shut, and an offline board is bare warp on the loom.',
+      'v20.by':    'after Edward Tufte <span class="dagger">†</span>',
+      'v20.brief': 'A published record rather than a dashboard — numbered figures, real captions, ' +
+                   'footnotes, a reference line. Nothing averaged, smoothed or filled in.',
+
+      'v21.by':    'iOS Control Center <span class="dagger">‡</span>',
+      'v21.brief': 'Modules of dark frosted glass over the sky, each ground’s tint alpha measured ' +
+                   'from the JPEG itself so white type clears 7:1 wherever a tile lands.',
+      'v22.by':    'visionOS depth <span class="dagger">‡</span>',
+      'v22.brief': 'Panels at three depths with parallax over the sky. All type is luminous on a ' +
+                   'guaranteed dark field, and an unknown fleet gets a void where the photograph ' +
+                   'would be.',
+      'v23.by':    'liquid glass, fluid morphology <span class="dagger">‡</span>',
+      'v23.brief': 'A slowly morphing blob of fluid glass. One ink polarity only, with a scrim and ' +
+                   'a veil that grow heavier exactly where the photograph grows brighter.',
+      'v24.by':    'the iOS home screen <span class="dagger">‡</span>',
+      'v24.brief': 'A home screen, not a dashboard: 4×4, 2×2 and 4×2 glass tiles that darken only ' +
+                   'the pixels behind them, so the exposed wallpaper stays a photograph.',
+      'v25.by':    'the Dynamic Island <span class="dagger">‡</span>',
+      'v25.brief': 'One black pill at the top carries the entire state and swells when the band ' +
+                   'changes, then contracts. Nothing else on the screen is UI — the rest is the sky.',
+      'v26.by':    'the iOS Lock Screen <span class="dagger">‡</span>',
+      'v26.brief': 'Wallpaper, a large light clock, one air widget and small complications for the ' +
+                   'rest of the fleet, held legible by four independent scrim layers.',
+      'v27.by':    'the Apple Weather grammar <span class="dagger">‡</span>',
+      'v27.brief': 'One sky, one number, one sentence; beneath it a strip of the other monitors and ' +
+                   'a single glass card of detail. Scrim and glass fill both retune per band.',
+      'v28.by':    'a Control Center deck <span class="dagger">‡</span>',
+      'v28.brief': 'A deck of small glass modules over a fixed veil that never thins below .68, so ' +
+                   'the photograph’s colour still reads but its brightness cannot reach the type.',
+      'v29.by':    'the iOS music player <span class="dagger">‡</span>',
+      'v29.brief': 'The band photograph is the album art, and the same frame blurred huge is the ' +
+                   'room colour behind it. When the air changes band, the record changes.',
+      'v30.by':    'one pane of glass <span class="dagger">‡</span>',
+      'v30.brief': 'Every character on the wall lives inside a single dark pane, so contrast is ' +
+                   'solved once, structurally, instead of being re-argued element by element.',
+
+      /* -------------------------------------------------------- the colophon */
+      'sheet.col.h': 'About this sheet',
+      'sheet.col.p1':
+        'Twenty presentations, one engine. Each version reuses the MQTT layer, discovery parsing, ' +
+        'availability and expiry handling and EPA banding from ' +
+        '<code>tools/mqtt-dashboard.html</code>, and replaces only what you see. All twenty are ' +
+        'single self-contained files whose one external dependency is ' +
+        '<code>unpkg.com/mqtt@5.15.2</code>. The glass set adds six local JPEGs in ' +
+        '<code>img/</code> — the only local assets in the folder.',
+      'sheet.col.p2':
+        '<b>The previews load lazily, on purpose.</b> Twenty walls opening twenty MQTT connections ' +
+        'the moment this page loads would be twenty sessions on the lab broker for a page nobody ' +
+        'has scrolled yet. Every iframe carries <span class="mono">loading="lazy"</span>, so a ' +
+        'wall connects only when its thumbnail comes into view. Scroll to the bottom and all ' +
+        'twenty exist; open the page and walk away and only the first row does.',
+      'sheet.col.p3':
+        '<span class="dagger">†</span> Seven of versions 11–20 name their lineage in the file ' +
+        'itself. Three — <b>Shout</b>, <b>Module</b> and <b>Journal</b> — describe a method rather ' +
+        'than a person; the attribution here is this sheet’s reading of that method, not a claim ' +
+        'the files make.',
+      'sheet.col.p4':
+        '<span class="dagger">‡</span> Versions 21–30 name an interface grammar, not a designer: ' +
+        'Control Center, the Lock Screen, the Dynamic Island, visionOS depth. They are studies in ' +
+        'a shared visual language rather than homages to an individual, and none of them claims ' +
+        'any affiliation.',
+      'sheet.col.p5':
+        '<b>The six photographs are generated images</b>, not photographs of a specific real place ' +
+        'or moment. They illustrate what each EPA band looks like from a valley rim; they are not ' +
+        'evidence, and nothing on any wall presents them as a record of a particular day.',
+      'sheet.col.p6':
+        'Four bugs shipped once in the original wall and are designed out of every version here: ' +
+        'CSS uppercasing turning µg/m³ into mg/m³, a reading sized in viewport units splitting ' +
+        '<span class="mono">163.3</span> across two lines, all three boards sharing the discovery ' +
+        'name <span class="mono">"PM2.5"</span>, and wildcard subscriptions. ' +
+        '<code>README.md</code> beside this file has the full account.',
+      'sheet.col.p7':
+        '<b>Demo mode is opt-in from the URL and marked everywhere it is on.</b> The band bench at ' +
+        'the top writes <code>?demo=</code> into this page’s address bar and into every preview’s ' +
+        '<span class="mono">src</span>, and nowhere else — no stored flag, no default, no survival ' +
+        'across a reload without the parameter. While it is set, the sheet grows a sticky ' +
+        'hazard-taped bar naming the exact value being simulated, every thumbnail is tabbed ' +
+        '<b>DEMO</b>, and the tab title is prefixed. A wall in demo mode <b>opens no broker ' +
+        'connection at all</b>, because these are health displays for children: one screen must ' +
+        'never be able to carry a real reading and an invented one at the same time. Fake clean ' +
+        'air on a wall is how a child is sent outside on a hazardous day.',
+      'sheet.col.p8':
+        'A thumbnail is never blank when something is wrong. A wall that cannot reach the broker, ' +
+        'or that the broker turns away, replaces its whole screen with one calm sentence saying ' +
+        'what to do — so twenty identical sentences on this sheet means the broker wants a login, ' +
+        'not that the sheet is broken. Reopen it with <span class="mono">?u=&amp;p=</span>, use ' +
+        'the sign-in above, or open one wall and press <b>s</b>.'
+    },
+
+    th: {
+      /* ---------------------------------------------------------- VETTED */
+      'verdict.good':      'อากาศดี ออกไปเล่นได้เลย',
+      'verdict.moderate':  'อากาศพอใช้ได้ ออกไปข้างนอกได้ตามปกติ',
+      'verdict.sensitive': 'ถ้าแพ้ง่าย เลี่ยงออกข้างนอกไว้ก่อน',
+      'verdict.unhealthy': 'อากาศไม่ดี อยู่ในบ้านดีกว่า',
+      'verdict.verybad':   'อากาศแย่มาก อย่าเพิ่งออกไปข้างนอก',
+      'verdict.hazardous': 'อันตราย อยู่ในบ้าน ปิดประตูหน้าต่างให้หมด',
+      'verdict.unknown':   'ยังไม่มีค่า ไม่รู้ว่าอากาศเป็นยังไง',
+
+      'band.good':      'ดี',
+      'band.moderate':  'ปานกลาง',
+      'band.sensitive': 'เริ่มมีผลกับคนแพ้ง่าย',
+      'band.unhealthy': 'ไม่ดีต่อสุขภาพ',
+      'band.verybad':   'แย่มาก',
+      'band.hazardous': 'อันตราย',
+      'band.none':      'ไม่มีเกณฑ์',
+
+      'state.offline':   'ไม่ได้ส่งข้อมูล',
+      'state.noreading': 'ยังไม่มีค่า',
+      'state.stale':     'ค่าเก่า',
+      'state.waiting':   'กำลังรอ',
+      'state.live':      'สด',
+      'state.fault':     'เซ็นเซอร์มีปัญหา',
+
+      'conn.connecting':  'กำลังเชื่อมต่อ',
+      'conn.connected':   'เชื่อมต่อแล้ว',
+      'conn.retrying':    'กำลังเชื่อมต่อใหม่',
+      'conn.refused':     'เข้าระบบไม่ได้ บัญชีนี้ไม่มีสิทธิ์',
+      'conn.unreachable': 'ติดต่อ broker ไม่ได้',
+      'conn.hint':        'กด s เพื่อใส่ข้อมูลเข้าระบบ',
+
+      'demo.warn': 'ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง',
+      'demo.at':   'ตั้งค่าทุกบอร์ดเป็น',
+
+      'time.justnow':    'เมื่อกี้',
+      'time.secondsAgo': '{n} วินาทีที่แล้ว',
+      'time.minutesAgo': '{n} นาทีที่แล้ว',
+      'time.hoursAgo':   '{n} ชั่วโมงที่แล้ว',
+
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'เกณฑ์ PM2.5 ของ US EPA',
+
+      /* ------------------------------------------- this sheet's own chrome */
+      'sheet.title':   'ยี่สิบจอวัดอากาศ — แผ่นรวมทั้งหมด',
+      'sheet.eyebrow': 'Kit4Kids · PM2.5 · เชียงใหม่',
+      'sheet.h1':      'ยี่สิบจอ สำหรับคำถามเดียว',
+      'sheet.lede':
+        'จอติดผนังยี่สิบแบบ สร้างบน MQTT engine ตัวเดียวกันที่ผ่านการทดสอบแล้ว ' +
+        'ทุกแบบตอบคำถามว่า <b>“ออกไปข้างนอกได้ไหม”</b> เป็นคำพูดธรรมดาก่อน แล้วค่อยโชว์ตัวเลข ' +
+        'สิบแบบวาดอากาศขึ้นมาเอง อีกสิบแบบใช้ภาพถ่าย ภาพย่อทุกใบข้างล่างคือหน้าเว็บจริงที่รันอยู่ ' +
+        'ไม่ใช่ภาพนิ่ง ต่ออยู่กับ broker ของแล็บจริง ๆ หรือถ้าเปิดแท่นทดสอบข้างล่าง ' +
+        'ทุกใบจะจำลองค่าเดียวกันพร้อมกัน คลิกใบไหนก็ได้เพื่อเปิดเต็มจอ',
+
+      'sheet.fact.boards': 'บอร์ด',
+      'sheet.fact.boards.d':
+        '<b>DBK-001</b>, <b>DBK-002</b>, <b>DBK-010</b> — ปกติมีตัวเดียวที่ส่งข้อมูล อีกสองตัวเงียบ ' +
+        'ทุกเวอร์ชันตั้งใจวาดสภาพผสมแบบนี้ ไม่มีตัวไหนเอา 0 ไปแทนเซ็นเซอร์ที่หยุดส่งค่า',
+      'sheet.fact.source': 'แหล่งข้อมูล',
+      'sheet.fact.source.d':
+        'Home Assistant MQTT discovery ผ่าน WebSocket พอร์ต <b>1884</b> ' +
+        'ตัวตนของบอร์ดอ่านจาก <span class="mono">state_topic</span> ไม่เคยอ่านจากชื่อใน discovery — ' +
+        'เพราะชื่อนั้นเป็น <span class="mono">"PM2.5"</span> เหมือนกันหมดทั้งสามตัว',
+      'sheet.fact.previews': 'ภาพตัวอย่าง',
+      'sheet.fact.previews.d':
+        'ทั้งยี่สิบใบเป็นของ<b>จริงที่รันอยู่</b> ไม่ใช่ภาพนิ่ง แต่ละ iframe ใส่ ' +
+        '<span class="mono">loading="lazy"</span> ไว้ จอจะเปิดการเชื่อมต่อ broker ของตัวเอง ' +
+        'ก็ต่อเมื่อภาพย่อเลื่อนเข้ามาในจอ — ยี่สิบการเชื่อมต่อจึงไม่เปิดพร้อมกัน ' +
+        'และการเลื่อนลงจนสุดหน้าคือสิ่งที่ทำให้ใบสุดท้ายขึ้นมา ' +
+        'ถ้าอยู่ในโหมดตัวอย่าง จะไม่มีใบไหนเปิดการเชื่อมต่อเลยสักใบ',
+      'sheet.fact.settings': 'การตั้งค่า',
+      'sheet.fact.settings.d':
+        'หน้านี้ไม่มีให้ตั้งค่าจอ และตัวจอเองก็ไม่ถามอะไรตอนเปิด แต่ละจอต่อเองแล้วซ่อนหน้าตั้งค่า ' +
+        'ไว้หลังปุ่ม <b>s</b> ถ้า broker ต้องล็อกอิน ให้เปิดหน้านี้ครั้งเดียวด้วย ' +
+        '<span class="mono">?u=&amp;p=</span> แล้วภาพตัวอย่างทุกใบจะรับต่อไปเอง — ' +
+        'จากนั้นข้อมูลนั้นจะถูกลบออกจากช่องที่อยู่เว็บ',
+
+      'sheet.scale':
+        '<b>เกณฑ์ PM2.5 ของ US EPA</b> หน่วย µg/m³ — เกณฑ์ที่ทุกเวอร์ชันใช้แบ่งระดับ: ' +
+        '0–12.0 ดี<span class="sep">·</span>12.1–35.4 ปานกลาง<span class="sep">·</span>' +
+        '35.5–55.4 เริ่มมีผลกับคนแพ้ง่าย<span class="sep">·</span>' +
+        '55.5–150.4 ไม่ดีต่อสุขภาพ<span class="sep">·</span>150.5–250.4 แย่มาก' +
+        '<span class="sep">·</span>250.5 ขึ้นไป อันตราย',
+
+      'sheet.lang.label': 'ภาษา',
+
+      /* --------------------------------------------------------- the bench */
+      'sheet.rig.h': 'แท่นทดสอบระดับอากาศ — สั่งภาพตัวอย่างทั้งยี่สิบใบพร้อมกัน',
+      'sheet.rig.why':
+        'บอร์ดตัวเดียวที่ยังส่งข้อมูลอ่านได้ <b>0 µg/m³</b> อีกสองตัวเงียบ ' +
+        'เลยไม่มีทางตัดสินหน้าตาของจอที่ค่าซึ่งสำคัญจริง ๆ ได้ เลือกระดับสักอัน ' +
+        'แล้วภาพตัวอย่างทุกใบจะได้ค่าจำลองเดียวกันผ่าน <code>?demo=</code> นี่คือ ' +
+        '<b>ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง</b> จอที่อยู่ในโหมดตัวอย่างจะไม่เปิดการเชื่อมต่อ broker เลย ' +
+        'หน้าจอเดียวจึงไม่มีทางถือค่าจริงกับค่าปลอมพร้อมกันได้ ไม่มีการจำค่าไว้ที่ไหน ' +
+        'ตัวเลือกอยู่ในช่องที่อยู่เว็บ และหายไปเมื่อโหลดใหม่',
+      'sheet.rig.lab.band':  'ระดับ',
+      'sheet.rig.lab.exact': 'ค่าที่ระบุ',
+      'sheet.rig.live':      'ค่าจริง',
+      'sheet.rig.mixed':     'สภาพผสม',
+      'sheet.rig.cycle':     'ไล่ทั้งหกระดับ',
+      'sheet.rig.go':        'ใช้ค่านี้',
+      'sheet.rig.hint':
+        'สองค่าที่ทำให้เลย์เอาต์พัง: <b>163.3</b> เคยตัดบรรทัดกลางตัวเลขเป็น “163.” กับ “3” ' +
+        'ส่วน <b>250.5</b> คือค่าแรกที่เป็นอันตราย ไม่ใช่แย่มาก — ' +
+        'ห้าตัวอักษรกับรอยต่อของระดับอยู่ในสตริงเดียวกัน',
+      'sheet.rig.group':  'ระดับอากาศตาม EPA ที่จะจำลอง',
+      'sheet.a.exact':    'ค่า PM2.5 ที่ต้องการจำลอง หน่วยไมโครกรัมต่อลูกบาศก์เมตร',
+      'sheet.k.band':     'ระดับ',
+      'sheet.k.range':    'ช่วงค่า',
+      'sheet.pill.live':  'ภาพตัวอย่าง : ค่าจริง',
+      'sheet.pill.demo':  'ภาพตัวอย่าง : ตัวอย่าง',
+      'sheet.note.live':
+        'ภาพตัวอย่างต่ออยู่กับ broker สิ่งที่เห็นคือค่าที่เซ็นเซอร์ส่งมาจริง ๆ',
+
+      'sheet.range.above': '{v} ขึ้นไป',
+      'sheet.dash':        '—',
+
+      'sheet.bad.empty':   '?demo= ถูกปล่อยว่างไว้',
+      'sheet.bad.notband': '“{v}” ไม่ใช่ชื่อระดับและไม่ใช่ตัวเลข',
+      'sheet.bad.say':     '{what} ภาพตัวอย่างทุกใบเลยแสดงสภาพผสมตามปกติของฟลีตแทน',
+      'sheet.bad.note':
+        '{what} ตัวจอจะไม่ยอมกลับไปใช้อากาศจริงตราบใดที่ยังมี ?demo= อยู่ ' +
+        'แต่ละใบจึงแสดงสภาพผสมตามปกติ พร้อมบอกเหตุผลไว้',
+
+      'sheet.mixed.band': '{band} — เฉพาะบอร์ดตัวเดียวที่ยังส่งข้อมูล',
+      'sheet.mixed.say':
+        'ภาพตัวอย่างทุกใบกำลังจำลองฟลีตแบบที่มันเป็นอยู่ปกติ บอร์ดหนึ่งส่งค่า 163.3 {unit} ' +
+        '({band}) บอร์ดหนึ่งหลับอยู่ไม่มีค่า อีกบอร์ดหนึ่งค่าล่าสุดเก่าเกินกว่าจะเชื่อได้',
+      'sheet.mixed.note':
+        'สภาพที่ฟลีตเป็นอยู่เกือบทุกวัน และเป็นสภาพที่เลย์เอาต์มักทำพลาด: ' +
+        'ค่าสามหลักอยู่ข้างบอร์ดที่ดับกับบอร์ดที่ค่าเก่า ไม่มีการเฉลี่ยค่า และไม่มี 0 มาแทนความเงียบ',
+
+      'sheet.cycle.band': 'ไล่ทั้งหกระดับตามลำดับ',
+      'sheet.cycle.say':  'ภาพตัวอย่างทุกใบกำลังไล่ระดับ EPA ทั้งหกตามลำดับ ระดับละประมาณสี่วินาที',
+      'sheet.cycle.note':
+        'แต่ละจอเดินนาฬิกาของตัวเอง ยี่สิบใบจึงไม่ตรงกัน — ' +
+        'ซึ่งเป็นสิ่งที่ทำให้การเปลี่ยนระดับมองเห็นเป็นการเปลี่ยนผ่าน ไม่ใช่แค่เป็นสถานะ',
+
+      'sheet.band.say':  'ภาพตัวอย่างทุกใบกำลังจำลองอากาศระดับ {band} ที่ {range}',
+      'sheet.band.note':
+        'บอร์ดทั้งสามตัวบนภาพตัวอย่างทุกใบถูกสั่งให้อ่านค่ากลาง ๆ ของระดับนี้ ' +
+        'แต่ละจอเลือกตัวเลขตัวแทนของตัวเอง ตัวเลขจึงต่างกัน แต่ระดับไม่ต่าง',
+
+      'sheet.num.say':  'ทุกบอร์ดบนภาพตัวอย่างทุกใบกำลังส่งค่า {v} {unit} ({band})',
+      'sheet.num.note':
+        'ค่านี้ส่งไปที่จอตามที่พิมพ์ แต่ละจอจึงตัดทศนิยมให้เหลือตำแหน่งเดียว ' +
+        'แบบเดียวกับที่ตัดค่าจากเซ็นเซอร์ — {v} จัดอยู่ในระดับ {band}',
+
+      'sheet.err.empty': 'พิมพ์ค่าก่อน — 163.3 กับ 250.5 คือสองค่าที่ควรลอง',
+      'sheet.err.nan':   '“{v}” ไม่ใช่ค่า PM2.5 ใช้ตัวเลขตั้งแต่ 0 ขึ้นไป เช่น 163.3',
+
+      'sheet.demo.say':   'ไม่ใช่ค่าที่วัดได้ — {say}',
+      'sheet.demo.out':   'เลือก <b>ค่าจริง</b> ข้างล่าง หรือโหลดใหม่โดยไม่มี <b>?demo=</b>',
+
+      'sheet.tally.no.one':
+        '1 ใน {total} ใบไม่รับ ?demo= และยังแสดงข้อมูลจริงจาก broker อยู่ — ' +
+        'ใบนั้นติดป้าย LIVE ไว้บนแผ่นนี้ และสิ่งที่มันแสดงคือของจริง',
+      'sheet.tally.no.many':
+        '{n} ใน {total} ใบไม่รับ ?demo= และยังแสดงข้อมูลจริงจาก broker อยู่ — ' +
+        'ใบพวกนั้นติดป้าย LIVE ไว้บนแผ่นนี้ และสิ่งที่มันแสดงคือของจริง',
+      'sheet.tally.unknown':
+        '{n} ใบตรวจจากตรงนี้ไม่ได้ — ยังไม่ถูกเลื่อนเข้ามาในจอ หรือแผ่นนี้ถูกเปิดจาก file:// ' +
+        'ซึ่งทำให้ภาพตัวอย่างเป็นคนละ origin ให้ดูแถบ DEMO ของจอนั้นในภาพย่อของมันเอง',
+      'sheet.tally.ok':
+        'ตรวจแล้ว: ภาพตัวอย่างทั้ง {total} ใบรับค่าไปแล้ว และไม่มีใบไหนต่ออยู่กับ broker',
+
+      /* -------------------------------------------------------- the sign-in */
+      'sheet.signin.h':    'เข้าระบบสำหรับภาพตัวอย่าง',
+      'sheet.signin.u':    'ชื่อผู้ใช้',
+      'sheet.signin.p':    'รหัสผ่าน',
+      'sheet.signin.go':   'โหลดภาพตัวอย่าง',
+      'sheet.signin.note':
+        'เก็บไว้ในเบราว์เซอร์นี้เท่านั้น · ตัวจอเองก็อ่าน <code>?u=&amp;p=</code> ได้ตรง ๆ',
+      'sheet.signin.off':
+        'ตอนนี้เปิดโหมดตัวอย่างอยู่ ไม่มีภาพตัวอย่างใบไหนต่อกับอะไรทั้งนั้น ' +
+        'การล็อกอินจึงยังไม่มีที่ให้ล็อกอิน จนกว่าจะเลือก <b>ค่าจริง</b> ที่แท่นทดสอบข้างบน',
+
+      /* --------------------------------------------------------- the groups */
+      'sheet.g1.h': 'ชุดนักออกแบบ',
+      'sheet.g1.p1':
+        'จอสิบแบบที่พื้นหลัง<b>วาด พิมพ์ หรือทอขึ้นมา</b> — สีโปสเตอร์ แม่พิมพ์ไม้ กริดสวิส ' +
+        'กี่ทอผ้า เลตเตอร์เพรส ไม่มีภาพ raster อยู่ในนั้นสักใบ ทุกรูปทรงเป็นเรขาคณิตของ CSS กับ SVG ' +
+        'ไฟล์แต่ละไฟล์จึงเป็นทั้งภาพและจอแสดงผลในตัวเอง',
+      'sheet.g1.p2':
+        'แต่ละแบบบอกที่มาของตัวเอง เจ็ดแบบเขียนไว้ในคอมเมนต์บนหัวไฟล์ อีกสาม ' +
+        '<span class="dagger">†</span> บอกเป็นวิธีคิดมากกว่าชื่อคน ' +
+        'เครดิตข้างล่างจึงเป็นการตีความวิธีคิดนั้นของแผ่นนี้เอง',
+
+      'sheet.g2.h': 'ชุดกระจก',
+      'sheet.g2.p1':
+        'จอสิบแบบที่<b>ภาพถ่ายคือค่าที่อ่านได้</b> ทั้งหน้าจอเป็นภาพว่าอากาศข้างนอกหน้าตาเป็นยังไง ' +
+        'ที่ระดับแย่ที่สุดซึ่งกำลังวัดได้อยู่ และค่อย ๆ เปลี่ยนภาพเมื่อบอร์ดข้ามเกณฑ์ของ EPA ' +
+        'โดยมีแผงโปร่งแสงสไตล์ iOS ลอยอยู่ข้างบน ถ้าไม่มีบอร์ดไหนส่งข้อมูลเลย ' +
+        'จะไม่มีแบบไหนขึ้นภาพรุ่งเช้าฟ้าใส — ท้องฟ้าที่ไม่รู้ค่าต้องไม่ถูกอ่านว่าอากาศดี',
+      'sheet.g2.p2':
+        'แต่ละแบบอ้าง <span class="dagger">‡</span> ไวยากรณ์ของอินเทอร์เฟซ ไม่ใช่ชื่อคน ' +
+        'ทั้งหมดเป็นการศึกษาภาษาภาพร่วมกัน ไม่ใช่การคารวะนักออกแบบคนไหน ' +
+        'ข้อบังคับที่ยากที่สุดตรงนี้คือความอ่านออก และทุกไฟล์เปิดหัวด้วยการคำนวณคอนทราสต์ของตัวเอง ' +
+        '— เลขอยู่ในคอมเมนต์บนหัวไฟล์แต่ละไฟล์',
+
+      'sheet.key.good':      '<code>img/good.jpg</code> — รุ่งเช้าฟ้าใสเป็นชั้น ๆ เห็นสันเขาไกลสุดขอบฟ้า',
+      'sheet.key.moderate':  '<code>img/moderate.jpg</code> — มีฝ้าบาง ๆ กลบชั้นที่อยู่ไกล',
+      'sheet.key.sensitive': '<code>img/sensitive.jpg</code> — สันเขาไกลแทบหายหมด แสงเหลืองแบน ๆ',
+      'sheet.key.unhealthy': '<code>img/unhealthy.jpg</code> — เหลือแค่สันเขาที่ใกล้ที่สุด อากาศสีเทาอมเหลืองทึบ',
+      'sheet.key.verybad':   '<code>img/verybad.jpg</code> — ขาวโพลนเกือบหมด เหลือแนวต้นไม้จาง ๆ แนวเดียว',
+      'sheet.key.hazardous': '<code>img/hazardous.jpg</code> — ทึบเกือบสนิท มีดวงอาทิตย์แดงเล็ก ๆ ดวงเดียว',
+
+      /* ---------------------------------------------------------- the cards
+         Version titles and designers' names stay in Latin: Munari and Hokusai
+         are not strings, and "Playground" is this file's name for itself. */
+      'sheet.a.open':    'เปิดเวอร์ชัน {n} {name}',
+      'sheet.a.preview': 'ภาพตัวอย่างสดของเวอร์ชัน {n} {name}',
+
+      'v11.by':    'แบบ Bruno Munari',
+      'v11.brief': 'บอร์ดแต่ละตัวเป็นสัตว์ที่วาดด้วยสีโปสเตอร์กับหมึก ค่าที่อ่านได้คือคำบรรยายใต้ภาพ ' +
+                   'สัตว์ที่หลับอยู่ดูยังไงก็ไม่ใช่ตัวที่อากาศสะอาด',
+      'v12.by':    'ตัวอักษรคือสถาปัตยกรรม แบบ Paula Scher <span class="dagger">†</span>',
+      'v12.brief': 'ค่าที่แย่ที่สุดถูกครอปให้เต็มห้อง ทั้งผนังท่วมด้วยสีของระดับนั้น — ' +
+                   'อ่านออกจากอีกฝั่งของห้องโถงก่อนที่จะเห็นตัวเลขด้วยซ้ำ',
+      'v13.by':    'แบบ Saul Bass',
+      'v13.brief': 'พื้นเดียว สีเน้นเดียว วงกลมเดียว ไม่มีตาราง ไม่มีการ์ด ไม่มีสีที่สาม — ' +
+                   'และโปสเตอร์จะกลับสีตัวเองที่สถานะเดียวเท่านั้น คืออันตราย',
+      'v14.by':    'แบบ Hokusai ชุด Thirty-six Views',
+      'v14.brief': 'ภาพพิมพ์แกะไม้สี่แม่พิมพ์ของอากาศ บนกระดาษสีครีม ' +
+                   'สีอื่นทั้งหมดคือการพิมพ์ทับที่คำนวณจากสี่แม่พิมพ์นั้น ตัวเลขเป็นตราประทับอยู่มุมภาพ',
+      'v15.by':    'แบบ Naoto Fukasawa',
+      'v15.brief': 'ตอนปกติไม่มีตัวเลขเลย สีคืออากาศ และมีแต่อากาศสะอาดเท่านั้นที่หายใจ ' +
+                   'บอร์ดที่ดับอยู่เป็นความว่างที่ไม่ขยับ ฟลีตที่ไม่ได้ส่งข้อมูลจึงไม่มีทางถูกอ่านว่าสะอาด',
+      'v16.by':    'กริดสวิส แบบ Josef Müller-Brockmann <span class="dagger">†</span>',
+      'v16.brief': 'ใบวัดค่าสิบสองคอลัมน์บนเส้นฐานเดียว หมึกดำบนกระดาษ ' +
+                   'หมึกแดงสีเดียวจะโผล่ก็ต่อเมื่อถึงระดับ “เริ่มมีผลกับคนแพ้ง่าย” ขึ้นไปเท่านั้น',
+      'v17.by':    'แบบ Charles &amp; Ray Eames',
+      'v17.brief': 'ทุกค่าที่บอร์ดส่งออกมา พร้อม MQTT topic พิมพ์ไว้ข้างใต้ เพราะรอยต่อควรมองเห็นได้ ' +
+                   'ความอบอุ่นมาจากความเคร่งครัด ไม่ใช่จากของประดับ',
+      'v18.by':    'แบบ John Maeda ชุด Laws of Simplicity',
+      'v18.brief': 'ประโยคเดียว ตัวเลขเดียว จอเดียว สิ่งที่ตัดออกไปถูกไล่ไว้ที่ท้ายหน้า ' +
+                   'การตัดออกจึงไม่ถูกเข้าใจผิดว่าเป็นการลืมใส่',
+      'v19.by':    'แบบ Anni Albers',
+      'v19.brief': 'ค่าที่อ่านได้เป็นตัวกำหนดความถี่ของเส้นด้าย อากาศสะอาดคือลายขัดโปร่ง ' +
+                   'อากาศสกปรกอัดเส้นด้ายจนแน่น ส่วนบอร์ดที่ไม่ส่งข้อมูลคือเส้นยืนเปล่า ๆ บนกี่',
+      'v20.by':    'แบบ Edward Tufte <span class="dagger">†</span>',
+      'v20.brief': 'เป็นบันทึกที่ตีพิมพ์ มากกว่าจะเป็นแดชบอร์ด — รูปมีเลขกำกับ มีคำบรรยายจริง ' +
+                   'มีเชิงอรรถ มีเส้นอ้างอิง ไม่มีการเฉลี่ย ไม่มีการปรับให้เรียบ ไม่มีการเติมค่าที่หายไป',
+
+      'v21.by':    'iOS Control Center <span class="dagger">‡</span>',
+      'v21.brief': 'แผงกระจกฝ้าสีเข้มวางทับท้องฟ้า ค่าความทึบของแต่ละพื้นวัดจากไฟล์ JPEG เอง ' +
+                   'ตัวอักษรสีขาวจึงได้คอนทราสต์เกิน 7:1 ไม่ว่าแผงจะไปตกตรงไหน',
+      'v22.by':    'ความลึกแบบ visionOS <span class="dagger">‡</span>',
+      'v22.brief': 'แผงสามระดับความลึก ขยับแบบพารัลแลกซ์อยู่เหนือท้องฟ้า ' +
+                   'ตัวอักษรทั้งหมดสว่างอยู่บนพื้นมืดที่การันตีแล้ว ' +
+                   'ถ้าไม่รู้ค่าของฟลีต ตรงที่ควรเป็นภาพถ่ายจะกลายเป็นความว่าง',
+      'v23.by':    'กระจกเหลว รูปทรงที่ไหลได้ <span class="dagger">‡</span>',
+      'v23.brief': 'ก้อนกระจกเหลวที่ค่อย ๆ เปลี่ยนรูป ใช้ขั้วสีของหมึกแบบเดียว ' +
+                   'มีฉากบังกับผ้าคลุมที่หนาขึ้นตรงจุดที่ภาพถ่ายสว่างขึ้นพอดี',
+      'v24.by':    'หน้าโฮมของ iOS <span class="dagger">‡</span>',
+      'v24.brief': 'เป็นหน้าโฮม ไม่ใช่แดชบอร์ด: แผ่นกระจก 4×4, 2×2 และ 4×2 ' +
+                   'ที่ทำให้มืดเฉพาะพิกเซลที่อยู่ข้างหลังมันเท่านั้น วอลเปเปอร์ส่วนที่โผล่ออกมาจึงยังเป็นภาพถ่ายอยู่',
+      'v25.by':    'the Dynamic Island <span class="dagger">‡</span>',
+      'v25.brief': 'แคปซูลสีดำอันเดียวด้านบนถือสถานะทั้งหมดไว้ พองขึ้นตอนระดับเปลี่ยน แล้วหดกลับ ' +
+                   'ไม่มีอะไรบนจอเป็น UI อีกแล้ว ที่เหลือคือท้องฟ้า',
+      'v26.by':    'หน้า Lock Screen ของ iOS <span class="dagger">‡</span>',
+      'v26.brief': 'วอลเปเปอร์ นาฬิกาตัวบางขนาดใหญ่ วิดเจ็ตอากาศหนึ่งอัน และตัวเลขเล็ก ๆ ของบอร์ดที่เหลือ ' +
+                   'ทั้งหมดอ่านออกได้ด้วยชั้นฉากบังสี่ชั้นที่แยกจากกัน',
+      'v27.by':    'ไวยากรณ์แบบ Apple Weather <span class="dagger">‡</span>',
+      'v27.brief': 'ท้องฟ้าเดียว ตัวเลขเดียว ประโยคเดียว ข้างใต้เป็นแถบของเครื่องวัดตัวอื่น ' +
+                   'กับการ์ดกระจกใบเดียวที่เก็บรายละเอียด ทั้งฉากบังและสีพื้นกระจกปรับใหม่ตามระดับ',
+      'v28.by':    'สำรับแบบ Control Center <span class="dagger">‡</span>',
+      'v28.brief': 'สำรับแผงกระจกเล็ก ๆ วางบนผ้าคลุมค่าคงที่ที่ไม่เคยบางกว่า .68 ' +
+                   'สีของภาพถ่ายจึงยังอ่านออก แต่ความสว่างของมันไปไม่ถึงตัวอักษร',
+      'v29.by':    'เครื่องเล่นเพลงของ iOS <span class="dagger">‡</span>',
+      'v29.brief': 'ภาพถ่ายของระดับนั้นคือปกอัลบั้ม และภาพเดียวกันที่เบลอจนใหญ่คือสีของห้องด้านหลัง ' +
+                   'พออากาศเปลี่ยนระดับ แผ่นก็เปลี่ยน',
+      'v30.by':    'กระจกบานเดียว <span class="dagger">‡</span>',
+      'v30.brief': 'ตัวอักษรทุกตัวบนจออยู่ในกระจกบานมืดบานเดียว คอนทราสต์จึงถูกแก้ครั้งเดียวที่โครงสร้าง ' +
+                   'แทนที่จะต้องมาเถียงกันใหม่ทีละชิ้น',
+
+      /* -------------------------------------------------------- the colophon */
+      'sheet.col.h': 'เกี่ยวกับแผ่นนี้',
+      'sheet.col.p1':
+        'ยี่สิบหน้าตา เอนจินเดียว ทุกเวอร์ชันใช้ชั้น MQTT การอ่าน discovery ' +
+        'การจัดการ availability กับ expiry และการแบ่งระดับตาม EPA จาก ' +
+        '<code>tools/mqtt-dashboard.html</code> ซ้ำกันหมด เปลี่ยนเฉพาะสิ่งที่ตาเห็น ' +
+        'ทั้งยี่สิบไฟล์เป็นไฟล์เดี่ยวที่มีทุกอย่างอยู่ในตัว มี dependency ภายนอกอันเดียวคือ ' +
+        '<code>unpkg.com/mqtt@5.15.2</code> ชุดกระจกเพิ่มไฟล์ JPEG ในเครื่องอีกหกไฟล์ใน ' +
+        '<code>img/</code> — เป็นไฟล์ในเครื่องชุดเดียวของโฟลเดอร์นี้',
+      'sheet.col.p2':
+        '<b>ภาพตัวอย่างโหลดแบบ lazy โดยตั้งใจ</b> ถ้ายี่สิบจอเปิดยี่สิบการเชื่อมต่อ MQTT ' +
+        'พร้อมกันตอนหน้านี้โหลด ก็จะกลายเป็นยี่สิบเซสชันบน broker ของแล็บ ' +
+        'สำหรับหน้าที่ยังไม่มีใครเลื่อนดูเลยด้วยซ้ำ ทุก iframe ใส่ ' +
+        '<span class="mono">loading="lazy"</span> ไว้ จอจะต่อก็ต่อเมื่อภาพย่อของมันเข้ามาในสายตา ' +
+        'เลื่อนลงจนสุดแล้วทั้งยี่สิบจะมีอยู่จริง เปิดหน้าทิ้งไว้แล้วเดินหนี จะมีแค่แถวแรกเท่านั้น',
+      'sheet.col.p3':
+        '<span class="dagger">†</span> เจ็ดในเวอร์ชัน 11–20 บอกที่มาไว้ในไฟล์เอง อีกสาม — ' +
+        '<b>Shout</b>, <b>Module</b> และ <b>Journal</b> — บอกเป็นวิธีคิดมากกว่าชื่อคน ' +
+        'เครดิตตรงนี้จึงเป็นการตีความของแผ่นนี้เอง ไม่ใช่สิ่งที่ไฟล์อ้าง',
+      'sheet.col.p4':
+        '<span class="dagger">‡</span> เวอร์ชัน 21–30 อ้างไวยากรณ์ของอินเทอร์เฟซ ไม่ใช่ชื่อนักออกแบบ: ' +
+        'Control Center, the Lock Screen, the Dynamic Island, ความลึกแบบ visionOS ' +
+        'ทั้งหมดเป็นการศึกษาภาษาภาพร่วมกัน ไม่ใช่การคารวะใครเป็นการส่วนตัว ' +
+        'และไม่มีแบบไหนอ้างว่าเกี่ยวข้องกับบริษัทใด',
+      'sheet.col.p5':
+        '<b>ภาพทั้งหกเป็นภาพที่สร้างขึ้น</b> ไม่ใช่ภาพถ่ายของสถานที่หรือช่วงเวลาจริงที่ไหน ' +
+        'มันแสดงว่าอากาศแต่ละระดับของ EPA มองจากขอบหุบเขาแล้วเป็นยังไงเท่านั้น ไม่ใช่หลักฐาน ' +
+        'และไม่มีจอไหนเสนอภาพพวกนี้เป็นบันทึกของวันใดวันหนึ่ง',
+      'sheet.col.p6':
+        'บั๊กสี่ตัวเคยหลุดไปกับจอรุ่นแรก และถูกออกแบบให้ไม่เกิดในทุกเวอร์ชันที่นี่: ' +
+        'CSS ที่แปลงเป็นตัวพิมพ์ใหญ่ทำให้ µg/m³ กลายเป็น mg/m³, ' +
+        'ค่าที่กำหนดขนาดด้วยหน่วย viewport ทำให้ <span class="mono">163.3</span> ถูกตัดเป็นสองบรรทัด, ' +
+        'บอร์ดทั้งสามใช้ชื่อ discovery ว่า <span class="mono">"PM2.5"</span> เหมือนกันหมด ' +
+        'และการ subscribe แบบ wildcard — <code>README.md</code> ที่อยู่ข้าง ๆ ไฟล์นี้เล่าไว้ครบ',
+      'sheet.col.p7':
+        '<b>โหมดตัวอย่างเปิดจาก URL เท่านั้น และประกาศตัวทุกที่ที่มันเปิดอยู่</b> ' +
+        'แท่นทดสอบด้านบนเขียน <code>?demo=</code> ลงในช่องที่อยู่เว็บของหน้านี้ และลงใน ' +
+        '<span class="mono">src</span> ของภาพตัวอย่างทุกใบ ไม่มีที่อื่นอีก — ไม่มีการจำค่า ' +
+        'ไม่มีค่าเริ่มต้น และไม่รอดข้ามการโหลดใหม่ที่ไม่มีพารามิเตอร์นี้ ระหว่างที่มันเปิดอยู่ ' +
+        'แผ่นนี้จะขึ้นแถบเตือนลายทางติดอยู่ด้านบนตลอด บอกค่าที่กำลังจำลองแบบเป๊ะ ๆ ' +
+        'ภาพย่อทุกใบติดป้าย <b>DEMO</b> และชื่อแท็บขึ้นต้นด้วยคำนั้น ' +
+        'จอที่อยู่ในโหมดตัวอย่าง<b>จะไม่เปิดการเชื่อมต่อ broker เลย</b> ' +
+        'เพราะนี่คือจอสุขภาพสำหรับเด็ก หน้าจอเดียวต้องไม่มีทางถือค่าจริงกับค่าที่แต่งขึ้นพร้อมกันได้ ' +
+        'อากาศสะอาดปลอม ๆ บนจอคือวิธีที่เด็กคนหนึ่งถูกส่งออกไปข้างนอกในวันที่อากาศอันตราย',
+      'sheet.col.p8':
+        'ภาพย่อจะไม่เคยว่างเปล่าเวลามีอะไรผิด จอที่ต่อ broker ไม่ได้ หรือถูก broker ปฏิเสธ ' +
+        'จะแทนที่ทั้งหน้าจอด้วยประโยคเดียวที่บอกว่าต้องทำอะไร — ' +
+        'ประโยคเดียวกันยี่สิบใบบนแผ่นนี้จึงแปลว่า broker ขอให้ล็อกอิน ไม่ใช่แผ่นนี้พัง ' +
+        'เปิดใหม่ด้วย <span class="mono">?u=&amp;p=</span> ใช้ช่องเข้าระบบด้านบน ' +
+        'หรือเปิดจอสักใบแล้วกด <b>s</b>'
+    }
+  };
+
+  var LANG_KEY = 'wall.sheet.lang.v1';
+
+  // ?lang= wins (the sheet is configured by its URL, and that is also how it
+  // hands its language to the twenty previews), then what this browser was last
+  // set to, then what the browser itself asks for, then English.
+  var pinned = false;
+  function pickLang() {
+    var q = null;
+    try { q = new URLSearchParams(location.search).get('lang'); } catch (e) {}
+    if (q === 'th' || q === 'en') { pinned = true; return q; }
+    var s = null;
+    try { s = localStorage.getItem(LANG_KEY); } catch (e) {}   // throws in private mode
+    if (s === 'th' || s === 'en') return s;
+    var n = '';
+    try { n = navigator.language || (navigator.languages && navigator.languages[0]) || ''; } catch (e) {}
+    if (String(n).toLowerCase().indexOf('th') === 0) return 'th';
+    return 'en';
+  }
+
+  var LANG = pickLang();
+  var subs = [];
+
+  // Never returns "undefined" on the sheet: a missing key falls back to English,
+  // then to the key itself, so a gap is loud in dev and legible in the room.
+  function t(key, vars) {
+    var s = (STR[LANG] || STR.en)[key];
+    if (s == null) s = STR.en[key];
+    if (s == null) s = key;
+    s = String(s);
+    if (vars) s = s.replace(/\{(\w+)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(vars, k) && vars[k] != null ? String(vars[k]) : m;
+    });
+    return s;
+  }
+
+  window.WallLang = {
+    t: t,
+    get: function () { return LANG; },
+    isPinned: function () { return pinned; },
+    // Thai has no full stop. Joining clauses with ". " is an English habit that
+    // reads as a typo in Thai, where a space already ends the clause.
+    join: function () { return LANG === 'th' ? ' ' : '. '; },
+    end:  function () { return LANG === 'th' ? '' : '.'; },
+    on: function (fn) { subs.push(fn); },
+    set: function (l) {
+      if ((l !== 'th' && l !== 'en') || l === LANG) return;
+      LANG = l;
+      pinned = true;                                        // a deliberate choice: say so in the URL
+      try { localStorage.setItem(LANG_KEY, l); } catch (e) {}   // private mode: still switches, just forgets
+      for (var i = 0; i < subs.length; i++) { subs[i](LANG); }
+    }
+  };
+}());
+</script>
 
 <!-- DEMO MARKER — inert on a real sheet. It is hidden here in the markup and the ONLY
      thing that ever unhides it is ?demo= in the address bar, set by the bench below or
@@ -395,13 +1241,22 @@ html.demo .shotwrap::after{
   <span class="tag">DEMO</span>
   <span class="thai">&#3605;&#3633;&#3623;&#3629;&#3618;&#3656;&#3634;&#3591;</span>
   <span class="say" id="idemo-say"></span>
-  <span class="out">choose <b>Live</b> below, or reload without <b>?demo=</b></span>
+  <span class="out" data-tx="sheet.demo.out">choose <b>Live</b> below, or reload without <b>?demo=</b></span>
 </div>
 
 <header class="masthead">
-  <p class="eyebrow">Kit4Kids &middot; PM2.5 &middot; Chiang Mai</p>
-  <h1>Twenty walls for one question</h1>
-  <p class="lede">Twenty wall displays built on one tested MQTT engine, each answering
+  <div class="mast-top">
+    <p class="eyebrow" data-t="sheet.eyebrow">Kit4Kids &middot; PM2.5 &middot; Chiang Mai</p>
+    <!-- The sheet's language, and the twenty previews' language with it. Pressing TH
+         re-points every iframe at ?lang=th; see applyFrames() in the bench. -->
+    <div class="langsw" id="langsw" role="group" aria-label="Language">
+      <button type="button" data-l="th" aria-pressed="false">TH</button>
+      <span class="bar" aria-hidden="true">/</span>
+      <button type="button" data-l="en" aria-pressed="true">EN</button>
+    </div>
+  </div>
+  <h1 data-t="sheet.h1">Twenty walls for one question</h1>
+  <p class="lede" data-tx="sheet.lede">Twenty wall displays built on one tested MQTT engine, each answering
     <b>&ldquo;should we go outside?&rdquo;</b> in plain words before it shows a number.
     Ten draw the air; ten photograph it. Every thumbnail below is the real page running
     &mdash; not a screenshot: live against the lab broker, or, when the bench below is
@@ -409,29 +1264,83 @@ html.demo .shotwrap::after{
     full size.</p>
 
   <dl class="facts">
-    <div><dt>Boards</dt><dd><b>DBK-001</b>, <b>DBK-002</b>, <b>DBK-010</b> &mdash; normally one live
+    <div><dt data-t="sheet.fact.boards">Boards</dt><dd data-tx="sheet.fact.boards.d"><b>DBK-001</b>, <b>DBK-002</b>, <b>DBK-010</b> &mdash; normally one live
       and two dark. Every version draws that mixed state on purpose; none of them lets a zero
       stand in for a sensor that has stopped speaking.</dd></div>
-    <div><dt>Source</dt><dd>Home Assistant MQTT discovery over WebSocket, port <b>1884</b>.
+    <div><dt data-t="sheet.fact.source">Source</dt><dd data-tx="sheet.fact.source.d">Home Assistant MQTT discovery over WebSocket, port <b>1884</b>.
       Board identity is parsed out of <span class="mono">state_topic</span>, never from the
       discovery name &mdash; that name is <span class="mono">&quot;PM2.5&quot;</span> on all three.</dd></div>
-    <div><dt>Previews</dt><dd>All twenty are <b>live</b>, not screenshots. Each iframe is
+    <div><dt data-t="sheet.fact.previews">Previews</dt><dd data-tx="sheet.fact.previews.d">All twenty are <b>live</b>, not screenshots. Each iframe is
       <span class="mono">loading=&quot;lazy&quot;</span>, so a wall opens its own broker connection
       only when its thumbnail scrolls into view &mdash; twenty MQTT connections never open at
       once, and reaching the bottom of this page is what brings the last of them up. In demo
       mode not one of them opens a connection at all.</dd></div>
-    <div><dt>Settings</dt><dd>None here for the walls, and none on the walls at startup. Each wall
+    <div><dt data-t="sheet.fact.settings">Settings</dt><dd data-tx="sheet.fact.settings.d">None here for the walls, and none on the walls at startup. Each wall
       connects by itself and hides its settings behind pressing <b>s</b>. If the broker wants a
       login, open this sheet once with <span class="mono">?u=&amp;p=</span> and every preview
       inherits it &mdash; the hint is then wiped from the address bar.</dd></div>
   </dl>
 
-  <p class="scale"><b>US EPA PM2.5 breakpoints</b>, &micro;g/m&sup3; &mdash; the standard every
+  <p class="scale" data-tx="sheet.scale"><b>US EPA PM2.5 scale</b>, &micro;g/m&sup3; &mdash; the standard every
     version bands against:
     0&ndash;12.0 Good<span class="sep">&middot;</span>12.1&ndash;35.4 Moderate<span class="sep">&middot;</span>35.5&ndash;55.4
-    Unhealthy for Sensitive Groups<span class="sep">&middot;</span>55.5&ndash;150.4 Unhealthy<span class="sep">&middot;</span>150.5&ndash;250.4
-    Very Unhealthy<span class="sep">&middot;</span>250.5 and above Hazardous.</p>
+    Unhealthy for sensitive groups<span class="sep">&middot;</span>55.5&ndash;150.4 Unhealthy<span class="sep">&middot;</span>150.5&ndash;250.4
+    Very unhealthy<span class="sep">&middot;</span>250.5 and above Hazardous.</p>
 </header>
+
+<!-- ===================================================================== BAND BENCH
+     Every wall accepts ?demo=<number|band|cycle|mixed> and opens no socket while it is
+     set. This drives all twenty at once so a layout can be compared at Unhealthy and
+     Hazardous, which is where they break, instead of at the 0 µg/m³ the fleet reports
+     for most of the year.
+
+     The bench is a control, not a state: it writes ?demo= into this page's address bar
+     and into each preview's src, and nowhere else. Nothing here touches localStorage. -->
+<section class="rig" aria-labelledby="rig-h">
+  <h2 id="rig-h">Band bench &mdash; drive all twenty previews at once</h2>
+  <p class="why">The only live board reads <b>0 &micro;g/m&sup3;</b> and two are dark, so no
+    layout here can be judged at the readings that matter. Pick a band and every preview is
+    handed the same simulated value through <code>?demo=</code>. It is
+    <b>&#3605;&#3633;&#3623;&#3629;&#3618;&#3656;&#3634;&#3591; &mdash; made-up air, never a
+    measurement</b>: a wall in demo mode opens no broker connection, so a screen can never
+    carry a real reading and a fake one at the same time. Nothing is remembered; the choice
+    lives in the address bar and dies with a reload.</p>
+
+  <div class="rigrow" role="group" aria-label="EPA band to simulate">
+    <span class="riglab">BAND</span>
+    <button class="b" type="button" data-live="1" aria-pressed="true">Live</button>
+    <button class="b warn" type="button" data-demo="good" aria-pressed="false">Good</button>
+    <button class="b warn" type="button" data-demo="moderate" aria-pressed="false">Moderate</button>
+    <button class="b warn" type="button" data-demo="sensitive" aria-pressed="false">Sensitive</button>
+    <button class="b warn" type="button" data-demo="unhealthy" aria-pressed="false">Unhealthy</button>
+    <button class="b warn" type="button" data-demo="verybad" aria-pressed="false">Very Unhealthy</button>
+    <button class="b warn" type="button" data-demo="hazardous" aria-pressed="false">Hazardous</button>
+    <button class="b warn" type="button" data-demo="mixed" aria-pressed="false">Mixed fleet</button>
+    <button class="b warn" type="button" data-demo="cycle" aria-pressed="false">Cycle all six</button>
+  </div>
+
+  <div class="rigrow">
+    <span class="riglab">EXACT</span>
+    <input class="num" id="rig-n" type="text" inputmode="decimal" autocomplete="off"
+           spellcheck="false" placeholder="163.3"
+           aria-label="exact PM2.5 value to simulate, in micrograms per cubic metre">
+    <button class="b" type="button" id="rig-go">Show this value</button>
+    <button class="b warn" type="button" data-demo="163.3" aria-pressed="false">163.3</button>
+    <button class="b warn" type="button" data-demo="250.5" aria-pressed="false">250.5</button>
+    <span class="righint">The two that break layouts: <b>163.3</b> once wrapped mid-digit into
+      &ldquo;163.&rdquo; and &ldquo;3&rdquo;, and <b>250.5</b> is the first value that is
+      Hazardous rather than Very Unhealthy &mdash; five glyphs and a band edge in one string.</span>
+  </div>
+
+  <div class="readout" id="rig-out" role="status" aria-live="polite">
+    <span class="pill" id="rig-pill">PREVIEWS&#8202;: LIVE</span>
+    <span><span class="k">BAND</span> <span class="band" id="rig-band">&mdash;</span></span>
+    <span><span class="k">RANGE</span> <span class="rng" id="rig-range">&mdash;</span></span>
+    <span class="note" id="rig-note">Previews are connected to the broker. Whatever they show
+      is what a sensor actually said.</span>
+    <span class="tally" id="rig-tally"></span>
+  </div>
+</section>
 
 <!-- Preview sign-in. The walls each accept ?u=&p= so a tablet can be pointed once; the
      contact sheet reuses that to bring the previews up against a broker that wants a login.
@@ -443,6 +1352,8 @@ html.demo .shotwrap::after{
   <input id="pv-p" type="password" placeholder="password" autocomplete="off">
   <button id="pv-go">Load previews</button>
   <span class="note">stays in this browser &middot; the walls also read <code>?u=&amp;p=</code> directly</span>
+  <span class="offnote">Demo mode is on, so no preview is connecting to anything &mdash; a login
+    has nothing to log into until you choose <b>Live</b> on the bench above.</span>
 </div>
 <script>
 (function () {
@@ -453,6 +1364,11 @@ html.demo .shotwrap::after{
   u.value = ls(U) || ''; p.value = ls(P) || '';
   function apply() {
     var qs = u.value ? '?u=' + encodeURIComponent(u.value) + '&p=' + encodeURIComponent(p.value) : '';
+    // The band bench at the bottom of this page is the single writer of every preview's
+    // src once it has booted, because the src it composes may also carry ?demo=. Hand the
+    // credentials to it rather than overwriting its work and dropping the demo flag —
+    // that would put live air behind a DEMO banner, which is the one thing forbidden here.
+    if (window.WallBench) { window.WallBench.setCarry(qs); return; }
     [].forEach.call(document.querySelectorAll('iframe[data-wall]'), function (f) {
       // Re-point, but stay lazy. Twenty eager iframes would open twenty broker
       // connections in one breath, which is exactly what loading="lazy" is here
@@ -486,7 +1402,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v11-playground.html" src="v11-playground.html" loading="lazy"
+      <iframe data-wall="v11-playground.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 11, Playground"></iframe>
       <a class="hit" data-wall="v11-playground.html" href="v11-playground.html"
@@ -495,8 +1411,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">11</span>
         <span class="nm"><a data-wall="v11-playground.html" href="v11-playground.html">Playground</a></span></p>
-      <p class="by">after Bruno Munari</p>
-      <p class="brief">Each board is a drawn creature in poster paint and ink; the reading is
+      <p class="by" data-tx="v11.by">after Bruno Munari</p>
+      <p class="brief" data-t="v11.brief">Each board is a drawn creature in poster paint and ink; the reading is
         its caption, and a sleeping creature is unmistakably not a clean one.</p>
       <p class="file"><a data-wall="v11-playground.html" href="v11-playground.html">v11-playground.html</a> &middot; 67 KB</p>
     </figcaption>
@@ -504,7 +1420,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v12-shout.html" src="v12-shout.html" loading="lazy"
+      <iframe data-wall="v12-shout.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 12, Shout"></iframe>
       <a class="hit" data-wall="v12-shout.html" href="v12-shout.html"
@@ -513,8 +1429,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">12</span>
         <span class="nm"><a data-wall="v12-shout.html" href="v12-shout.html">Shout</a></span></p>
-      <p class="by">type as architecture, after Paula Scher <span class="dagger">&dagger;</span></p>
-      <p class="brief">The worst live reading cropped to fill the room, with the whole wall
+      <p class="by" data-tx="v12.by">type as architecture, after Paula Scher <span class="dagger">&dagger;</span></p>
+      <p class="brief" data-t="v12.brief">The worst live reading cropped to fill the room, with the whole wall
         flooded in the colour of its band &mdash; readable across a hall before a digit is.</p>
       <p class="file"><a data-wall="v12-shout.html" href="v12-shout.html">v12-shout.html</a> &middot; 58 KB</p>
     </figcaption>
@@ -522,7 +1438,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v13-one-mark.html" src="v13-one-mark.html" loading="lazy"
+      <iframe data-wall="v13-one-mark.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 13, One Mark"></iframe>
       <a class="hit" data-wall="v13-one-mark.html" href="v13-one-mark.html"
@@ -531,8 +1447,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">13</span>
         <span class="nm"><a data-wall="v13-one-mark.html" href="v13-one-mark.html">One Mark</a></span></p>
-      <p class="by">after Saul Bass</p>
-      <p class="brief">One ground, one accent, one circle. No table, no card, no third hue &mdash;
+      <p class="by" data-tx="v13.by">after Saul Bass</p>
+      <p class="brief" data-t="v13.brief">One ground, one accent, one circle. No table, no card, no third hue &mdash;
         and the poster inverts itself for exactly one state, Hazardous.</p>
       <p class="file"><a data-wall="v13-one-mark.html" href="v13-one-mark.html">v13-one-mark.html</a> &middot; 66 KB</p>
     </figcaption>
@@ -540,7 +1456,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v14-haze.html" src="v14-haze.html" loading="lazy"
+      <iframe data-wall="v14-haze.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 14, Haze"></iframe>
       <a class="hit" data-wall="v14-haze.html" href="v14-haze.html"
@@ -549,8 +1465,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">14</span>
         <span class="nm"><a data-wall="v14-haze.html" href="v14-haze.html">Haze</a></span></p>
-      <p class="by">after Hokusai, Thirty-six Views</p>
-      <p class="brief">A four-block woodcut of the air on cream paper. Every other colour is an
+      <p class="by" data-tx="v14.by">after Hokusai, Thirty-six Views</p>
+      <p class="brief" data-t="v14.brief">A four-block woodcut of the air on cream paper. Every other colour is an
         overprint computed from those blocks; the number is a seal in the corner.</p>
       <p class="file"><a data-wall="v14-haze.html" href="v14-haze.html">v14-haze.html</a> &middot; 77 KB</p>
     </figcaption>
@@ -558,7 +1474,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v15-ambient.html" src="v15-ambient.html" loading="lazy"
+      <iframe data-wall="v15-ambient.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 15, Ambient"></iframe>
       <a class="hit" data-wall="v15-ambient.html" href="v15-ambient.html"
@@ -567,8 +1483,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">15</span>
         <span class="nm"><a data-wall="v15-ambient.html" href="v15-ambient.html">Ambient</a></span></p>
-      <p class="by">after Naoto Fukasawa</p>
-      <p class="brief">No numerals at rest: colour is the air, and only clean air breathes. A dark
+      <p class="by" data-tx="v15.by">after Naoto Fukasawa</p>
+      <p class="brief" data-t="v15.brief">No numerals at rest: colour is the air, and only clean air breathes. A dark
         board is a motionless void, so an offline fleet can never read as clean.</p>
       <p class="file"><a data-wall="v15-ambient.html" href="v15-ambient.html">v15-ambient.html</a> &middot; 66 KB</p>
     </figcaption>
@@ -576,7 +1492,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v16-module.html" src="v16-module.html" loading="lazy"
+      <iframe data-wall="v16-module.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 16, Module"></iframe>
       <a class="hit" data-wall="v16-module.html" href="v16-module.html"
@@ -585,8 +1501,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">16</span>
         <span class="nm"><a data-wall="v16-module.html" href="v16-module.html">Module</a></span></p>
-      <p class="by">Swiss grid, after Josef M&uuml;ller-Brockmann <span class="dagger">&dagger;</span></p>
-      <p class="brief">A twelve-column measurement sheet on one baseline, black on paper. The single
+      <p class="by" data-tx="v16.by">Swiss grid, after Josef M&uuml;ller-Brockmann <span class="dagger">&dagger;</span></p>
+      <p class="brief" data-t="v16.brief">A twelve-column measurement sheet on one baseline, black on paper. The single
         red ink appears only from &ldquo;Unhealthy for Sensitive Groups&rdquo; upward.</p>
       <p class="file"><a data-wall="v16-module.html" href="v16-module.html">v16-module.html</a> &middot; 77 KB</p>
     </figcaption>
@@ -594,7 +1510,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v17-workbench.html" src="v17-workbench.html" loading="lazy"
+      <iframe data-wall="v17-workbench.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 17, Workbench"></iframe>
       <a class="hit" data-wall="v17-workbench.html" href="v17-workbench.html"
@@ -603,8 +1519,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">17</span>
         <span class="nm"><a data-wall="v17-workbench.html" href="v17-workbench.html">Workbench</a></span></p>
-      <p class="by">after Charles &amp; Ray Eames</p>
-      <p class="brief">Every value the boards publish, each with its MQTT topic printed underneath,
+      <p class="by" data-tx="v17.by">after Charles &amp; Ray Eames</p>
+      <p class="brief" data-t="v17.brief">Every value the boards publish, each with its MQTT topic printed underneath,
         because a joint should be visible. Warmth from rigour, not decoration.</p>
       <p class="file"><a data-wall="v17-workbench.html" href="v17-workbench.html">v17-workbench.html</a> &middot; 90 KB</p>
     </figcaption>
@@ -612,7 +1528,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v18-subtract.html" src="v18-subtract.html" loading="lazy"
+      <iframe data-wall="v18-subtract.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 18, Subtract"></iframe>
       <a class="hit" data-wall="v18-subtract.html" href="v18-subtract.html"
@@ -621,8 +1537,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">18</span>
         <span class="nm"><a data-wall="v18-subtract.html" href="v18-subtract.html">Subtract</a></span></p>
-      <p class="by">after John Maeda, Laws of Simplicity</p>
-      <p class="brief">One sentence, one number, one screen. What was removed is listed in the
+      <p class="by" data-tx="v18.by">after John Maeda, Laws of Simplicity</p>
+      <p class="brief" data-t="v18.brief">One sentence, one number, one screen. What was removed is listed in the
         footer, so a subtraction can never be mistaken for an omission.</p>
       <p class="file"><a data-wall="v18-subtract.html" href="v18-subtract.html">v18-subtract.html</a> &middot; 56 KB</p>
     </figcaption>
@@ -630,7 +1546,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v19-weave.html" src="v19-weave.html" loading="lazy"
+      <iframe data-wall="v19-weave.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 19, Weave"></iframe>
       <a class="hit" data-wall="v19-weave.html" href="v19-weave.html"
@@ -639,8 +1555,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">19</span>
         <span class="nm"><a data-wall="v19-weave.html" href="v19-weave.html">Weave</a></span></p>
-      <p class="by">after Anni Albers</p>
-      <p class="brief">The reading sets the sett of the cloth: clean air is an open plain weave,
+      <p class="by" data-tx="v19.by">after Anni Albers</p>
+      <p class="brief" data-t="v19.brief">The reading sets the sett of the cloth: clean air is an open plain weave,
         dirty air packs the threads shut, and an offline board is bare warp on the loom.</p>
       <p class="file"><a data-wall="v19-weave.html" href="v19-weave.html">v19-weave.html</a> &middot; 71 KB</p>
     </figcaption>
@@ -648,7 +1564,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v20-journal.html" src="v20-journal.html" loading="lazy"
+      <iframe data-wall="v20-journal.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 20, Journal"></iframe>
       <a class="hit" data-wall="v20-journal.html" href="v20-journal.html"
@@ -657,8 +1573,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">20</span>
         <span class="nm"><a data-wall="v20-journal.html" href="v20-journal.html">Journal</a></span></p>
-      <p class="by">after Edward Tufte <span class="dagger">&dagger;</span></p>
-      <p class="brief">A published record rather than a dashboard &mdash; numbered figures, real
+      <p class="by" data-tx="v20.by">after Edward Tufte <span class="dagger">&dagger;</span></p>
+      <p class="brief" data-t="v20.brief">A published record rather than a dashboard &mdash; numbered figures, real
         captions, footnotes, a reference line. Nothing averaged, smoothed or filled in.</p>
       <p class="file"><a data-wall="v20-journal.html" href="v20-journal.html">v20-journal.html</a> &middot; 89 KB</p>
     </figcaption>
@@ -694,7 +1610,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v21-frosted.html" src="v21-frosted.html" loading="lazy"
+      <iframe data-wall="v21-frosted.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 21, Frosted"></iframe>
       <a class="hit" data-wall="v21-frosted.html" href="v21-frosted.html"
@@ -703,8 +1619,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">21</span>
         <span class="nm"><a data-wall="v21-frosted.html" href="v21-frosted.html">Frosted</a></span></p>
-      <p class="by">iOS Control Center <span class="dagger">&Dagger;</span></p>
-      <p class="brief">Modules of dark frosted glass over the sky, each ground&rsquo;s tint alpha
+      <p class="by" data-tx="v21.by">iOS Control Center <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v21.brief">Modules of dark frosted glass over the sky, each ground&rsquo;s tint alpha
         measured from the JPEG itself so white type clears 7:1 wherever a tile lands.</p>
       <p class="file"><a data-wall="v21-frosted.html" href="v21-frosted.html">v21-frosted.html</a> &middot; 66 KB</p>
     </figcaption>
@@ -712,7 +1628,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v22-spatial.html" src="v22-spatial.html" loading="lazy"
+      <iframe data-wall="v22-spatial.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 22, Spatial"></iframe>
       <a class="hit" data-wall="v22-spatial.html" href="v22-spatial.html"
@@ -721,8 +1637,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">22</span>
         <span class="nm"><a data-wall="v22-spatial.html" href="v22-spatial.html">Spatial</a></span></p>
-      <p class="by">visionOS depth <span class="dagger">&Dagger;</span></p>
-      <p class="brief">Panels at three depths with parallax over the sky. All type is luminous on a
+      <p class="by" data-tx="v22.by">visionOS depth <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v22.brief">Panels at three depths with parallax over the sky. All type is luminous on a
         guaranteed dark field, and an unknown fleet gets a void where the photograph would be.</p>
       <p class="file"><a data-wall="v22-spatial.html" href="v22-spatial.html">v22-spatial.html</a> &middot; 62 KB</p>
     </figcaption>
@@ -730,7 +1646,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v23-liquid.html" src="v23-liquid.html" loading="lazy"
+      <iframe data-wall="v23-liquid.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 23, Liquid"></iframe>
       <a class="hit" data-wall="v23-liquid.html" href="v23-liquid.html"
@@ -739,8 +1655,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">23</span>
         <span class="nm"><a data-wall="v23-liquid.html" href="v23-liquid.html">Liquid</a></span></p>
-      <p class="by">liquid glass, fluid morphology <span class="dagger">&Dagger;</span></p>
-      <p class="brief">A slowly morphing blob of fluid glass. One ink polarity only, with a scrim
+      <p class="by" data-tx="v23.by">liquid glass, fluid morphology <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v23.brief">A slowly morphing blob of fluid glass. One ink polarity only, with a scrim
         and a veil that grow heavier exactly where the photograph grows brighter.</p>
       <p class="file"><a data-wall="v23-liquid.html" href="v23-liquid.html">v23-liquid.html</a> &middot; 64 KB</p>
     </figcaption>
@@ -748,7 +1664,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v24-widgets.html" src="v24-widgets.html" loading="lazy"
+      <iframe data-wall="v24-widgets.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 24, Widgets"></iframe>
       <a class="hit" data-wall="v24-widgets.html" href="v24-widgets.html"
@@ -757,8 +1673,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">24</span>
         <span class="nm"><a data-wall="v24-widgets.html" href="v24-widgets.html">Widgets</a></span></p>
-      <p class="by">the iOS home screen <span class="dagger">&Dagger;</span></p>
-      <p class="brief">A home screen, not a dashboard: 4&times;4, 2&times;2 and 4&times;2 glass tiles
+      <p class="by" data-tx="v24.by">the iOS home screen <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v24.brief">A home screen, not a dashboard: 4&times;4, 2&times;2 and 4&times;2 glass tiles
         that darken only the pixels behind them, so the exposed wallpaper stays a photograph.</p>
       <p class="file"><a data-wall="v24-widgets.html" href="v24-widgets.html">v24-widgets.html</a> &middot; 64 KB</p>
     </figcaption>
@@ -766,7 +1682,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v25-island.html" src="v25-island.html" loading="lazy"
+      <iframe data-wall="v25-island.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 25, Island"></iframe>
       <a class="hit" data-wall="v25-island.html" href="v25-island.html"
@@ -775,8 +1691,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">25</span>
         <span class="nm"><a data-wall="v25-island.html" href="v25-island.html">Island</a></span></p>
-      <p class="by">the Dynamic Island <span class="dagger">&Dagger;</span></p>
-      <p class="brief">One black pill at the top carries the entire state and swells when the band
+      <p class="by" data-tx="v25.by">the Dynamic Island <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v25.brief">One black pill at the top carries the entire state and swells when the band
         changes, then contracts. Nothing else on the screen is UI &mdash; the rest is the sky.</p>
       <p class="file"><a data-wall="v25-island.html" href="v25-island.html">v25-island.html</a> &middot; 57 KB</p>
     </figcaption>
@@ -784,7 +1700,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v26-lockscreen.html" src="v26-lockscreen.html" loading="lazy"
+      <iframe data-wall="v26-lockscreen.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 26, Lockscreen"></iframe>
       <a class="hit" data-wall="v26-lockscreen.html" href="v26-lockscreen.html"
@@ -793,8 +1709,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">26</span>
         <span class="nm"><a data-wall="v26-lockscreen.html" href="v26-lockscreen.html">Lockscreen</a></span></p>
-      <p class="by">the iOS Lock Screen <span class="dagger">&Dagger;</span></p>
-      <p class="brief">Wallpaper, a large light clock, one air widget and small complications for
+      <p class="by" data-tx="v26.by">the iOS Lock Screen <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v26.brief">Wallpaper, a large light clock, one air widget and small complications for
         the rest of the fleet, held legible by four independent scrim layers.</p>
       <p class="file"><a data-wall="v26-lockscreen.html" href="v26-lockscreen.html">v26-lockscreen.html</a> &middot; 50 KB</p>
     </figcaption>
@@ -802,7 +1718,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v27-weather.html" src="v27-weather.html" loading="lazy"
+      <iframe data-wall="v27-weather.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 27, Weather"></iframe>
       <a class="hit" data-wall="v27-weather.html" href="v27-weather.html"
@@ -811,8 +1727,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">27</span>
         <span class="nm"><a data-wall="v27-weather.html" href="v27-weather.html">Weather</a></span></p>
-      <p class="by">the Apple Weather grammar <span class="dagger">&Dagger;</span></p>
-      <p class="brief">One sky, one number, one sentence; beneath it a strip of the other monitors
+      <p class="by" data-tx="v27.by">the Apple Weather grammar <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v27.brief">One sky, one number, one sentence; beneath it a strip of the other monitors
         and a single glass card of detail. Scrim and glass fill both retune per band.</p>
       <p class="file"><a data-wall="v27-weather.html" href="v27-weather.html">v27-weather.html</a> &middot; 68 KB</p>
     </figcaption>
@@ -820,7 +1736,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v28-tiles.html" src="v28-tiles.html" loading="lazy"
+      <iframe data-wall="v28-tiles.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 28, Tiles"></iframe>
       <a class="hit" data-wall="v28-tiles.html" href="v28-tiles.html"
@@ -829,8 +1745,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">28</span>
         <span class="nm"><a data-wall="v28-tiles.html" href="v28-tiles.html">Tiles</a></span></p>
-      <p class="by">a Control Center deck <span class="dagger">&Dagger;</span></p>
-      <p class="brief">A deck of small glass modules over a fixed veil that never thins below .68,
+      <p class="by" data-tx="v28.by">a Control Center deck <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v28.brief">A deck of small glass modules over a fixed veil that never thins below .68,
         so the photograph&rsquo;s colour still reads but its brightness cannot reach the type.</p>
       <p class="file"><a data-wall="v28-tiles.html" href="v28-tiles.html">v28-tiles.html</a> &middot; 60 KB</p>
     </figcaption>
@@ -838,7 +1754,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v29-nowplaying.html" src="v29-nowplaying.html" loading="lazy"
+      <iframe data-wall="v29-nowplaying.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 29, Now Playing"></iframe>
       <a class="hit" data-wall="v29-nowplaying.html" href="v29-nowplaying.html"
@@ -847,8 +1763,8 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">29</span>
         <span class="nm"><a data-wall="v29-nowplaying.html" href="v29-nowplaying.html">Now Playing</a></span></p>
-      <p class="by">the iOS music player <span class="dagger">&Dagger;</span></p>
-      <p class="brief">The band photograph is the album art, and the same frame blurred huge is the
+      <p class="by" data-tx="v29.by">the iOS music player <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v29.brief">The band photograph is the album art, and the same frame blurred huge is the
         room colour behind it. When the air changes band, the record changes.</p>
       <p class="file"><a data-wall="v29-nowplaying.html" href="v29-nowplaying.html">v29-nowplaying.html</a> &middot; 62 KB</p>
     </figcaption>
@@ -856,7 +1772,7 @@ html.demo .shotwrap::after{
 
   <figure class="card">
     <div class="shotwrap">
-      <iframe data-wall="v30-focus.html" src="v30-focus.html" loading="lazy"
+      <iframe data-wall="v30-focus.html" loading="lazy"
               scrolling="no" tabindex="-1" aria-hidden="true"
               title="Live preview of version 30, Focus"></iframe>
       <a class="hit" data-wall="v30-focus.html" href="v30-focus.html"
@@ -865,14 +1781,52 @@ html.demo .shotwrap::after{
     <figcaption>
       <p class="line"><span class="no">30</span>
         <span class="nm"><a data-wall="v30-focus.html" href="v30-focus.html">Focus</a></span></p>
-      <p class="by">one pane of glass <span class="dagger">&Dagger;</span></p>
-      <p class="brief">Every character on the wall lives inside a single dark pane, so contrast is
+      <p class="by" data-tx="v30.by">one pane of glass <span class="dagger">&Dagger;</span></p>
+      <p class="brief" data-t="v30.brief">Every character on the wall lives inside a single dark pane, so contrast is
         solved once, structurally, instead of being re-argued element by element.</p>
       <p class="file"><a data-wall="v30-focus.html" href="v30-focus.html">v30-focus.html</a> &middot; 48 KB</p>
     </figcaption>
   </figure>
 
   </div>
+
+  <!-- The previews are written by script (see THE FRAME WRITER), because the demo flag
+       and the credentials have to be composed into the src BEFORE the first fetch. With
+       script off there are no thumbnails at all, so the sheet says so and hands over the
+       twenty files as plain links rather than showing twenty empty frames. -->
+  <noscript>
+    <div class="nojs">
+      <p><b>The thumbnails need JavaScript.</b> Each preview&rsquo;s address is composed
+        before it loads, so that a wall opened in demo mode is never briefly fetched
+        without <span class="mono">?demo=</span> and never opens a broker connection it
+        should not have. With script off nothing composes it, so nothing is loaded. The
+        twenty walls themselves are here:</p>
+      <ul>
+        <li><a href="v11-playground.html">v11-playground.html</a> &mdash; Playground</li>
+        <li><a href="v12-shout.html">v12-shout.html</a> &mdash; Shout</li>
+        <li><a href="v13-one-mark.html">v13-one-mark.html</a> &mdash; One Mark</li>
+        <li><a href="v14-haze.html">v14-haze.html</a> &mdash; Haze</li>
+        <li><a href="v15-ambient.html">v15-ambient.html</a> &mdash; Ambient</li>
+        <li><a href="v16-module.html">v16-module.html</a> &mdash; Module</li>
+        <li><a href="v17-workbench.html">v17-workbench.html</a> &mdash; Workbench</li>
+        <li><a href="v18-subtract.html">v18-subtract.html</a> &mdash; Subtract</li>
+        <li><a href="v19-weave.html">v19-weave.html</a> &mdash; Weave</li>
+        <li><a href="v20-journal.html">v20-journal.html</a> &mdash; Journal</li>
+        <li><a href="v21-frosted.html">v21-frosted.html</a> &mdash; Frosted</li>
+        <li><a href="v22-spatial.html">v22-spatial.html</a> &mdash; Spatial</li>
+        <li><a href="v23-liquid.html">v23-liquid.html</a> &mdash; Liquid</li>
+        <li><a href="v24-widgets.html">v24-widgets.html</a> &mdash; Widgets</li>
+        <li><a href="v25-island.html">v25-island.html</a> &mdash; Island</li>
+        <li><a href="v26-lockscreen.html">v26-lockscreen.html</a> &mdash; Lock Screen</li>
+        <li><a href="v27-weather.html">v27-weather.html</a> &mdash; Weather</li>
+        <li><a href="v28-tiles.html">v28-tiles.html</a> &mdash; Tiles</li>
+        <li><a href="v29-nowplaying.html">v29-nowplaying.html</a> &mdash; Now Playing</li>
+        <li><a href="v30-focus.html">v30-focus.html</a> &mdash; Focus</li>
+      </ul>
+      <p>Add <span class="mono">?demo=163.3</span> to any of them by hand to see it at a
+        band the fleet is not currently in. Each wall marks itself while that is set.</p>
+    </div>
+  </noscript>
 </section>
 
 </main>
@@ -906,6 +1860,17 @@ html.demo .shotwrap::after{
     splitting <span class="mono">163.3</span> across two lines, all three boards sharing the
     discovery name <span class="mono">&quot;PM2.5&quot;</span>, and wildcard subscriptions.
     <code>README.md</code> beside this file has the full account.</p>
+  <p><b>Demo mode is opt-in from the URL and marked everywhere it is on.</b> The band bench at
+    the top writes <code>?demo=</code> into this page&rsquo;s address bar and hands it to the
+    one function that composes every preview&rsquo;s <span class="mono">src</span>, and nowhere
+    else &mdash; no stored flag, no default, no survival across a reload without the parameter.
+    The previews ship with no <span class="mono">src</span> at all, so a wall is never fetched
+    once without the flag and then re-pointed with it. While it is set, the sheet grows
+    a sticky hazard-taped bar naming the exact value being simulated, every thumbnail is tabbed
+    <b>DEMO</b>, and the tab title is prefixed. A wall in demo mode <b>opens no broker connection
+    at all</b>, because these are health displays for children: one screen must never be able to
+    carry a real reading and an invented one at the same time. Fake clean air on a wall is how a
+    child is sent outside on a hazardous day.</p>
   <p>A thumbnail is never blank when something is wrong. A wall that cannot reach the broker,
     or that the broker turns away, replaces its whole screen with one calm sentence saying what
     to do &mdash; so twenty identical sentences on this sheet means the broker wants a login, not
@@ -916,36 +1881,412 @@ html.demo .shotwrap::after{
 <script>
 (function () {
   'use strict';
-  // There is no configuration UI for the walls on this page, and none on the twenty walls
-  // at startup. All this does is carry connection hints the sheet was opened with through
-  // to the previews and the links, so opening the contact sheet against a different broker
-  // opens all twenty against it too. Nothing is read from or written to storage here, and
-  // no credential is ever written into this file.
+  /* =========================================================== THE FRAME WRITER
+     The twenty <iframe data-wall> elements ship with NO src. This is the only
+     code in the file that ever gives one to an iframe, and it composes the
+     connection hints and the demo flag into one string before the first byte of
+     any wall is fetched.
+
+     It used to be the other way round: every iframe carried a bare src= in the
+     markup and the band bench rewrote it afterwards. That is a race the bench
+     always loses. The browser had already fetched twenty LIVE walls and let them
+     open broker sockets by the time the rewrite ran, so a sheet displaying its
+     sticky "every board is simulating 163.3 µg/m³ (Very Unhealthy)" banner had
+     also, for a second or two, been showing the real air behind it. Measured
+     before this change: 40 wall requests of which 20 carried no ?demo=, and nine
+     WebSockets to the fleet broker. There is now nothing to rewrite, because
+     there was never a wrong src to begin with.
+
+     The bench does not write srcs either — it hands its band to .set() below, so
+     the demo flag and the credentials can never travel separately and a sign-in
+     can never silently drop the flag.
+
+     A <noscript> block under the sheet carries plain links, because a page whose
+     twenty pictures are all written by script owes the reader an explanation
+     when script is off. */
   var KEYS = ['h', 'port', 'u', 'p', 'tls', 'f'];
-  var q, carry, i;
+  var state = { carry: '', demo: null };     // demo === null is the only live state
 
-  try { q = new URLSearchParams(location.search); }
-  catch (e) { return; }                      // ancient browser: markup already works
-
-  carry = new URLSearchParams();
-  for (i = 0; i < KEYS.length; i++) {
-    if (q.has(KEYS[i])) carry.set(KEYS[i], q.get(KEYS[i]));
+  function compose() {
+    var parts = [];
+    if (state.carry) parts.push(state.carry);
+    if (state.demo !== null) parts.push('demo=' + encodeURIComponent(state.demo));
+    return parts.length ? '?' + parts.join('&') : '';
   }
-  var qs = carry.toString();
-  if (!qs) return;                           // the common case: nothing to do
 
-  var nodes = document.querySelectorAll('a[data-wall], iframe[data-wall]');
-  for (i = 0; i < nodes.length; i++) {
-    var n = nodes[i];
-    var file = n.getAttribute('data-wall');
-    if (!file) continue;
-    // Re-pointing a lazy iframe simply re-arms it; it still waits to be scrolled to.
-    if (n.tagName === 'IFRAME') { n.src = file + '?' + qs; }
-    else { n.setAttribute('href', file + '?' + qs); }
+  function apply() {
+    var qs = compose();
+    var nodes = document.querySelectorAll('a[data-wall], iframe[data-wall]');
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i], file = n.getAttribute('data-wall');
+      if (!file) continue;
+      // Giving a lazy iframe its src arms it; it still waits to be scrolled to,
+      // so a band change does not open twenty connections (in demo it opens none).
+      // The links are pointed at the same query, so opening a wall full size keeps
+      // whatever the sheet was set to.
+      if (n.tagName === 'IFRAME') { n.src = file + qs; }
+      else { n.setAttribute('href', file + qs); }
+    }
   }
+
+  var q = null;
+  try { q = new URLSearchParams(location.search); } catch (e) { q = null; }
+
+  if (q) {
+    var carry = new URLSearchParams();
+    for (var i = 0; i < KEYS.length; i++) {
+      if (q.has(KEYS[i])) carry.set(KEYS[i], q.get(KEYS[i]));
+    }
+    state.carry = carry.toString();
+    if (q.has('demo')) state.demo = String(q.get('demo'));
+  }
+
+  window.WallFrames = {
+    carry: function () { return state.carry; },
+    demo:  function () { return state.demo; },
+    // The bench and the sign-in both come through here. Nothing is stored: this
+    // object is the whole of the sheet's memory of what the previews are set to.
+    set: function (patch) {
+      if (patch && 'carry' in patch) state.carry = String(patch.carry || '').replace(/^\?/, '');
+      if (patch && 'demo'  in patch) state.demo  = (patch.demo === null) ? null : String(patch.demo);
+      apply();
+    }
+  };
+
+  apply();          // the first write, and the only one until somebody presses a band
 
   // Do not leave a passphrase sitting in the address bar of a wall-mounted screen.
-  try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+  // ?demo= is the one parameter deliberately kept: demo mode is opt-in FROM THE URL and
+  // must go on saying so, or a reload would silently turn simulated air into live air.
+  if (q) {
+    try {
+      var keep = q.has('demo') ? '?demo=' + encodeURIComponent(q.get('demo')) : '';
+      history.replaceState(null, '', location.pathname + keep + location.hash);
+    } catch (e) {}
+  }
+}());
+</script>
+
+<script>
+(function () {
+  'use strict';
+  /* ==========================================================================
+     BAND BENCH — this sheet's half of ?demo=.
+
+     Every wall in this folder accepts ?demo=<number|band|cycle|mixed>, and while it
+     is set the wall opens NO broker connection at all: the fake readings are pushed
+     through the same message handler the broker's would land in, so what you see is
+     the shipped renderer, not a second one written for the demo. This bench does one
+     job — it puts the same ?demo= on all twenty previews at once, and it makes the
+     fact loud.
+
+     THE SAFETY RULE, which is why the code below looks the way it does. These are
+     health displays for children in a burning season. Fake Good air could send a
+     child outside during a hazardous episode; fake Hazardous air alarms a household
+     for nothing. So:
+
+       · demo mode is OPT-IN FROM THE URL AND NOWHERE ELSE. This bench is a control,
+         not a state — pressing a band writes ?demo= into the address bar and into
+         each preview's src, and into nothing else. There is no localStorage key, no
+         default, no timer, no "remember this". Reload without the parameter and the
+         page is byte-for-byte the live sheet again.
+       · the marker is PERSISTENT, not a toast: a sticky full-bleed hazard-taped bar
+         that is still on screen at the bottom of a twenty-thumbnail page, plus a
+         DEMO tab burned onto every thumbnail so a photograph cropped to one wall
+         still says so, plus "DEMO ·" in the tab title.
+       · the marker names THE VALUE BEING SIMULATED, not merely that something is.
+       · nothing here can put a preview into a state that mixes real and fake air:
+         the demo flag and the credentials travel in one composed query string
+         written by one function, so a login can never silently drop the flag.
+     ====================================================================== */
+
+  // US EPA PM2.5 breakpoints, µg/m³. Typed as µ and never case-transformed anywhere:
+  // uppercasing maps µ to M, which turns micrograms into milligrams.
+  var BANDS = [
+    { key: 'good',      name: 'Good',                           range: '0 – 12.0',        hi: 12.0 },
+    { key: 'moderate',  name: 'Moderate',                       range: '12.1 – 35.4',     hi: 35.4 },
+    { key: 'sensitive', name: 'Unhealthy for Sensitive Groups', range: '35.5 – 55.4',     hi: 55.4 },
+    { key: 'unhealthy', name: 'Unhealthy',                      range: '55.5 – 150.4',    hi: 150.4 },
+    { key: 'verybad',   name: 'Very Unhealthy',                 range: '150.5 – 250.4',   hi: 250.4 },
+    { key: 'hazardous', name: 'Hazardous',                      range: '250.5 and above', hi: Infinity, open: true }
+  ];
+  var UNIT = 'µg/m³';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var root = document.documentElement;
+  var BASE_TITLE = document.title;
+  var rig = document.querySelector('.rig');
+  if (!rig || typeof URLSearchParams !== 'function') return;   // markup already works
+
+  var state = { carry: '', demo: null };   // demo === null is the only live state
+  var sweepTimer = null;
+
+  // "0 – 12.0 µg/m³", but "250.5 µg/m³ and above" — the open-ended band reads wrong with
+  // the unit tacked on the end.
+  function withUnit(b) {
+    return b.open ? '250.5 ' + UNIT + ' and above' : b.range + ' ' + UNIT;
+  }
+
+  function byKey(k) {
+    for (var i = 0; i < BANDS.length; i++) { if (BANDS[i].key === k) return BANDS[i]; }
+    return null;
+  }
+
+  // The walls truncate a payload to one decimal before classifying it, the way EPA
+  // truncates. Do the same, or this bench could name a band the previews are not
+  // showing: 12.06 is Good on the wall and would be Moderate to a naive comparison.
+  function bandForNumber(n) {
+    var t = Math.trunc(n * 10) / 10;
+    for (var i = 0; i < BANDS.length; i++) { if (t <= BANDS[i].hi) return BANDS[i]; }
+    return BANDS[BANDS.length - 1];
+  }
+
+  function classify(d) {
+    var k = String(d).trim().toLowerCase();
+    if (k === 'cycle') return { mode: 'cycle' };
+    if (k === 'mixed') return { mode: 'mixed' };
+    var b = byKey(k);
+    if (b) return { mode: 'band', band: b };
+    var n = Number(k);
+    if (k !== '' && isFinite(n) && n >= 0) return { mode: 'number', n: n };
+    return { mode: 'bad' };
+  }
+
+  /* ------------------------------------------------- one writer of every preview src
+     Not this module. The previews ship with no src at all and the script above is the
+     only code in the file that ever gives them one, composing the credentials and the
+     demo flag into a single query before anything is fetched. The bench asks for a
+     band; it does not write a src, so it cannot lose a race with the loader and a
+     sign-in cannot overwrite a src and quietly drop the demo flag with it. */
+  function applyFrames() {
+    if (!window.WallFrames) return;
+    window.WallFrames.set({ carry: state.carry, demo: state.demo });
+  }
+
+  // The address bar carries the demo flag and NOTHING else — never a passphrase on a
+  // wall-mounted screen, and never a stored flag anywhere.
+  function syncUrl() {
+    var tail = (state.demo === null) ? '' : '?demo=' + encodeURIComponent(state.demo);
+    try { history.replaceState(null, '', location.pathname + tail + location.hash); }
+    catch (e) {}
+  }
+
+  // Read back from the writer rather than scraped out of an iframe's src. Parsing a
+  // src to recover what was put into it is a second source of truth, and the two can
+  // disagree — which for this sheet means disagreeing about whether the demo flag is
+  // set on a preview.
+  function initialCarry() {
+    return window.WallFrames ? window.WallFrames.carry() : '';
+  }
+
+  /* ------------------------------------------------------------------- what to say */
+  function describe() {
+    if (state.demo === null) {
+      return { band: '—', range: '—', say: null,
+        note: 'Previews are connected to the broker. Whatever they show is what a sensor actually said.' };
+    }
+    var c = classify(state.demo), b;
+
+    if (c.mode === 'bad') {
+      var what = state.demo === ''
+        ? '?demo= was left empty'
+        : '“' + state.demo + '” is not a band name or a number';
+      return { band: '—', range: '—',
+        say: what + ', so every preview is showing the fleet’s usual mixed state instead',
+        note: what + '. The walls refuse to fall back to live air while ?demo= is present, so each one shows the usual mixed fleet and says why.' };
+    }
+
+    if (c.mode === 'mixed') {
+      // Every wall's mixed scene puts 163.3 on the one board that is talking — the string
+      // that once wrapped mid-digit. Classify it rather than naming a band by hand, so this
+      // line cannot drift from what the previews are actually rendering.
+      b = bandForNumber(163.3);
+      return { band: b.name + ' — on the one board that is talking', range: b.range,
+        say: 'every preview is simulating the fleet as it usually is, one board live at 163.3 ' + UNIT + ' (' + b.name + '), one asleep with no reading, one whose last word is too old to trust',
+        note: 'The state the fleet is in most days and the one layouts get wrong: a three-digit reading beside a dark board and a stale one. Nothing is averaged and no zero stands in for silence.' };
+    }
+
+    if (c.mode === 'cycle') {
+      return { band: 'all six, in turn', range: BANDS[0].range + ' … ' + BANDS[5].range,
+        say: 'every preview is walking all six EPA bands in order, about four seconds each',
+        note: 'Each wall runs its own clock, so the twenty are not in step — that is what makes a band change visible as a transition rather than only as a state.' };
+    }
+
+    if (c.mode === 'band') {
+      b = c.band;
+      return { band: b.name, range: b.range,
+        say: 'every preview is simulating ' + b.name + ' air, ' + withUnit(b),
+        note: 'All three boards on every preview are told to read a value from the middle of this band. Each wall picks its own representative figure, so the exact digits differ between them; the band does not.' };
+    }
+
+    b = bandForNumber(c.n);
+    return { band: b.name, range: b.range,
+      say: 'every board on every preview is publishing ' + state.demo + ' ' + UNIT + ' (' + b.name + ')',
+      note: 'The value goes to the walls as typed, so each one truncates it to one decimal exactly the way it truncates a sensor payload — ' + state.demo + ' classifies as ' + b.name + '.' };
+  }
+
+  /* --------------------------------------------------------------- the DEMO marker */
+  function marker(say) {
+    var bar = $('idemo');
+    if (say === null) {
+      bar.hidden = true;
+      // Emptied, not merely hidden. A stale “simulating 12.06” sentence left sitting in
+      // the DOM is a sentence something could put back on screen; while the previews are
+      // live there must be no such text anywhere in this document.
+      $('idemo-say').textContent = '';
+      root.classList.remove('demo');
+      document.title = BASE_TITLE;
+      $('rig-pill').textContent = 'PREVIEWS : LIVE';
+      return;
+    }
+    // Named in the bar, named in the tab, and named again on every thumbnail by CSS.
+    $('idemo-say').textContent = 'Not a measurement — ' + say + '.';
+    bar.hidden = false;
+    root.classList.add('demo');
+    document.title = 'DEMO · ' + BASE_TITLE;
+    $('rig-pill').textContent = 'PREVIEWS : DEMO';
+  }
+
+  function render(err) {
+    var d = describe();
+    $('rig-band').textContent = d.band;
+    $('rig-range').textContent = d.range;
+    $('rig-note').textContent = err || d.note;
+    marker(d.say);
+    var btns = rig.querySelectorAll('.b[data-demo], .b[data-live]');
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i];
+      var on = b.hasAttribute('data-live')
+        ? (state.demo === null)
+        : (b.getAttribute('data-demo') === state.demo);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    syncSweep();
+  }
+
+  /* ------------------------------------------------------- did the preview take it?
+     Driving twenty walls from one control means the sheet can be wrong in the most
+     dangerous way available to it: claiming DEMO over a thumbnail that quietly ignored
+     ?demo= and is rendering real air. So it does not claim — it checks.
+
+     Every wall that implements demo mode marks its own document: html.demo, a data-demo
+     attribute on <html> or <body>, or a "DEMO" title prefix. Any one of those is proof;
+     none of them is ever set on a live wall. The check is five attribute reads, no tree
+     walk and no layout, and it is deliberately conservative — anything it cannot read
+     (a preview not scrolled to yet, or the sheet opened from file://, where an iframe is
+     a foreign origin) counts as UNKNOWN and is reported as unknown, never as verified. */
+  function tookDemo(f) {
+    var want = f.getAttribute('data-wall'), doc;
+    try { doc = f.contentDocument; } catch (e) { return null; }   // foreign origin
+    if (!doc || !doc.URL || doc.URL.indexOf(want) < 0) return null;  // not the wall yet
+    var h = doc.documentElement, b = doc.body;
+    if (h && h.hasAttribute('data-demo')) return true;
+    if (h && h.classList && h.classList.contains('demo')) return true;
+    if (b && b.hasAttribute('data-demo')) return true;
+    if (b && b.classList && b.classList.contains('demo')) return true;
+    if (/^\s*DEMO/.test(doc.title || '')) return true;
+    return false;
+  }
+
+  function tally(yes, no, unknown, total) {
+    var bits = [];
+    if (no > 0) {
+      bits.push(no + ' of ' + total + ' ' + (no === 1 ? 'preview is' : 'previews are') +
+        ' ignoring ?demo= and still showing live broker data — each one is tabbed LIVE on the sheet, and what it shows is real');
+    }
+    if (unknown > 0) {
+      bits.push(unknown + ' could not be checked from here — not scrolled into view yet, or this sheet was opened from file://, where a preview is a foreign origin and this check reads nothing at all. Look for that wall’s own DEMO bars inside its thumbnail, or run “python3 -m http.server” in tools/wall and open the sheet over http:// so the check can actually run');
+    }
+    if (!bits.length) bits.push('Verified: all ' + total + ' previews took the setting and none of them is connected to the broker');
+    $('rig-tally').textContent = bits.join('. ') + '.';
+  }
+
+  function sweep() {
+    var wraps = document.querySelectorAll('.shotwrap');
+    var yes = 0, no = 0, unknown = 0;
+    for (var i = 0; i < wraps.length; i++) {
+      var w = wraps[i], f = w.querySelector('iframe[data-wall]');
+      var took = f ? tookDemo(f) : null;
+      if (took === true) { w.setAttribute('data-took', 'yes'); yes++; }
+      else if (took === false) { w.setAttribute('data-took', 'no'); no++; }
+      else { w.removeAttribute('data-took'); unknown++; }
+    }
+    tally(yes, no, unknown, wraps.length);
+  }
+
+  // The sweep runs only while demo mode is on: a preview scrolled into view three minutes
+  // from now still gets checked, and leaving demo mode clears every verdict it left behind.
+  function syncSweep() {
+    if (state.demo === null) {
+      if (sweepTimer) { clearInterval(sweepTimer); sweepTimer = null; }
+      var wraps = document.querySelectorAll('.shotwrap');
+      for (var i = 0; i < wraps.length; i++) { wraps[i].removeAttribute('data-took'); }
+      $('rig-tally').textContent = '';
+      return;
+    }
+    sweep();
+    if (!sweepTimer) sweepTimer = setInterval(sweep, 1500);
+  }
+
+  function set(v) {                       // v === null means: back to live air
+    state.demo = (v === null) ? null : String(v);
+    applyFrames();
+    syncUrl();
+    render(null);
+  }
+
+  function goInput() {
+    var raw = String($('rig-n').value || '').trim();
+    if (!raw) { render('Type a value first — 163.3 and 250.5 are the two worth trying.'); return; }
+    var n = Number(raw);
+    if (!isFinite(n) || n < 0) {
+      render('“' + raw + '” is not a PM2.5 reading. Use a number of 0 or more, for example 163.3.');
+      return;
+    }
+    set(raw);                             // as typed, so the walls do their own truncating
+  }
+
+  /* ------------------------------------------------------------------------ wiring */
+  rig.addEventListener('click', function (ev) {
+    var t = ev.target;
+    while (t && t !== rig && t.tagName !== 'BUTTON') { t = t.parentNode; }
+    if (!t || t.tagName !== 'BUTTON') return;
+    if (t.id === 'rig-go') { goInput(); return; }
+    if (t.hasAttribute('data-live')) { $('rig-n').value = ''; set(null); return; }
+    var v = t.getAttribute('data-demo');
+    if (v === null) return;
+    if (isFinite(Number(v))) { $('rig-n').value = v; }   // the numeric chips fill the box
+    set(v);
+  });
+
+  $('rig-n').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' || ev.keyCode === 13) { ev.preventDefault(); goInput(); }
+  });
+
+  // The sign-in block hands its credentials here rather than writing srcs itself, so a
+  // login can never overwrite a preview's src and quietly drop the demo flag with it.
+  window.WallBench = {
+    setCarry: function (qs) {
+      state.carry = String(qs || '').replace(/^\?/, '');
+      applyFrames();
+    }
+  };
+
+  /* -------------------------------------------------------------------------- boot */
+  state.carry = initialCarry();           // whatever the sign-in or ?u=&p= already set
+
+  var q0 = null;
+  try { q0 = new URLSearchParams(location.search); } catch (e) { q0 = null; }
+
+  if (q0 && q0.has('demo')) {
+    state.demo = String(q0.get('demo'));
+    var c0 = classify(state.demo);
+    if (c0.mode === 'number') { $('rig-n').value = state.demo; }
+  }
+  // Neither branch touches a src. The writer above already read the same ?demo= out of
+  // the same address bar and pointed all twenty previews with it before this ran;
+  // re-applying the identical query here would only reload twenty iframes.
+  render(null);
 }());
 </script>
 

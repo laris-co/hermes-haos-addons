@@ -44,7 +44,13 @@ body{
     radial-gradient(760px 560px at 96% 0%, #fdf2e0 0%, transparent 58%),
     var(--paper);
   color:var(--ink);
-  font:16px/1.45 ui-rounded,"SF Pro Rounded","Nunito","Quicksand",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  /* Latin rounded faces first so the poster keeps its voice; the Thai faces sit behind them
+     so Thai glyphs — which none of the rounded faces cover — land on a face that draws tone
+     marks properly instead of whatever the system picks. No webfont link: this page is
+     self-contained and has to open with no network. */
+  font:16px/1.45 ui-rounded,"SF Pro Rounded","Nunito","Quicksand",
+       "Noto Sans Thai","IBM Plex Sans Thai","Sarabun",
+       system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   -webkit-font-smoothing:antialiased;
   padding:var(--pad);
   min-height:100vh;
@@ -73,8 +79,16 @@ body{
 }
 .answer .paintword{color:var(--headline-paint,var(--ink))}
 .because{margin:.6rem 0 0;font-size:clamp(.95rem,1.9vw,1.4rem);color:var(--ink-soft);max-width:46ch;text-wrap:pretty}
+/* Tallies on the left, the language pair on the right, one wrapping row. Keeping the
+   switcher in normal flow (not absolutely positioned over the headline) means a long
+   Thai answer can never run underneath it. */
+.rollrow{
+  margin:.85rem 0 0;display:flex;flex-wrap:wrap;align-items:center;
+  justify-content:space-between;gap:.5rem .9rem;min-width:0;
+}
 .roll{
-  margin:.85rem 0 0;display:flex;flex-wrap:wrap;gap:.4rem .55rem;align-items:center;
+  margin:0;display:flex;flex-wrap:wrap;gap:.4rem .55rem;align-items:center;
+  flex:1 1 16rem;min-width:0;
   font-size:clamp(.78rem,1.3vw,.95rem);
 }
 .tally{
@@ -91,6 +105,12 @@ body{
   grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));
 }
 .yard[hidden]{display:none}
+
+
+}
+.sheet-notes{margin-top:1.2rem;font-size:.82rem;line-height:1.6;color:var(--ink-soft);max-width:64ch}
+.sheet-notes p{margin:0 0 .6rem}
+.sheet-notes b{color:var(--ink);font-weight:700}
 
 .card{
   container-type:inline-size;              /* the creature and the numeral size off THIS
@@ -235,6 +255,8 @@ footer.foot{
   padding:0 .4rem 1.2rem;max-width:80ch;
 }
 footer.foot b{color:var(--ink)}
+footer.foot p{margin:0 0 .5rem}
+footer.foot p:last-child{margin-bottom:0}
 kbd{
   font:inherit;font-weight:800;border:2px solid var(--ink);border-bottom-width:3px;
   border-radius:7px;padding:0 .35rem;background:var(--paper-2);
@@ -285,6 +307,68 @@ button{
 button.ghost{background:var(--paper);color:var(--ink)}
 .saidwhat{margin:.8rem 0 0;font-size:.8rem;color:var(--ink-soft)}
 
+/* ---------------------------------------------------------------- language
+   The switcher is deliberately the quietest control on the page: dashed outline, faint
+   ink, sitting at the end of the tally row. The wall's job is a reading; this is a
+   preference. It must be reachable without scrolling, not noticed before the answer.
+   Declared AFTER the generic button{} rule above so it actually wins. */
+.langpick{display:flex;gap:.3rem;flex:0 0 auto}
+.langbtn{
+  font:inherit;font-size:clamp(.7rem,1.15vw,.84rem);font-weight:800;
+  background:var(--paper);color:var(--ink-faint);
+  border:2px dashed var(--ink-faint);border-radius:999px;
+  padding:.16rem .62rem;line-height:1.55;cursor:pointer;white-space:nowrap;
+}
+.langbtn[aria-pressed="true"]{
+  border-style:solid;border-color:var(--ink);color:var(--ink);background:var(--paper-2);
+}
+.langbtn:focus-visible{outline:3px solid var(--c-usg);outline-offset:2px}
+
+/* THAI TYPOGRAPHY.
+   Thai stacks tone marks and vowel signs above and below the base glyph (สั้ / ญู), so a
+   line-height tuned for Latin clips them. Body text gets 1.7, display text 1.3–1.4 — never
+   the 1.0–1.15 the Latin headline runs at. Negative letter-spacing is unwound too: Thai
+   clusters are already tight and tightening them further collides the marks.
+   There is NO text-transform here and there must never be one: CSS uppercasing maps µ to M,
+   and this project has already shipped µg/m³ as mg/m³ once — a 1000x error from a style rule. */
+html[lang="th"] body{line-height:1.65}
+html[lang="th"] .answer{line-height:1.3;letter-spacing:normal}
+html[lang="th"] .say{line-height:1.4;letter-spacing:normal}
+html[lang="th"] .name{letter-spacing:normal}
+html[lang="th"] .stop p{line-height:1.35;letter-spacing:normal}
+html[lang="th"] .ask,
+html[lang="th"] .because,
+html[lang="th"] .note,
+html[lang="th"] .meta,
+html[lang="th"] .legend h2,
+html[lang="th"] .legend p,
+html[lang="th"] .key b,
+html[lang="th"] footer.foot,
+html[lang="th"] .stop small,
+html[lang="th"] .sheet h2,
+html[lang="th"] .sheet .hint,
+html[lang="th"] .f label,
+html[lang="th"] .saidwhat{line-height:1.7}
+html[lang="th"] .tally,
+html[lang="th"] .pill,
+html[lang="th"] .bandline,
+html[lang="th"] .demobar{line-height:1.6}
+/* Thai writes no spaces between words, so the browser has no break opportunities inside a
+   phrase and a long string would push the page sideways. Prose is allowed to break anywhere.
+   The reading is NOT in this list and must never be added to it — breaking inside a number
+   once split a hazardous "163.3" into "163." and "3". */
+html[lang="th"] .answer,
+html[lang="th"] .because,
+html[lang="th"] .say,
+html[lang="th"] .note,
+html[lang="th"] .legend p,
+html[lang="th"] footer.foot,
+html[lang="th"] .stop p,
+html[lang="th"] .stop small,
+html[lang="th"] .sheet .hint,
+html[lang="th"] .saidwhat,
+html[lang="th"] .dbsay{word-break:break-word;overflow-wrap:anywhere}
+
 /* ---------------------------------------------------------------- demo marker
    This is a HEALTH display. A simulated number must be impossible to mistake for a
    reading off a sensor, so the marker is: full-bleed, sticky (it is still on screen at
@@ -310,7 +394,10 @@ button.ghost{background:var(--paper);color:var(--ink)}
   border-radius:999px;padding:.1rem .8rem;letter-spacing:.16em;
   font-size:clamp(.95rem,2vw,1.35rem);white-space:nowrap;
 }
-.dbthai{font-size:clamp(.9rem,1.8vw,1.2rem);color:var(--c-mod);white-space:nowrap}
+/* The marker stays BILINGUAL whatever the page language is: a photograph of this wall has
+   to say "not real" to whoever picks it up. No white-space:nowrap — the Thai sentence is
+   long enough to push the page sideways on a phone if it cannot wrap. */
+.dbwarn{font-size:clamp(.9rem,1.8vw,1.2rem);color:var(--c-mod);min-width:0}
 .dbsay{flex:1 1 22ch;min-width:0;font-weight:700}
 .dbexit{font-weight:700;color:#c8b9a3;font-size:clamp(.72rem,1.25vw,.86rem)}
 .dbexit b{color:var(--paper-2);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -322,6 +409,29 @@ html.demo .card::after{
   border-radius:0 var(--r) 0 12px;padding:.1rem .55rem;
   font-size:clamp(.62rem,2.4cqi,.78rem);font-weight:800;letter-spacing:.14em;
 }
+
+/* ---------------------------------------------------------------- the wall
+   Built for an unattended 1600x900 display, where the fold once landed mid-glyph on the
+   live card's band line and cut the band label off the one card that had a reading.
+   What is fixed here is everything that could be fixed WITHOUT shrinking a card below
+   its own content — a clipped card is a worse lie than a scrolled one:
+     · the creature scales with the screen instead of holding 305px (it is the one
+       element on a card that loses nothing by being smaller),
+     · the six-band key packs into a single row,
+     · two paragraphs of provenance move to the settings sheet, one keypress away.
+   That takes the page from 1564px to 1262px at 1600x900. The remaining 362px cannot be
+   found without deciding what to REMOVE — the verdict block is 346px, the six-band key
+   is 238px, and the cards are 518px — so the page still scrolls and that decision is
+   left to a human rather than taken by clipping.
+   Conditional on purpose: a phone flows and scrolls exactly as before. */
+@media (min-width:1000px) and (min-height:620px){
+  .stage{height:min(19vh,16rem);width:auto;margin:.1rem auto;
+         display:flex;align-items:center;justify-content:center}
+  .face{height:100%;width:auto;max-width:100%}
+  .keys{grid-template-columns:repeat(6,minmax(0,1fr));gap:.45rem .6rem}
+  #foot-1,#foot-2{display:none}
+  .foot{padding-bottom:0}
+}
 </style>
 </head>
 <body>
@@ -330,38 +440,42 @@ html.demo .card::after{
      that ever unhides it is ?demo= in the address bar. No stored flag, no default. -->
 <div class="demobar" id="demobar" hidden>
   <span class="dbtag">DEMO</span>
-  <span class="dbthai">&#3605;&#3633;&#3623;&#3629;&#3618;&#3656;&#3634;&#3591;</span>
+  <span class="dbwarn" id="demowarn-en"></span>
+  <span class="dbwarn" id="demowarn-th"></span>
   <span class="dbsay" id="demosay"></span>
-  <span class="dbexit">reload without <b>?demo=</b> to see the real boards</span>
+  <span class="dbexit" id="demoexit"></span>
 </div>
 
 <div class="wrap" id="wrap">
 
   <header class="top">
-    <p class="ask">Should we go outside?</p>
+    <p class="ask" id="ask">Should we go outside?</p>
     <p class="answer" id="answer">Let&rsquo;s find out&hellip;</p>
     <p class="because" id="because">Saying hello to the air boards.</p>
-    <p class="roll" id="roll"></p>
+    <div class="rollrow">
+      <p class="roll" id="roll"></p>
+      <!-- Language switcher. Each button is written in its own language, so it needs no
+           label of its own and no case rule can touch it. Keyboard: "l". -->
+      <div class="langpick" id="langpick" role="group">
+        <button type="button" class="langbtn" data-lang="th" aria-pressed="false">&#3652;&#3607;&#3618;</button>
+        <button type="button" class="langbtn" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
   </header>
 
   <main class="yard" id="yard" hidden></main>
 
   <section class="legend">
-    <h2>The six weather-friends</h2>
-    <p>Colours and cut-offs follow the <b>US EPA PM2.5 scale</b>, measured in &micro;g/m&sup3;
-       (millionths of a gram of smoke dust in a cubic metre of air).</p>
+    <h2 id="legend-title">The six weather-friends</h2>
+    <p id="legend-body">Colours and cut-offs follow the <b>US EPA PM2.5 scale</b>, measured in
+       &micro;g/m&sup3; (millionths of a gram of smoke dust in a cubic metre of air).</p>
     <div class="keys" id="keys"></div>
   </section>
 
   <footer class="foot">
-    <b>Every friend is drawn from the board itself.</b> A card appears when a sensor announces
-    itself over Home&nbsp;Assistant discovery, and the name on it is the board id taken from the
-    topic it publishes on &mdash; not the sensor&rsquo;s label, which is &ldquo;PM2.5&rdquo; on
-    every one of them.<br>
-    <b>A sleeping friend is telling the truth.</b> When a board is not sending, its friend closes
-    its eyes and shows no number at all. An empty card or a hopeful zero would be a lie about the
-    air in that room.<br>
-    <b>Press <kbd>s</kbd></b> to change the broker, or <kbd>Esc</kbd> to close it again.
+    <p id="foot-1"></p>
+    <p id="foot-2"></p>
+    <p id="foot-3"></p>
   </footer>
 </div>
 
@@ -369,32 +483,34 @@ html.demo .card::after{
 
 <div class="sheet" id="sheet" hidden>
   <div class="box">
-    <h2>Broker settings</h2>
-    <p class="hint">This wall talks MQTT over a WebSocket. Port <b>1884</b> is the WebSocket
-      listener; the plain MQTT port cannot be opened by a browser at all, and trying looks
-      exactly like a wrong passphrase.</p>
+    <h2 id="sheet-title">Broker settings</h2>
+    <p class="hint" id="sheet-hint"></p>
     <form class="form" id="form" autocomplete="off">
-      <div class="f"><label for="f-host">Host</label>
+      <div class="f"><label for="f-host" id="lbl-host">Host</label>
         <input id="f-host" name="host" spellcheck="false" required></div>
-      <div class="f"><label for="f-port">WebSocket port</label>
+      <div class="f"><label for="f-port" id="lbl-port">WebSocket port</label>
         <input id="f-port" name="port" inputmode="numeric" required></div>
-      <div class="f"><label for="f-user">Username</label>
+      <div class="f"><label for="f-user" id="lbl-user">Username</label>
         <input id="f-user" name="user" spellcheck="false"></div>
-      <div class="f"><label for="f-pass">Passphrase</label>
+      <div class="f"><label for="f-pass" id="lbl-pass">Passphrase</label>
         <input id="f-pass" name="pass" type="password" autocomplete="off"></div>
-      <div class="f"><label for="f-filter">Show topics starting with</label>
-        <input id="f-filter" name="filter" spellcheck="false" placeholder="dbk/ — blank shows every sensor"></div>
+      <div class="f"><label for="f-filter" id="lbl-filter">Show topics starting with</label>
+        <input id="f-filter" name="filter" spellcheck="false"></div>
       <div class="f f-check"><input id="f-tls" name="tls" type="checkbox">
-        <label for="f-tls">TLS (wss)</label></div>
+        <label for="f-tls" id="lbl-tls">TLS (wss)</label></div>
       <div class="f f-check"><input id="f-remember" name="remember" type="checkbox">
-        <label for="f-remember">Remember passphrase</label></div>
+        <label for="f-remember" id="lbl-remember">Remember passphrase</label></div>
       <div class="f acts">
-        <button type="submit">Connect</button>
+        <button type="submit" id="btn-connect">Connect</button>
         <button type="button" class="ghost" id="btn-forget">Forget</button>
         <button type="button" class="ghost" id="btn-close">Close</button>
       </div>
     </form>
     <p class="saidwhat" id="saidwhat"></p>
+    <div class="sheet-notes">
+      <p id="sheet-foot-1"></p>
+      <p id="sheet-foot-2"></p>
+    </div>
   </div>
 </div>
 
@@ -409,13 +525,416 @@ html.demo .card::after{
   'use strict';
 
   /* ==========================================================================
+     TRANSLATION LAYER
+     Most people who read this wall read Thai. The display was English-only.
+
+     The Thai here is not translated English — it is written against how a Thai
+     speaker actually says these things, and it is shared verbatim with the other
+     walls in this folder so a child who learns one screen can read them all.
+     Do not "improve" a Thai string in one file: it will drift from twenty others.
+
+     Two typography facts drive the CSS above:
+       · Thai puts NO SPACE between words. The spaces inside these strings are
+         phrase breaks — Thai's equivalent of a comma or a full stop. Never close
+         one up, never add one inside a word.
+       · Thai is never uppercased. There is no text-transform anywhere on this page
+         and there must not be: uppercasing maps µ to M, and µg/m³ printed as mg/m³
+         is a 1000x lie about the air.
+     ====================================================================== */
+
+  var LANG_KEY = 'air-playground.lang.v1';
+
+  var STR = {
+    en: {
+      /* --- the answer a child is looking for -------------------------------- */
+      'verdict.good':        'Go outside. The air is clean.',
+      'verdict.moderate':    'Air is okay. Outdoor play is fine.',
+      'verdict.sensitive':   'Sensitive groups take care.',
+      'verdict.unhealthy':   'Unhealthy — stay indoors.',
+      'verdict.verybad':     'Very unhealthy — stay indoors.',
+      'verdict.hazardous':   'Hazardous — stay inside.',
+      'verdict.unknown':     'No reading — air quality unknown.',
+
+      /* --- the EPA band, named in adult words ------------------------------- */
+      'band.good':           'Good',
+      'band.moderate':       'Moderate',
+      'band.sensitive':      'Unhealthy for sensitive groups',
+      'band.unhealthy':      'Unhealthy',
+      'band.verybad':        'Very unhealthy',
+      'band.hazardous':      'Hazardous',
+      'band.none':           'Not rated',
+      /* The key at the foot of the page has 8.5rem columns. English needs a shorter
+         label there; Thai does not — its band names are already short, so the Thai
+         side of every bandshort key is the band name itself, unchanged. */
+      'bandshort.good':      'Good',
+      'bandshort.moderate':  'Moderate',
+      'bandshort.sensitive': 'Sensitive groups',
+      'bandshort.unhealthy': 'Unhealthy',
+      'bandshort.verybad':   'Very unhealthy',
+      'bandshort.hazardous': 'Hazardous',
+
+      /* --- what the board is doing ------------------------------------------ */
+      'state.offline':       'offline',
+      'state.noreading':     'no reading',
+      'state.stale':         'stale',
+      'state.waiting':       'waiting',
+      'state.live':          'live',
+      'state.fault':         'sensor fault',
+
+      /* --- the broker ------------------------------------------------------- */
+      'conn.connecting':     'connecting',
+      'conn.connected':      'connected',
+      'conn.retrying':       'reconnecting',
+      'conn.refused':        'The broker refused this connection.',
+      'conn.unreachable':    'Cannot reach the broker.',
+      'conn.hint':           'Press s to enter the details.',
+
+      /* --- simulated air ---------------------------------------------------- */
+      'demo.warn':           'SIMULATED DATA, NOT A REAL READING',
+      'demo.at':             'every board faked at',
+
+      /* --- how long ago ----------------------------------------------------- */
+      'time.justnow':        'just now',
+      'time.secondsAgo':     '{n}s ago',
+      'time.minutesAgo':     '{n}m ago',
+      'time.hoursAgo':       '{n}h ago',
+
+      'unit.ugm3':           'µg/m³',
+      'scale.epa':           'US EPA PM2.5 scale',
+
+      /* ===================================================================
+         Below here: strings particular to this wall's voice. The playground
+         speaks to children — warm, short, never frightening, never lying.
+         =================================================================== */
+      'pg.title':            'Air Friends — is it a good day to go outside?',
+      'pg.ask':              'Should we go outside?',
+      'pg.lang':             'Language',
+
+      'pg.time.never':       'not yet',
+      'pg.time.daysAgo':     '{n}d ago',
+
+      'pg.answer.finding':   'Let’s find out…',
+      'pg.answer.nobody':    'Nobody can say yet.',
+      'pg.because.hello':    'Saying hello to the air boards.',
+      'pg.because.waiting':  'Waiting for a board to introduce itself.',
+      'pg.because.quiet1':   'The one board on this wall is not sending a reading, so this ' +
+                             'screen will not guess.',
+      'pg.because.quietN':   'None of the {n} boards on this wall is sending a reading, so ' +
+                             'this screen will not guess.',
+      'pg.worst':            'Worst reading right now: {v} {u} at {who} — {band} on the {scale}.',
+
+      'pg.tally.talking1':   '{n} board talking',
+      'pg.tally.talkingN':   '{n} boards talking',
+      'pg.tally.quiet1':     '{n} board quiet',
+      'pg.tally.quietN':     '{n} boards quiet',
+      'pg.tally.none':       'no boards found yet',
+
+      'pg.say.asleep':       '{who} is asleep.',
+      'pg.say.waiting':      'Nothing said yet.',
+      'pg.say.stale':        'This news is old.',
+      'pg.say.fault':        'This sensor feels poorly.',
+      'pg.say.reporting':    'Reporting happily.',
+
+      'pg.note.good':        'The air out there is clean today.',
+      'pg.note.moderate':    'A little haze, but playing outside is okay.',
+      'pg.note.sensitive':   'If you cough, wheeze or use an inhaler, play inside today.',
+      'pg.note.unhealthy':   'Short trips outside only, and wear a mask if you go.',
+      'pg.note.verybad':     'Keep the windows shut. No running around outdoors.',
+      'pg.note.hazardous':   'This is the worst kind of air. Shut the windows and tell a grown-up.',
+      'pg.note.offline':     'This board is not sending, so nobody knows the air where it lives. ' +
+                             'That is why there is no number here.',
+      'pg.note.waiting':     'The board is awake but has not sent a reading since this screen ' +
+                             'opened. Readings are not kept on the broker, so the first one has ' +
+                             'to arrive.',
+      'pg.note.unknown':     'The board answered with “{v}” instead of a measurement.',
+      'pg.note.stale':       'Nothing new for longer than {n} seconds, so the last number is ' +
+                             'shown small and should not be trusted.',
+      'pg.note.fault':       'It reported a dust amount below zero, which cannot happen. ' +
+                             'A grown-up should look at the board.',
+      'pg.note.notpm':       '{m} — not part of the PM2.5 scale.',
+      'pg.band.nothing':     'nothing measured',
+
+      'pg.meta.heard':       'heard {t}',
+      'pg.meta.saidOffline': 'said offline {t}',
+      'pg.meta.lastNumber':  'last number {v} {u}, {t}',
+      'pg.meta.availUnknown':'awake or asleep: unknown',
+      'pg.meta.rawValue':    'raw value — template not applied',
+
+      'pg.legend.title':     'The six weather-friends',
+      'pg.legend.body':      'Colours and cut-offs follow the {scale}, measured in {unit} ' +
+                             '(millionths of a gram of smoke dust in a cubic metre of air).',
+
+      'pg.foot.1.lead':      'Every friend is drawn from the board itself.',
+      'pg.foot.1.rest':      'A card appears when a sensor announces itself over Home Assistant ' +
+                             'discovery, and the name on it is the board id taken from the topic ' +
+                             'it publishes on — not the sensor’s label, which is “PM2.5” on every ' +
+                             'one of them.',
+      'pg.foot.2.lead':      'A sleeping friend is telling the truth.',
+      'pg.foot.2.rest':      'When a board is not sending, its friend closes its eyes and shows no ' +
+                             'number at all. An empty card or a hopeful zero would be a lie about ' +
+                             'the air in that room.',
+      'pg.foot.keys':        'Press {s} to change the broker, {l} to switch language, or {esc} ' +
+                             'to close.',
+
+      'pg.set.title':        'Broker settings',
+      'pg.set.hint':         'This wall talks MQTT over a WebSocket. Port 1884 is the WebSocket ' +
+                             'listener; the plain MQTT port cannot be opened by a browser at all, ' +
+                             'and trying looks exactly like a wrong passphrase.',
+      'pg.set.host':         'Host',
+      'pg.set.port':         'WebSocket port',
+      'pg.set.user':         'Username',
+      'pg.set.pass':         'Passphrase',
+      'pg.set.filter':       'Show topics starting with',
+      'pg.set.filterPh':     'dbk/ — blank shows every sensor',
+      'pg.set.tls':          'TLS (wss)',
+      'pg.set.remember':     'Remember passphrase',
+      'pg.set.connect':      'Connect',
+      'pg.set.forget':       'Forget',
+      'pg.set.close':        'Close',
+      'pg.set.nostore':      'This browser refused to save settings (a private window?). The ' +
+                             'connection still works, but you will type these again next time.',
+      'pg.set.savedPass':    'Saved in this browser only, on this device — passphrase included. ' +
+                             'Nothing is uploaded.',
+      'pg.set.savedNoPass':  'Saved in this browser only, on this device. The passphrase was ' +
+                             'NOT stored.',
+      'pg.set.cleared':      'Saved settings cleared from this browser.',
+
+      'pg.stop.nokit':       'The drawing kit for this wall did not arrive.',
+      'pg.stop.nokitSub':    'This screen needs unpkg.com/mqtt@5.15.2 once, when it opens. Check ' +
+                             'this device’s internet connection and reload the page.',
+      'pg.stop.https':       'This page is loaded over https, so it may not talk to the boards.',
+      'pg.stop.httpsSub':    'Press s, tick TLS (wss) and use the secure WebSocket port — or open ' +
+                             'this file straight from disk.',
+      'pg.stop.start':       'This screen could not start talking to the boards.',
+      'pg.stop.startSub':    'Check the address, then press Connect.',
+      'pg.stop.unreachSub':  'Check that the little computer at {url} is switched on and on this ' +
+                             'network. The wall keeps trying by itself every few seconds.',
+      'pg.stop.refusedSub':  'The broker said: {why}.',
+
+      'pg.err.1':            'the broker rejected the MQTT protocol version',
+      'pg.err.2':            'the broker rejected this client id',
+      'pg.err.3':            'the broker is unavailable',
+      'pg.err.4':            'the username or passphrase is wrong',
+      'pg.err.5':            'this account is not allowed on the broker',
+
+      'pg.demo.exit':        'reload without {q} to see the real boards',
+      'pg.demo.live':        '{b} live at {v}',
+      'pg.demo.stale':       '{b} too old, last said {v}',
+      'pg.demo.asleep':      '{b} asleep, no reading',
+      'pg.demo.cycle':       'walking every EPA band, 4 seconds each — now {v}',
+      'pg.demo.badEmpty':    '?demo= was left empty, so this is the fleet’s usual state',
+      'pg.demo.badValue':    '“{raw}” is not a demo setting, so this is the fleet’s usual state'
+    },
+
+    th: {
+      'verdict.good':        'อากาศดี ออกไปเล่นได้เลย',
+      'verdict.moderate':    'อากาศพอใช้ได้ ออกไปข้างนอกได้ตามปกติ',
+      'verdict.sensitive':   'ถ้าแพ้ง่าย เลี่ยงออกข้างนอกไว้ก่อน',
+      'verdict.unhealthy':   'อากาศไม่ดี อยู่ในบ้านดีกว่า',
+      'verdict.verybad':     'อากาศแย่มาก อย่าเพิ่งออกไปข้างนอก',
+      'verdict.hazardous':   'อันตราย อยู่ในบ้าน ปิดประตูหน้าต่างให้หมด',
+      'verdict.unknown':     'ยังไม่มีค่า ไม่รู้ว่าอากาศเป็นยังไง',
+
+      'band.good':           'ดี',
+      'band.moderate':       'ปานกลาง',
+      'band.sensitive':      'เริ่มมีผลกับคนแพ้ง่าย',
+      'band.unhealthy':      'ไม่ดีต่อสุขภาพ',
+      'band.verybad':        'แย่มาก',
+      'band.hazardous':      'อันตราย',
+      'band.none':           'ไม่มีเกณฑ์',
+      'bandshort.good':      'ดี',
+      'bandshort.moderate':  'ปานกลาง',
+      'bandshort.sensitive': 'เริ่มมีผลกับคนแพ้ง่าย',
+      'bandshort.unhealthy': 'ไม่ดีต่อสุขภาพ',
+      'bandshort.verybad':   'แย่มาก',
+      'bandshort.hazardous': 'อันตราย',
+
+      'state.offline':       'ไม่ได้ส่งข้อมูล',
+      'state.noreading':     'ยังไม่มีค่า',
+      'state.stale':         'ค่าเก่า',
+      'state.waiting':       'กำลังรอ',
+      'state.live':          'สด',
+      'state.fault':         'เซ็นเซอร์มีปัญหา',
+
+      'conn.connecting':     'กำลังเชื่อมต่อ',
+      'conn.connected':      'เชื่อมต่อแล้ว',
+      'conn.retrying':       'กำลังเชื่อมต่อใหม่',
+      'conn.refused':        'เข้าระบบไม่ได้ บัญชีนี้ไม่มีสิทธิ์',
+      'conn.unreachable':    'ติดต่อ broker ไม่ได้',
+      'conn.hint':           'กด s เพื่อใส่ข้อมูลเข้าระบบ',
+
+      'demo.warn':           'ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง',
+      'demo.at':             'ตั้งค่าทุกบอร์ดเป็น',
+
+      'time.justnow':        'เมื่อกี้',
+      'time.secondsAgo':     '{n} วินาทีที่แล้ว',
+      'time.minutesAgo':     '{n} นาทีที่แล้ว',
+      'time.hoursAgo':       '{n} ชั่วโมงที่แล้ว',
+
+      'unit.ugm3':           'µg/m³',
+      'scale.epa':           'เกณฑ์ PM2.5 ของ US EPA',
+
+      'pg.title':            'เพื่อนอากาศ — วันนี้ออกไปข้างนอกได้ไหม',
+      'pg.ask':              'วันนี้ออกไปข้างนอกได้ไหม',
+      'pg.lang':             'ภาษา',
+
+      'pg.time.never':       'ยังไม่เคย',
+      'pg.time.daysAgo':     '{n} วันที่แล้ว',
+
+      'pg.answer.finding':   'ขอดูก่อนนะ',
+      'pg.answer.nobody':    'ยังตอบไม่ได้',
+      'pg.because.hello':    'กำลังทักทายบอร์ดวัดอากาศอยู่',
+      'pg.because.waiting':  'รอให้บอร์ดสักตัวแนะนำตัวเข้ามา',
+      'pg.because.quiet1':   'บอร์ดตัวเดียวบนกำแพงนี้ไม่ได้ส่งค่ามา จอนี้เลยไม่เดาให้',
+      'pg.because.quietN':   'บอร์ดทั้ง {n} ตัวบนกำแพงนี้ไม่มีตัวไหนส่งค่ามาเลย จอนี้เลยไม่เดาให้',
+      'pg.worst':            'ตอนนี้ค่าที่แย่ที่สุดคือ {v} {u} ที่ {who} อยู่ในระดับ{band} ตาม{scale}',
+
+      'pg.tally.talking1':   '{n} บอร์ดกำลังส่งค่า',
+      'pg.tally.talkingN':   '{n} บอร์ดกำลังส่งค่า',
+      'pg.tally.quiet1':     '{n} บอร์ดเงียบอยู่',
+      'pg.tally.quietN':     '{n} บอร์ดเงียบอยู่',
+      'pg.tally.none':       'ยังไม่เจอบอร์ดเลย',
+
+      'pg.say.asleep':       '{who} หลับอยู่',
+      'pg.say.waiting':      'ยังไม่ได้บอกอะไรเลย',
+      'pg.say.stale':        'ข่าวนี้เก่าแล้ว',
+      'pg.say.fault':        'เซ็นเซอร์ตัวนี้ไม่ค่อยสบาย',
+      'pg.say.reporting':    'ส่งค่าอยู่ ปกติดี',
+
+      'pg.note.good':        'วันนี้อากาศข้างนอกสะอาด',
+      'pg.note.moderate':    'มีฝุ่นบ้างนิดหน่อย แต่ออกไปเล่นข้างนอกได้',
+      'pg.note.sensitive':   'ถ้าไอบ่อย หอบ หรือต้องพ่นยา วันนี้เล่นในบ้านดีกว่า',
+      'pg.note.unhealthy':   'ออกไปข้างนอกได้แป๊บเดียว แล้วต้องใส่หน้ากากด้วย',
+      'pg.note.verybad':     'ปิดหน้าต่างไว้ อย่าออกไปวิ่งเล่นข้างนอก',
+      'pg.note.hazardous':   'อากาศแย่ที่สุดแล้ว ปิดหน้าต่างให้หมด แล้วบอกผู้ใหญ่ด้วย',
+      'pg.note.offline':     'บอร์ดนี้ไม่ได้ส่งข้อมูลมา เลยไม่มีใครรู้ว่าอากาศตรงนั้นเป็นยังไง ' +
+                             'ตรงนี้ถึงไม่มีตัวเลข',
+      'pg.note.waiting':     'บอร์ดตื่นอยู่ แต่ยังไม่ได้ส่งค่ามาตั้งแต่เปิดจอนี้ ' +
+                             'ค่าเก่าไม่ได้ถูกเก็บไว้ที่ broker ต้องรอค่าแรกส่งเข้ามาก่อน',
+      'pg.note.unknown':     'บอร์ดตอบกลับมาว่า “{v}” ไม่ใช่ค่าที่วัดได้',
+      'pg.note.stale':       'ไม่มีค่าใหม่มานานเกิน {n} วินาที ตัวเลขที่เห็นเป็นค่าเก่า อย่าเพิ่งเชื่อ',
+      'pg.note.fault':       'บอร์ดส่งค่าฝุ่นติดลบมา ซึ่งเป็นไปไม่ได้ ให้ผู้ใหญ่มาดูบอร์ดตัวนี้หน่อย',
+      'pg.note.notpm':       '{m} ไม่ได้อยู่ในเกณฑ์ PM2.5',
+      'pg.band.nothing':     'ยังไม่มีอะไรวัดได้',
+
+      'pg.meta.heard':       'ได้ยินล่าสุด {t}',
+      'pg.meta.saidOffline': 'บอกว่าไม่ได้ส่งข้อมูล {t}',
+      'pg.meta.lastNumber':  'ค่าล่าสุด {v} {u} {t}',
+      'pg.meta.availUnknown':'ไม่รู้ว่าบอร์ดตื่นหรือหลับอยู่',
+      'pg.meta.rawValue':    'ค่าดิบ ยังไม่ได้ผ่าน template',
+
+      'pg.legend.title':     'เพื่อนอากาศทั้งหกตัว',
+      'pg.legend.body':      'สีและช่วงตัวเลขบนจอนี้ใช้{scale} หน่วยคือ {unit} ' +
+                             'หมายถึงน้ำหนักฝุ่นควันหนึ่งในล้านกรัม ต่ออากาศหนึ่งลูกบาศก์เมตร',
+
+      'pg.foot.1.lead':      'เพื่อนทุกตัววาดขึ้นจากบอร์ดจริง',
+      'pg.foot.1.rest':      'การ์ดจะโผล่ขึ้นมาตอนเซ็นเซอร์ประกาศตัวผ่าน Home Assistant discovery ' +
+                             'ชื่อบนการ์ดคือ board id ที่อ่านมาจาก topic ที่บอร์ดส่งค่า ' +
+                             'ไม่ใช่ชื่อเซ็นเซอร์ เพราะทุกตัวตั้งชื่อว่า “PM2.5” เหมือนกันหมด',
+      'pg.foot.2.lead':      'เพื่อนที่หลับอยู่กำลังพูดความจริง',
+      'pg.foot.2.rest':      'ตอนบอร์ดไม่ได้ส่งข้อมูล เพื่อนของมันจะหลับตาและไม่โชว์ตัวเลขเลย ' +
+                             'ถ้าโชว์การ์ดเปล่าหรือขึ้นเลขศูนย์ไว้ให้ดูดี ' +
+                             'นั่นคือโกหกเรื่องอากาศในห้องนั้น',
+      'pg.foot.keys':        'กด {s} เพื่อเปลี่ยน broker · กด {l} เพื่อสลับภาษา · กด {esc} เพื่อปิด',
+
+      'pg.set.title':        'ตั้งค่า broker',
+      'pg.set.hint':         'จอนี้คุย MQTT ผ่าน WebSocket พอร์ต 1884 คือพอร์ตที่เปิดรับ WebSocket ' +
+                             'ส่วนพอร์ต MQTT ธรรมดา เบราว์เซอร์เปิดไม่ได้เลย ' +
+                             'และเวลาลองแล้วไม่ติด หน้าตาจะเหมือนใส่รหัสผิดเป๊ะ',
+      'pg.set.host':         'Host',
+      'pg.set.port':         'พอร์ต WebSocket',
+      'pg.set.user':         'ชื่อผู้ใช้',
+      'pg.set.pass':         'รหัสผ่าน',
+      'pg.set.filter':       'แสดงเฉพาะ topic ที่ขึ้นต้นด้วย',
+      'pg.set.filterPh':     'dbk/ — เว้นว่างไว้จะแสดงทุกเซ็นเซอร์',
+      'pg.set.tls':          'TLS (wss)',
+      'pg.set.remember':     'จำรหัสผ่านไว้',
+      'pg.set.connect':      'เชื่อมต่อ',
+      'pg.set.forget':       'ลืมค่าที่บันทึกไว้',
+      'pg.set.close':        'ปิด',
+      'pg.set.nostore':      'เบราว์เซอร์นี้ไม่ยอมบันทึกค่า (เปิดโหมดส่วนตัวอยู่หรือเปล่า) ' +
+                             'เชื่อมต่อได้ตามปกติ แต่ครั้งหน้าต้องพิมพ์ใหม่',
+      'pg.set.savedPass':    'บันทึกไว้ในเบราว์เซอร์นี้ บนเครื่องนี้เท่านั้น รวมรหัสผ่านด้วย ' +
+                             'ไม่มีการส่งขึ้นที่ไหน',
+      'pg.set.savedNoPass':  'บันทึกไว้ในเบราว์เซอร์นี้ บนเครื่องนี้เท่านั้น ไม่ได้เก็บรหัสผ่านไว้',
+      'pg.set.cleared':      'ลบค่าที่บันทึกไว้ออกจากเบราว์เซอร์นี้แล้ว',
+
+      'pg.stop.nokit':       'ชุดวาดภาพของจอนี้โหลดมาไม่ครบ',
+      'pg.stop.nokitSub':    'จอนี้ต้องโหลด unpkg.com/mqtt@5.15.2 หนึ่งครั้งตอนเปิด ' +
+                             'ลองเช็กอินเทอร์เน็ตของเครื่องนี้ แล้วโหลดหน้าใหม่',
+      'pg.stop.https':       'หน้านี้เปิดผ่าน https อาจคุยกับบอร์ดไม่ได้',
+      'pg.stop.httpsSub':    'กด s แล้วติ๊ก TLS (wss) และใช้พอร์ต WebSocket แบบปลอดภัย ' +
+                             'หรือเปิดไฟล์นี้จากเครื่องตรง ๆ',
+      'pg.stop.start':       'จอนี้เริ่มคุยกับบอร์ดไม่ได้',
+      'pg.stop.startSub':    'เช็กที่อยู่ก่อน แล้วกดเชื่อมต่อ',
+      'pg.stop.unreachSub':  'ลองเช็กว่าคอมพิวเตอร์เครื่องเล็กที่ {url} เปิดอยู่ ' +
+                             'และต่อเน็ตวงเดียวกันหรือเปล่า จอนี้จะลองเชื่อมต่อใหม่เองทุกไม่กี่วินาที',
+      'pg.stop.refusedSub':  'broker บอกว่า: {why}',
+
+      'pg.err.1':            'broker ไม่รับ MQTT เวอร์ชันนี้',
+      'pg.err.2':            'broker ไม่รับ client id นี้',
+      'pg.err.3':            'broker ยังไม่พร้อมให้ใช้งาน',
+      'pg.err.4':            'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูก',
+      'pg.err.5':            'บัญชีนี้ไม่มีสิทธิ์บน broker',
+
+      'pg.demo.exit':        'โหลดใหม่โดยไม่ใส่ {q} เพื่อดูค่าจริง',
+      'pg.demo.live':        '{b} ส่งค่าอยู่ {v}',
+      'pg.demo.stale':       '{b} ค่าเก่าแล้ว ล่าสุดบอกว่า {v}',
+      'pg.demo.asleep':      '{b} หลับอยู่ ไม่มีค่า',
+      'pg.demo.cycle':       'ไล่ทีละระดับของ EPA ระดับละ 4 วินาที ตอนนี้ {v}',
+      'pg.demo.badEmpty':    '?demo= ถูกเว้นว่างไว้ นี่คือสภาพปกติของบอร์ดชุดนี้',
+      'pg.demo.badValue':    '“{raw}” ไม่ใช่ค่าที่ demo รู้จัก นี่คือสภาพปกติของบอร์ดชุดนี้'
+    }
+  };
+
+  // ?lang= wins (so a kiosk can be pinned from its URL), then what this browser was last
+  // told, then what the browser itself asks for. localStorage is wrapped: a private window
+  // throws on the mere act of reading it, and a wall must not go blank over a preference.
+  function pickLang() {
+    var q = null;
+    try { q = new URLSearchParams(location.search); } catch (e) { q = null; }
+    var fromUrl = q ? String(q.get('lang') || '').trim().toLowerCase() : '';
+    if (fromUrl === 'th' || fromUrl === 'en') return fromUrl;
+
+    var saved = '';
+    try { saved = localStorage.getItem(LANG_KEY) || ''; } catch (e) { saved = ''; }
+    if (saved === 'th' || saved === 'en') return saved;
+
+    var nav = '';
+    try {
+      nav = String((navigator.languages && navigator.languages[0]) || navigator.language || '');
+    } catch (e) { nav = ''; }
+    if (nav.toLowerCase().indexOf('th') === 0) return 'th';
+
+    return 'en';
+  }
+
+  var LANG = pickLang();
+
+  // Never returns "undefined" on a wall: a missing Thai key falls back to English, and a key
+  // missing from both prints as itself — loud in review, never blank in a classroom.
+  function t(key, vars) {
+    var table = STR[LANG] || STR.en;
+    var s = table[key];
+    if (typeof s !== 'string') s = STR.en[key];
+    if (typeof s !== 'string') s = key;
+    if (vars) {
+      s = s.replace(/\{(\w+)\}/g, function (whole, name) {
+        var v = vars[name];
+        return (v === undefined || v === null) ? whole : String(v);
+      });
+    }
+    return s;
+  }
+
+  /* ==========================================================================
      DATA LAYER — carried over from tools/mqtt-dashboard.html unchanged in
      behaviour: discovery parsing, alias expansion, indexing, availability,
      expiry, EPA banding, the wildcard refusal and the subscription ceiling.
      Only the presentation below it is new.
      ====================================================================== */
 
-  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser cannot speak to the raw TCP port.
   var STORE_KEY = 'air-playground.conn.v1';
@@ -425,31 +944,18 @@ html.demo .card::after{
 
   // US EPA PM2.5 breakpoints, micrograms per cubic metre. One source of truth for the
   // creatures, the headline and the key at the bottom of the page.
+  //
+  // No prose lives in here any more — only `k`, the band's key. The verdict, the band name
+  // and the child-facing note are looked up through t() at render time, which is what lets
+  // the whole wall change language without a reload or a dropped connection. The ranges are
+  // numerals and stay as they are: Thai readers read PM2.5 values in Arabic digits.
   var BANDS = [
-    { max: 12.0,  label: 'Good',                            short: 'Good',
-      r: '0 – 12.0',        v: '--c-good', mood: 'good', light: 0,
-      say: 'Yes! Go outside and play.',
-      note: 'The air out there is clean today.' },
-    { max: 35.4,  label: 'Moderate',                        short: 'Moderate',
-      r: '12.1 – 35.4',     v: '--c-mod',  mood: 'mod',  light: 1,
-      say: 'Yes — outside is fine.',
-      note: 'A little haze, but playing outside is okay.' },
-    { max: 55.4,  label: 'Unhealthy for sensitive groups',  short: 'Sensitive groups',
-      r: '35.5 – 55.4',     v: '--c-usg',  mood: 'usg',  light: 0,
-      say: 'Mostly yes — take it easy.',
-      note: 'If you cough, wheeze or use an inhaler, play inside today.' },
-    { max: 150.4, label: 'Unhealthy',                       short: 'Unhealthy',
-      r: '55.5 – 150.4',    v: '--c-unh',  mood: 'unh',  light: 0,
-      say: 'Better to play inside.',
-      note: 'Short trips outside only, and wear a mask if you go.' },
-    { max: 250.4, label: 'Very unhealthy',                  short: 'Very unhealthy',
-      r: '150.5 – 250.4',   v: '--c-vun',  mood: 'vun',  light: 0,
-      say: 'Stay inside today.',
-      note: 'Keep the windows shut. No running around outdoors.' },
-    { max: Infinity, label: 'Hazardous',                    short: 'Hazardous',
-      r: '250.5 +',         v: '--c-haz',  mood: 'haz',  light: 0,
-      say: 'Everybody stays inside.',
-      note: 'This is the worst kind of air. Shut the windows and tell a grown-up.' }
+    { max: 12.0,  k: 'good',      r: '0 – 12.0',      v: '--c-good', mood: 'good', light: 0 },
+    { max: 35.4,  k: 'moderate',  r: '12.1 – 35.4',   v: '--c-mod',  mood: 'mod',  light: 1 },
+    { max: 55.4,  k: 'sensitive', r: '35.5 – 55.4',   v: '--c-usg',  mood: 'usg',  light: 0 },
+    { max: 150.4, k: 'unhealthy', r: '55.5 – 150.4',  v: '--c-unh',  mood: 'unh',  light: 0 },
+    { max: 250.4, k: 'verybad',   r: '150.5 – 250.4', v: '--c-vun',  mood: 'vun',  light: 0 },
+    { max: Infinity, k: 'hazardous', r: '250.5 +',    v: '--c-haz',  mood: 'haz',  light: 0 }
   ];
 
   var ALIASES = {
@@ -493,16 +999,18 @@ html.demo .card::after{
     return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
   }
 
+  // One unit only, never "2h 14m": Thai builds that phrase differently and the shared
+  // string table has one placeholder per unit. The digits stay Arabic in both languages.
   function ago(ts) {
-    if (!ts) return 'never';
+    if (!ts) return t('pg.time.never');
     var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-    if (s < 2) return 'just now';
-    if (s < 60) return s + 's ago';
+    if (s < 2) return t('time.justnow');
+    if (s < 60) return t('time.secondsAgo', { n: s });
     var m = Math.floor(s / 60);
-    if (m < 60) return m + 'm ago';
+    if (m < 60) return t('time.minutesAgo', { n: m });
     var h = Math.floor(m / 60);
-    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
-    return Math.floor(h / 24) + 'd ago';
+    if (h < 24) return t('time.hoursAgo', { n: h });
+    return t('pg.time.daysAgo', { n: Math.floor(h / 24) });
   }
 
   // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
@@ -891,41 +1399,38 @@ html.demo .card::after{
     var mood, paint, pill, say, note, showNum = false;
 
     if (st === 'offline') {
-      mood = 'sleep'; paint = css('--c-sleep'); pill = 'asleep';
-      say = ent.title + ' is asleep.';
-      note = 'This board is not sending, so nobody knows the air where it lives. ' +
-             'That is why there is no number here.';
+      mood = 'sleep'; paint = css('--c-sleep'); pill = t('state.offline');
+      say = t('pg.say.asleep', { who: ent.title });
+      note = t('pg.note.offline');
     } else if (st === 'waiting') {
-      mood = 'wait'; paint = css('--c-wait'); pill = 'listening';
-      say = 'Nothing said yet.';
-      note = 'The board is awake but has not sent a reading since this screen opened. ' +
-             'Readings are not kept on the broker, so the first one has to arrive.';
+      mood = 'wait'; paint = css('--c-wait'); pill = t('state.waiting');
+      say = t('pg.say.waiting');
+      note = t('pg.note.waiting');
     } else if (st === 'unknown') {
-      mood = 'wait'; paint = css('--c-wait'); pill = 'no reading';
-      say = 'No reading right now.';
-      note = 'The board answered with “' + (ent.value ? ent.value.text : 'unknown') +
-             '” instead of a measurement.';
+      mood = 'wait'; paint = css('--c-wait'); pill = t('state.noreading');
+      say = t('verdict.unknown');
+      // The quoted word is what the board actually put on the wire. It is printed exactly
+      // as it arrived, in either language — this is wire text, not prose.
+      note = t('pg.note.unknown', { v: ent.value ? ent.value.text : t('state.noreading') });
     } else if (st === 'stale') {
-      mood = 'old'; paint = css('--c-old'); pill = 'too old';
-      say = 'This news is old.';
-      note = 'Nothing new for longer than ' + ent.expire + ' seconds, so the last number is ' +
-             'shown small and should not be trusted.';
+      mood = 'old'; paint = css('--c-old'); pill = t('state.stale');
+      say = t('pg.say.stale');
+      note = t('pg.note.stale', { n: ent.expire });
       showNum = true;
     } else if (st === 'fault') {
-      mood = 'fault'; paint = css('--c-fault'); pill = 'poorly';
-      say = 'This sensor feels poorly.';
-      note = 'It reported a dust amount below zero, which cannot happen. A grown-up should ' +
-             'look at the board.';
+      mood = 'fault'; paint = css('--c-fault'); pill = t('state.fault');
+      say = t('pg.say.fault');
+      note = t('pg.note.fault');
       showNum = true;
     } else if (band) {
-      mood = band.mood; paint = css(band.v); pill = 'live';
-      say = band.say;
-      note = band.note;
+      mood = band.mood; paint = css(band.v); pill = t('state.live');
+      say = t('verdict.' + band.k);
+      note = t('pg.note.' + band.k);
       showNum = true;
     } else {
-      mood = 'ok'; paint = css('--c-good'); pill = 'live';
-      say = 'Reporting happily.';
-      note = ent.measure ? ent.measure + ' — not part of the PM2.5 scale.' : '';
+      mood = 'ok'; paint = css('--c-good'); pill = t('state.live');
+      say = t('pg.say.reporting');
+      note = ent.measure ? t('pg.note.notpm', { m: ent.measure }) : '';
       showNum = true;
     }
 
@@ -950,28 +1455,33 @@ html.demo .card::after{
     }
 
     // The band, named in adult words with its EPA range, so the colour is never the only cue.
+    // The range keeps its Arabic digits in both languages and is never allowed to wrap.
     if (band) {
-      c.bandline.innerHTML = '<i></i><span>' + esc(band.label) + '</span><em>' +
+      c.bandline.innerHTML = '<i></i><span>' + esc(t('band.' + band.k)) + '</span><em>' +
         esc(band.r) + '</em>';
     } else if (st === 'offline' || st === 'waiting' || st === 'unknown') {
-      c.bandline.innerHTML = '<i></i><span>no band — nothing measured</span>';
+      c.bandline.innerHTML = '<i></i><span>' + esc(t('band.none')) + '</span><em>' +
+        esc(t('pg.band.nothing')) + '</em>';
     } else {
       c.bandline.innerHTML = '';
     }
 
+    // Each fragment is a whole clause in its own language — they are never assembled from
+    // translated words, because Thai orders them differently. The separator is punctuation.
     var bits = [];
     if (st === 'offline') {
       var seen = ent.availAt ||
         (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0);
-      bits.push('said offline ' + ago(seen));
+      bits.push(t('pg.meta.saidOffline', { t: ago(seen) }));
       if (ent.value && ent.value.kind === 'number') {
-        bits.push('last number ' + ent.value.text + ' ' + ent.unit + ', ' + ago(ent.at));
+        bits.push(t('pg.meta.lastNumber',
+          { v: ent.value.text, u: ent.unit, t: ago(ent.at) }));
       }
     } else {
-      bits.push('heard ' + ago(ent.at));
-      if (avail === 'unknown') bits.push('awake or asleep: unknown');
+      bits.push(t('pg.meta.heard', { t: ago(ent.at) }));
+      if (avail === 'unknown') bits.push(t('pg.meta.availUnknown'));
     }
-    if (ent.templated) bits.push('raw value — template not applied');
+    if (ent.templated) bits.push(t('pg.meta.rawValue'));
     c.when.textContent = bits.join(' · ');
   }
 
@@ -995,24 +1505,27 @@ html.demo .card::after{
     var ans = $('answer'), why = $('because'), roll = $('roll');
 
     if (worst) {
-      ans.innerHTML = '<span class="paintword">' + esc(worst.say) + '</span>';
+      ans.innerHTML = '<span class="paintword">' + esc(t('verdict.' + worst.k)) + '</span>';
       document.documentElement.style.setProperty('--headline-paint', css(worst.v));
-      why.textContent = worst.note + ' Worst reading right now: ' + worstEnt.value.text + ' ' +
-        worstEnt.unit + ' at ' + worstEnt.title + ' — ' + worst.label +
-        ' on the US EPA PM2.5 scale.';
+      why.textContent = t('pg.note.' + worst.k) + ' ' + t('pg.worst', {
+        v: worstEnt.value.text,
+        u: worstEnt.unit,
+        who: worstEnt.title,
+        band: t('band.' + worst.k),
+        scale: t('scale.epa')
+      });
     } else if (entities.size) {
-      ans.textContent = 'Nobody can say yet.';
+      ans.textContent = t('pg.answer.nobody');
       document.documentElement.style.setProperty('--headline-paint', css('--ink'));
       why.textContent = quiet === 1
-        ? 'The one board on this wall is not sending a reading, so this screen will not guess.'
-        : 'None of the ' + quiet + ' boards on this wall is sending a reading, so this screen ' +
-          'will not guess.';
+        ? t('pg.because.quiet1')
+        : t('pg.because.quietN', { n: quiet });
     } else {
-      ans.textContent = 'Let’s find out…';
+      ans.textContent = t('pg.answer.finding');
       document.documentElement.style.setProperty('--headline-paint', css('--ink'));
       why.textContent = connState === 'connected'
-        ? 'Connected to the broker. Waiting for a board to introduce itself.'
-        : 'Saying hello to the air boards.';
+        ? t('conn.connected') + ' ' + t('pg.because.waiting')
+        : t('pg.because.hello');
     }
 
     roll.innerHTML = '';
@@ -1023,10 +1536,19 @@ html.demo .card::after{
       el.innerHTML = '<i></i>' + esc(text);
       roll.appendChild(el);
     };
-    mk(live.length + (live.length === 1 ? ' board talking' : ' boards talking'),
+    mk(t(live.length === 1 ? 'pg.tally.talking1' : 'pg.tally.talkingN', { n: live.length }),
        worst ? css(worst.v) : css('--c-good'), false);
-    if (quiet) mk(quiet + (quiet === 1 ? ' board quiet' : ' boards quiet'), css('--c-sleep'), true);
-    if (!entities.size) mk('no boards found yet', css('--c-wait'), true);
+    if (quiet) {
+      mk(t(quiet === 1 ? 'pg.tally.quiet1' : 'pg.tally.quietN', { n: quiet }),
+         css('--c-sleep'), true);
+    }
+    if (!entities.size) mk(t('pg.tally.none'), css('--c-wait'), true);
+    // An unsettled broker used to be invisible here — the wall just looked like it had
+    // nothing to say. One quiet chip, and only while it is unsettled.
+    if (!demo && (connState === 'connecting' || connState === 'reconnecting')) {
+      mk(t(connState === 'connecting' ? 'conn.connecting' : 'conn.retrying'),
+         css('--c-wait'), true);
+    }
   }
 
   function layout() {
@@ -1045,43 +1567,67 @@ html.demo .card::after{
   setInterval(function () { entities.forEach(render); headline(); }, 1000);
 
   // ---------------------------------------------------------------- the key
-  (function key() {
+  // A named function rather than an IIFE, because the language switcher rebuilds it.
+  function renderKeys() {
     var host = $('keys');
+    host.innerHTML = '';
     BANDS.forEach(function (b) {
       var el = document.createElement('div');
       el.className = 'key';
       el.innerHTML = faceMarkup('face mini') +
-        '<b>' + esc(b.short) + '</b><span>' + esc(b.r) + '</span>';
+        '<b>' + esc(t('bandshort.' + b.k)) + '</b><span>' + esc(b.r) + '</span>';
       var svg = el.querySelector('svg');
       svg.style.setProperty('--paint', css(b.v));
       paintFace(svg, b.mood);
       host.appendChild(el);
     });
-  })();
+  }
 
   // ---------------------------------------------------------------- calm stop
   // Any failure this page cannot fix by waiting turns the whole screen into one sentence.
-  function stopScreen(say, sub2) {
-    $('stop-say').textContent = say;
-    $('stop-sub').textContent = sub2 || '';
+  // The curtain stores KEYS, not sentences. If it is up when someone presses "l" it has to
+  // be able to say the same thing again in the other language, and a stored English string
+  // could not. `whyKey` is the broker's own reason, which is itself translated.
+  var lastStop = null;
+  function stopScreen(sayKey, subKey, opts) {
+    lastStop = {
+      say: sayKey,
+      sub: subKey || '',
+      vars: (opts && opts.vars) || null,
+      whyKey: (opts && opts.whyKey) || '',
+      whyRaw: (opts && opts.whyRaw) || '',
+      hint: !!(opts && opts.hint)
+    };
+    paintStop();
     $('stop').hidden = false;
   }
-  function clearStop() { $('stop').hidden = true; }
+  function paintStop() {
+    if (!lastStop) return;
+    var v = {};
+    if (lastStop.vars) {
+      Object.keys(lastStop.vars).forEach(function (k) { v[k] = lastStop.vars[k]; });
+    }
+    if (lastStop.whyKey) v.why = t(lastStop.whyKey);
+    else if (lastStop.whyRaw) v.why = lastStop.whyRaw;
+    $('stop-say').textContent = t(lastStop.say, v);
+    var sub2 = lastStop.sub ? t(lastStop.sub, v) : '';
+    if (lastStop.hint) sub2 = sub2 ? sub2 + ' ' + t('conn.hint') : t('conn.hint');
+    $('stop-sub').textContent = sub2;
+  }
+  function clearStop() { $('stop').hidden = true; lastStop = null; }
 
   // ---------------------------------------------------------------- connect
+  // Returns a KEY for the five reason codes the broker gives, so the curtain can be
+  // repainted in either language. Anything else is the library's own message: passed
+  // through untranslated rather than paraphrased into something that is not what it said.
   function describe(err) {
     var code = err && (err.code !== undefined ? err.code : err.reasonCode);
-    var map = {
-      1: 'the broker rejected the MQTT protocol version',
-      2: 'the broker rejected this client id',
-      3: 'the broker is unavailable',
-      4: 'the username or passphrase is wrong',
-      5: 'this account is not allowed on the broker'
-    };
-    if (map[code]) return { text: map[code], fatal: code === 2 || code === 4 || code === 5 };
+    if (code >= 1 && code <= 5) {
+      return { key: 'pg.err.' + code, fatal: code === 2 || code === 4 || code === 5 };
+    }
     var m = String((err && err.message) || err || 'unknown error');
-    if (/not authoriz|bad user/i.test(m)) return { text: m, fatal: true };
-    return { text: m, fatal: false };
+    if (/not authoriz|bad user/i.test(m)) return { raw: m, fatal: true };
+    return { raw: m, fatal: false };
   }
 
   function disconnect() {
@@ -1097,9 +1643,7 @@ html.demo .card::after{
     if (demo) return;
     if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
       connState = 'fatal';
-      stopScreen('The drawing kit for this wall did not arrive.',
-        'This screen needs unpkg.com/mqtt@5.15.2 once, when it opens. Check this device’s ' +
-        'internet connection and reload the page.');
+      stopScreen('pg.stop.nokit', 'pg.stop.nokitSub');
       return;
     }
 
@@ -1114,9 +1658,7 @@ html.demo .card::after{
     connState = 'connecting';
 
     if (!cfg.tls && location.protocol === 'https:') {
-      stopScreen('This page is loaded over https, so it may not talk to the boards.',
-        'Press s, tick TLS (wss) and use the secure WebSocket port — or open this file straight ' +
-        'from disk.');
+      stopScreen('pg.stop.https', 'pg.stop.httpsSub');
     }
 
     try {
@@ -1132,8 +1674,7 @@ html.demo .card::after{
       });
     } catch (e) {
       connState = 'fatal';
-      stopScreen('This screen could not start talking to the boards.',
-        'Press s to check the address, then press Connect.');
+      stopScreen('pg.stop.start', 'pg.stop.startSub', { hint: true });
       return;
     }
 
@@ -1162,9 +1703,7 @@ html.demo .card::after{
       if (manualStop || connState === 'fatal') return;
       if (!everConnected) {
         connState = 'error';
-        stopScreen('This screen cannot find the air boards.',
-          'Check that the little computer at ' + url + ' is switched on and on this network. ' +
-          'The wall keeps trying by itself every few seconds. Press s to change the address.');
+        stopScreen('conn.unreachable', 'pg.stop.unreachSub', { vars: { url: url }, hint: true });
       } else {
         connState = 'reconnecting';
         headline();
@@ -1178,14 +1717,11 @@ html.demo .card::after{
         manualStop = true;
         try { client.end(true); } catch (e) {}
         client = null;
-        stopScreen('The air boards would not let this screen in.',
-          'The broker said: ' + d.text + '. Press s, enter the right username and passphrase, ' +
-          'then press Connect.');
+        stopScreen('conn.refused', 'pg.stop.refusedSub',
+          { whyKey: d.key || '', whyRaw: d.raw || '', hint: true });
       } else {
         connState = 'error';
-        stopScreen('This screen cannot find the air boards.',
-          'Check that the little computer at ' + url + ' is switched on and on this network. ' +
-          'The wall keeps trying by itself every few seconds. Press s to change the address.');
+        stopScreen('conn.unreachable', 'pg.stop.unreachSub', { vars: { url: url }, hint: true });
       }
     });
   }
@@ -1224,12 +1760,97 @@ html.demo .card::after{
   function openSheet() { if (demo) return; sheet.hidden = false; $('f-host').focus(); }
   function closeSheet() { sheet.hidden = true; }
 
+  // What the settings sheet last reported, kept as a key so it survives a language change.
+  var lastSaidKey = '';
+  function said(key) { lastSaidKey = key; $('saidwhat').textContent = key ? t(key) : ''; }
+
+  /* ==========================================================================
+     LANGUAGE — painting the fixed furniture, and switching without a reload.
+
+     Everything the wall says is looked up at paint time, so switching is just:
+     repaint the chrome, repaint every card, repaint the curtain. No reload — a
+     reload would flash the page and, worse, drop the MQTT connection and throw
+     away every board that had introduced itself, which on a quiet fleet means a
+     wall of empty cards for the next fifteen minutes.
+     ====================================================================== */
+
+  function paintChrome() {
+    document.documentElement.setAttribute('lang', LANG);
+    document.title = (demo ? 'DEMO · ' : '') + t('pg.title');
+
+    $('ask').textContent = t('pg.ask');
+    $('legend-title').textContent = t('pg.legend.title');
+
+    // esc() the template FIRST (it carries no markup of its own), then drop the two spans in.
+    $('legend-body').innerHTML = esc(t('pg.legend.body'))
+      .replace('{scale}', '<b>' + esc(t('scale.epa')) + '</b>')
+      .replace('{unit}', esc(t('unit.ugm3')));
+
+    // Written twice on purpose. On a 1600x900 wall these two paragraphs are 113px of
+    // provenance below the fold, and a wall has nobody to scroll them into view; there
+    // they are hidden and the same words live on the settings sheet, one keypress away.
+    // On a phone the page scrolls and both copies are simply present.
+    var f1 = '<b>' + esc(t('pg.foot.1.lead')) + '</b> ' + esc(t('pg.foot.1.rest'));
+    var f2 = '<b>' + esc(t('pg.foot.2.lead')) + '</b> ' + esc(t('pg.foot.2.rest'));
+    $('foot-1').innerHTML = f1;
+    $('foot-2').innerHTML = f2;
+    $('sheet-foot-1').innerHTML = f1;
+    $('sheet-foot-2').innerHTML = f2;
+    $('foot-3').innerHTML = esc(t('pg.foot.keys'))
+      .replace('{s}', '<kbd>s</kbd>')
+      .replace('{l}', '<kbd>l</kbd>')
+      .replace('{esc}', '<kbd>Esc</kbd>');
+
+    $('sheet-title').textContent = t('pg.set.title');
+    $('sheet-hint').textContent = t('pg.set.hint');
+    $('lbl-host').textContent = t('pg.set.host');
+    $('lbl-port').textContent = t('pg.set.port');
+    $('lbl-user').textContent = t('pg.set.user');
+    $('lbl-pass').textContent = t('pg.set.pass');
+    $('lbl-filter').textContent = t('pg.set.filter');
+    $('lbl-tls').textContent = t('pg.set.tls');
+    $('lbl-remember').textContent = t('pg.set.remember');
+    $('f-filter').setAttribute('placeholder', t('pg.set.filterPh'));
+    $('btn-connect').textContent = t('pg.set.connect');
+    $('btn-forget').textContent = t('pg.set.forget');
+    $('btn-close').textContent = t('pg.set.close');
+
+    // The DEMO tag and the two warning sentences are set elsewhere and stay bilingual;
+    // only the way out of demo mode follows the page language.
+    $('demoexit').innerHTML = esc(t('pg.demo.exit')).replace('{q}', '<b>?demo=</b>');
+
+    $('langpick').setAttribute('aria-label', t('pg.lang'));
+    Array.prototype.forEach.call($('langpick').querySelectorAll('.langbtn'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-lang') === LANG ? 'true' : 'false');
+    });
+  }
+
+  function applyLang(next) {
+    if (next !== 'th' && next !== 'en') return;
+    if (next === LANG) return;
+    LANG = next;
+    try { localStorage.setItem(LANG_KEY, next); } catch (e) {}   // private mode throws
+    paintChrome();
+    renderKeys();
+    entities.forEach(render);
+    headline();
+    paintStop();
+    if (lastSaidKey) said(lastSaidKey);
+    if (demo && lastDemoScene) demoMarker(lastDemoScene);
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.langbtn'), function (b) {
+    b.addEventListener('click', function () { applyLang(b.getAttribute('data-lang')); });
+  });
+
   document.addEventListener('keydown', function (ev) {
     var t = ev.target || {};
     var typing = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
     if (ev.key === 'Escape') { closeSheet(); return; }
     if (typing || ev.metaKey || ev.ctrlKey || ev.altKey) return;
     if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); sheet.hidden ? openSheet() : closeSheet(); }
+    // "l" for language. "s" was already taken by the settings sheet; these are the only two.
+    if (ev.key === 'l' || ev.key === 'L') { ev.preventDefault(); applyLang(LANG === 'th' ? 'en' : 'th'); }
   });
   $('btn-close').addEventListener('click', closeSheet);
   sheet.addEventListener('click', function (ev) { if (ev.target === sheet) closeSheet(); });
@@ -1243,12 +1864,7 @@ html.demo .card::after{
     entities.clear(); byState.clear(); byAvail.clear(); byUid.clear(); boardStatus.clear();
     filteredOut.clear();
     var ok = saveStore(storable(cfg));
-    $('saidwhat').textContent = !ok
-      ? 'This browser refused to save settings (a private window?). The connection still works, ' +
-        'but you will type these again next time.'
-      : cfg.remember
-        ? 'Saved in this browser only, on this device — passphrase included. Nothing is uploaded.'
-        : 'Saved in this browser only, on this device. The passphrase was NOT stored.';
+    said(!ok ? 'pg.set.nostore' : cfg.remember ? 'pg.set.savedPass' : 'pg.set.savedNoPass');
     clearStop();
     closeSheet();
     layout();
@@ -1259,7 +1875,7 @@ html.demo .card::after{
     clearStore();
     fillForm(null);
     $('f-pass').value = '';
-    $('saidwhat').textContent = 'Saved settings cleared from this browser.';
+    said('pg.set.cleared');
   });
 
   /* ==========================================================================
@@ -1304,8 +1920,14 @@ html.demo .card::after{
       from: function (pm, step) { return String(-57 - (step % 4)); } },
     { id: 'uptime', name: 'Uptime', unit: 's', dc: 'duration',
       from: function (pm, step, up) { return String(up); } },
+    // This one is a PAYLOAD, not a label: a real board publishes the English band name on
+    // the wire whatever language the wall is set to, and the card prints wire text verbatim.
+    // So it reads STR.en directly and never goes through t().
     { id: 'air_quality_level', name: 'Air quality level', unit: '', dc: '',
-      from: function (pm) { var b = bandFor(Math.trunc(pm * 10) / 10); return b ? b.label : 'unknown'; } }
+      from: function (pm) {
+        var b = bandFor(Math.trunc(pm * 10) / 10);
+        return b ? STR.en['band.' + b.k] : 'unknown';
+      } }
   ];
 
   var demoStep = 0;
@@ -1389,7 +2011,7 @@ html.demo .card::after{
   function demoShow(wire) {
     var v = parseValue(wire);
     var b = v.kind === 'number' ? bandFor(v.n1) : null;
-    return v.text + ' ' + DEMO_UNIT + (b ? ' (' + b.label + ')' : '');
+    return v.text + ' ' + DEMO_UNIT + (b ? ' (' + t('band.' + b.k) + ')' : '');
   }
 
   function demoRequest() {
@@ -1459,25 +2081,35 @@ html.demo .card::after{
     headline();
   }
 
+  // Kept so the language switcher can say the same thing again without republishing and
+  // resetting every board's age.
+  var lastDemoScene = null;
+
   function demoMarker(scene) {
+    if (scene) lastDemoScene = scene;
+    scene = lastDemoScene;
+    if (!scene) return;
+
     var out = [];
     if (demo.bad) {
       out.push(demo.raw === ''
-        ? '?demo= was left empty, so this is the fleet’s usual state'
-        : '“' + demo.raw + '” is not a demo setting, so this is the fleet’s usual state');
+        ? t('pg.demo.badEmpty')
+        : t('pg.demo.badValue', { raw: demo.raw }));
     }
     if (demo.mode === 'mixed') {
       scene.forEach(function (s) {
-        if (s.state === 'live') out.push(s.board + ' live at ' + demoShow(s.wire));
-        else if (s.state === 'stale') out.push(s.board + ' too old, last said ' + demoShow(s.wire));
-        else out.push(s.board + ' asleep, no reading');
+        if (s.state === 'live') out.push(t('pg.demo.live', { b: s.board, v: demoShow(s.wire) }));
+        else if (s.state === 'stale') out.push(t('pg.demo.stale', { b: s.board, v: demoShow(s.wire) }));
+        else out.push(t('pg.demo.asleep', { b: s.board }));
       });
     } else if (demo.mode === 'cycle') {
-      out.push('walking every EPA band, 4 seconds each — now ' + demoShow(scene[0].wire));
+      out.push(t('pg.demo.cycle', { v: demoShow(scene[0].wire) }));
     } else {
-      out.push('all three boards told to read ' + demoShow(scene[0].wire));
+      out.push(t('demo.at') + ' ' + demoShow(scene[0].wire));
     }
-    $('demosay').textContent = 'Made-up air, not a measurement: ' + out.join(' · ') + '.';
+    // The bar's own DEMO tag and its two warning sentences already say "not real" in both
+    // languages; this line only has to say what the fake numbers are.
+    $('demosay').textContent = out.join(' · ');
     $('demobar').hidden = false;
   }
 
@@ -1501,7 +2133,12 @@ html.demo .card::after{
   function demoBoot(req) {
     demo = req;
     document.documentElement.classList.add('demo');
-    document.title = 'DEMO · ' + document.title;   // named in the tab and in a screenshot
+    // BILINGUAL AND PERMANENT. Whichever language the wall is set to, the marker says
+    // "simulated" in both — a phone photograph of this screen has to be unmistakable to
+    // whoever picks it up, and that is not necessarily whoever set the language.
+    $('demowarn-en').textContent = STR.en['demo.warn'];
+    $('demowarn-th').textContent = STR.th['demo.warn'];
+    paintChrome();                                 // re-titles the tab "DEMO · …"
     client = DEMO_CLIENT;
     activeFilter = '';
     connState = 'demo';
@@ -1538,6 +2175,11 @@ html.demo .card::after{
   // ?demo= is read FIRST and is the only door into demo mode — no stored flag, no default,
   // nothing that survives a reload of the bare address. Without it, every line below runs
   // exactly as it did before demo mode existed: connect on load, no configuration asked.
+  // Language first: every line below paints text, and it should paint it once, in the right
+  // language, rather than in English and then again.
+  paintChrome();
+  renderKeys();
+
   var demoReq = demoRequest();
   if (demoReq) {
     demoBoot(demoReq);

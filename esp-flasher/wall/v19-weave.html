@@ -42,7 +42,12 @@ body{
     repeating-linear-gradient(90deg, var(--ink-14) 0 1px, transparent 1px 15px),
     repeating-linear-gradient(0deg,  rgba(25,22,18,.07) 0 1px, transparent 1px 15px);
   color:var(--ink);
-  font:16px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  /* The Thai faces sit at the TAIL of the stack on purpose. Font matching is per glyph:
+     Latin keeps system-ui exactly as it was drawn, and every Thai character falls through
+     to a face that actually knows where to put a tone mark. Named faces only — this page
+     is offline-capable, so there is no webfont link to lean on. */
+  font:16px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,
+       'Noto Sans Thai','IBM Plex Sans Thai','Sarabun',sans-serif;
   -webkit-font-smoothing:antialiased;
   padding:clamp(.7rem,1.7vw,1.5rem);
   min-height:100vh;
@@ -50,6 +55,23 @@ body{
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
 h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.015em}
 .loom{max-width:2100px;margin:0 auto;display:flex;flex-direction:column;gap:clamp(.7rem,1.5vw,1.15rem)}
+
+/* ---------------------------------------------------------------- the wall
+   This page is made for an unattended 1600x900 display, and a wall has nobody to
+   scroll it: anything below the fold is not "further down", it is gone. On a
+   wall-shaped viewport the loom is therefore fitted to the screen — the bolt takes
+   the space left over and the panels weave into whatever height that is. The rule
+   is deliberately NOT unconditional: on a phone, or any short or narrow viewport,
+   the page goes back to flowing and scrolling normally, because clipping content
+   is worse than scrolling it. */
+@media (min-width:1000px) and (min-height:620px){
+  html,body{height:100%}
+  body{overflow:hidden;display:flex;flex-direction:column}
+  .loom{flex:1;min-height:0;width:100%}
+  .bolt{flex:1;min-height:0}
+  .panel{min-height:0}
+  .hem{padding-bottom:.2rem}
+}
 
 /* ---------------------------------------------------------------- selvedge */
 /* The answer band. It is the widest, heaviest thing on the wall on purpose:
@@ -152,11 +174,21 @@ h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.015em}
     repeating-linear-gradient(45deg,  rgba(25,22,18,.5) 0 2px, transparent 2px 9px),
     repeating-linear-gradient(-45deg, rgba(25,22,18,.5) 0 2px, transparent 2px 9px);
 }
-/* faded — cloth woven a while ago, now expired. Same sett, drained. */
+/* faded — cloth woven a while ago, now expired. Drained sett, cut line. */
 .panel[data-weave="faded"]{--warp:rgba(25,22,18,.30);--weft:rgba(25,22,18,.20);--twill:0.03}
 .panel[data-weave="faded"] .cloth::after{
   content:"";position:absolute;left:0;right:0;top:50%;border-top:2px dashed var(--ink-45);
 }
+/* …and the NUMBER goes with it. Both rules above touch the woven ground; neither
+   reached the reading, so at ?demo=mixed the expired board printed 41.6 at 104px
+   in rgb(25,22,18) beside a live 87.4 at 104px in rgb(25,22,18) — byte-identical
+   on both axes, with a small CUT chip and a dashed line the only things telling
+   a reader across the room that one of those numbers is twenty-six minutes old.
+   An expired figure has to lose weight as well as colour. */
+.panel[data-weave="faded"] .p-num{
+  font-size:clamp(1.4rem,14cqi,3rem);color:var(--ink-45);
+}
+.panel[data-weave="faded"] .p-unit{color:var(--ink-45)}
 
 /* the inlay: a rectangle of plain ground the weave is interrupted for.
    Always light, always ink type — legibility outranks the pattern. */
@@ -175,7 +207,18 @@ h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.015em}
 .p-num[data-kind="word"]{
   font-size:clamp(1.15rem,13cqi,2.6rem);letter-spacing:-.01em;white-space:normal;overflow-wrap:anywhere;
 }
-.p-num[data-long="1"]{font-size:clamp(1.1rem,11cqi,2.4rem);white-space:normal;overflow-wrap:anywhere}
+/* The escape hatch for a payload too long to fit: it steps the size down and
+   lets the string wrap. What it does NOT do any more is `overflow-wrap:anywhere`.
+   That declaration permits a break at any character — including between the "3"
+   and the "." of a reading — and it is the exact declaration that once shipped
+   "163.3" broken across two lines on this fleet's wall. The step-down below
+   already removes the overflow pressure on its own; `anywhere` was insurance
+   against a case the step-down had already handled, bought with the one failure
+   mode this whole file is written to prevent. The wrap between WORDS that a long
+   non-numeric payload needs is what `white-space:normal` gives, and that is
+   enough. (Reachable only above 7 characters, which ?demo= cannot produce — it
+   truncates to one decimal — so this branch is for a malformed wire payload.) */
+.p-num[data-long="1"]{font-size:clamp(1.1rem,11cqi,2.4rem);white-space:normal}
 /* NOT uppercased — anywhere. CSS text-transform maps "µ" to "M", quietly turning
    µg/m³ into mg/m³: a 1000x unit error caused by a styling rule. Every string that
    came off the wire is printed exactly as the sensor published it. */
@@ -212,6 +255,12 @@ h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.015em}
 .notes p b{color:var(--ink)}
 .hem{font-size:clamp(.72rem,1.02vw,.82rem);line-height:1.62;color:var(--ink-70);padding:.2rem .2rem 1.2rem;max-width:110ch}
 .hem b{color:var(--ink);font-weight:700}
+/* The long notes live on the settings sheet now: on a 1600x900 wall they were 212px of
+   prose below the fold, unreadable because unreachable. The wall keeps one line. */
+.notes-h{margin:1.5rem 0 .4rem;font-size:.95rem;letter-spacing:.02em}
+.notes-body{font-size:.82rem;line-height:1.62;color:var(--ink-70);max-width:66ch}
+.notes-body p{margin:0 0 .55rem}
+.notes-body b{color:var(--ink);font-weight:700}
 .hem p{margin:.25rem 0}
 kbd{
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
@@ -306,6 +355,57 @@ body[data-demo] .cloth::before{
   padding:.22rem .5rem;
 }
 
+/* ---------------------------------------------------------------- the setting */
+/* Thai is threaded differently. It has no spaces between words, so the browser has no
+   boundary to break on; and it stacks tone marks above the line and descenders below it
+   (สั้ / ญู), so the tight negative tracking that makes this wall's display type sit
+   right for Latin crushes it. Every slot below that can hold Thai gets its tracking
+   released and at least 1.5 leading.
+
+   NOT ONE RULE HERE REACHES A READING. .p-num keeps white-space:nowrap while it holds a
+   number; only its [data-kind="word"] form — offline, ยังไม่มีค่า — is allowed to wrap.
+   Breaking "163.3" into "163." and "3" is the same class of bug as µ→M: a styling rule
+   quietly changing what the sensor said. */
+:root{
+  --thai:'Noto Sans Thai','IBM Plex Sans Thai','Sarabun',ui-sans-serif,system-ui,
+         -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+.ask .a:lang(th), .ask .th:lang(th), .p-band:lang(th), .p-say:lang(th), .p-th:lang(th),
+.p-state:lang(th), .p-num[data-kind="word"]:lang(th), .sw b:lang(th), .census .n:lang(th),
+.p-meta:lang(th), .takeover p:lang(th), .takeover .alt:lang(th), .link:lang(th),
+.demo-say b:lang(th), .demo-say span:lang(th), .demo-val:lang(th), .demo-bot [lang="th"],
+.sett h3 .scale:lang(th){
+  font-family:var(--thai);
+  letter-spacing:0;                 /* the display sizes here track NEGATIVE for Latin */
+  line-height:1.55;                 /* 1.2 clips the tone marks off the top */
+}
+/* No word boundaries means a long Thai string has nowhere to break and will run out of
+   its column. Listed slot by slot — never as a blanket rule — so no numeral is included. */
+.ask .a, .ask .th, .p-band, .p-say, .p-th, .takeover p, .takeover .alt,
+.demo-say b, .demo-say span, .sw b{ word-break:break-word; overflow-wrap:anywhere }
+
+/* the other language, under the takeover's one calm sentence */
+.takeover .alt{
+  margin:0;max-width:30ch;font-size:clamp(.95rem,2.2vw,1.5rem);line-height:1.5;
+  font-weight:700;color:var(--ink-70);letter-spacing:0;
+}
+/* the loom's own footnote on a panel: always English, always quiet */
+.p-note{font-size:clamp(.68rem,.85cqi + .56rem,.8rem);color:var(--ink-45);line-height:1.45}
+.p-note:empty{display:none}
+
+/* -------------------------------------------------------------- language tabs */
+/* Two selvedge tabs in the census column. The wall's job is the reading, so this is the
+   quietest interactive thing on the page: an ink outline, filled only when it is in use. */
+.langs{display:flex;margin-top:.3rem}
+.langs button{
+  font:inherit;font-size:clamp(.62rem,.92vw,.72rem);font-weight:800;letter-spacing:.1em;
+  padding:.08rem .42rem;background:transparent;color:var(--ink-45);
+  border:1.5px solid var(--ink-28);border-radius:0;cursor:pointer;
+}
+.langs button + button{border-left-width:0}
+.langs button[aria-pressed="true"]{background:var(--ink);color:var(--ground-2);border-color:var(--ink)}
+.langs button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -315,49 +415,48 @@ body[data-demo] .cloth::before{
 
   <header class="selvedge">
     <div class="ask">
-      <div class="q">SHOULD WE GO OUTSIDE?</div>
-      <div class="a" id="verdict">Reading the loom&hellip;</div>
+      <div class="q" id="ask-q" lang="en">SHOULD WE GO OUTSIDE?</div>
+      <!-- .a is the answer in the reader's language; .th is the same sentence in the other
+           one. The wall stays bilingual whichever way the tabs are set, because the child
+           reading it and the teacher beside them do not always share a first language. -->
+      <div class="a" id="verdict">&nbsp;</div>
       <div class="th" id="verdict-th" lang="th">&nbsp;</div>
-      <div class="src" id="verdict-src">Answered from the worst live PM2.5 reading on this wall, using the US EPA scale.</div>
+      <div class="src" id="verdict-src">&nbsp;</div>
     </div>
     <div class="census">
       <div class="n" id="census">&mdash;</div>
-      <div class="link" id="link">connecting to the loom&hellip;</div>
-      <div class="link" id="link-hint">press <b>s</b> for broker settings</div>
+      <div class="link" id="link">&nbsp;</div>
+      <div class="link" id="link-hint">&nbsp;</div>
+      <div class="langs" id="langs" lang="en">
+        <button type="button" data-lang="th" aria-pressed="false">TH</button>
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      </div>
     </div>
   </header>
 
   <main class="bolt" id="bolt" hidden></main>
 
   <section class="sett" id="sett">
-    <h3>THE SETT &mdash; US EPA PM2.5 breakpoints, in &micro;g/m&sup3;</h3>
+    <h3><b lang="en">THE SETT</b> &mdash; <span class="scale" id="sett-scale"></span></h3>
     <div class="setts" id="setts"></div>
   </section>
 
-  <section class="notes" id="notes" hidden></section>
+  <!-- Diagnostics for whoever maintains the wall, not for the room: English, and marked
+       as English so a Thai page does not apply Thai line-breaking to them. -->
+  <section class="notes" id="notes" lang="en" hidden></section>
 
-  <footer class="hem">
+  <footer class="hem" lang="en">
     <p><b>The cloth is the reading.</b> Thread pitch and thread width are computed from the
-      number itself &mdash; clean air weaves an open plain-weave you can see the ground through,
-      and every microgram packs the sett tighter until no light passes. Nothing here is
-      hand-picked, and no colour is doing the work.</p>
-    <p><b>An empty loom is not a zero.</b> A board that has reported offline shows bare warp:
-      threads strung up, nothing crossing them, no number. This wall never weaves cloth out of a
-      reading it does not have, and never lets a stale number stand in for a live one.</p>
-    <p><b>Boards name themselves.</b> Every panel is titled with the board id parsed out of its
-      own state topic. The discovery payload calls all three of them &ldquo;PM2.5&rdquo;, so the
-      published name is never allowed to be the identity.</p>
-    <p><b>Freshly opened.</b> Readings are published without the retain flag, so a page that has
-      just loaded shows <em>threaded &mdash; waiting for the first pick</em> even for a perfectly
-      healthy board. Press <kbd>s</kbd> to change the broker; nothing is stored unless you save it
-      there, and then only in this browser on this device.</p>
+      number itself; a board that has reported offline shows bare warp, never a zero. How
+      this wall is woven, and what it refuses to weave &mdash; press <kbd>s</kbd>.</p>
   </footer>
 </div>
 
 <!-- The whole screen, when there is nothing honest to show. -->
 <div class="takeover" id="takeover" hidden>
   <p id="takeover-msg"></p>
-  <p class="sub" id="takeover-sub"></p>
+  <p class="alt" id="takeover-alt"></p>
+  <p class="sub" id="takeover-sub" lang="en"></p>
 </div>
 
 <!-- ========================= THE DEMO MARK =========================
@@ -366,19 +465,22 @@ body[data-demo] .cloth::before{
      being simulated is printed inside the band, next to the word DEMO. -->
 <div class="demo-band demo-top" id="demo-top" hidden>
   <div class="demo-word">DEMO<span lang="th">ตัวอย่าง</span></div>
+  <!-- Both languages, always, whichever way the tabs are set: a screen showing invented
+       numbers must be unreadable as real to ANY passer-by, not only to the one whose
+       language the page happens to be in. Filled from the string table by paintDemo(). -->
   <div class="demo-say">
-    <b>SIMULATED AIR &mdash; NOT A REAL READING</b>
-    <span lang="th">ข้อมูลจำลอง ไม่ใช่ค่าที่วัดได้จริง อย่าใช้ตัดสินใจออกนอกบ้าน</span>
+    <b id="demo-warn"></b>
+    <span id="demo-warn-alt"></span>
   </div>
   <div class="demo-val mono" id="demo-val">&mdash;</div>
 </div>
 <div class="demo-band demo-bot" id="demo-bot" hidden>
-  <span id="demo-bot-text">DEMO &middot; ตัวอย่าง &middot; SIMULATED DATA &middot; NO SENSOR CONNECTED</span>
+  <span id="demo-bot-text"></span>
 </div>
 
 <!-- Settings live behind the "s" key. They are never in the way of the air. -->
 <div class="sheet" id="sheet" hidden>
-  <div class="card">
+  <div class="card" lang="en">
     <h2>Broker</h2>
     <p class="lead">This wall speaks MQTT over WebSocket. A browser cannot open the plain TCP
       listener, so this must be the WebSocket port &mdash; pointing it at the wrong one fails in a
@@ -398,6 +500,24 @@ body[data-demo] .cloth::before{
       </div>
     </form>
     <p class="hint" id="store-hint"></p>
+
+    <h2 class="notes-h">How this wall is woven</h2>
+    <div class="notes-body">
+      <p><b>The cloth is the reading.</b> Thread pitch and thread width are computed from the
+        number itself &mdash; clean air weaves an open plain-weave you can see the ground through,
+        and every microgram packs the sett tighter until no light passes. Nothing here is
+        hand-picked, and no colour is doing the work.</p>
+      <p><b>An empty loom is not a zero.</b> A board that has reported offline shows bare warp:
+        threads strung up, nothing crossing them, no number. This wall never weaves cloth out of a
+        reading it does not have, and never lets a stale number stand in for a live one.</p>
+      <p><b>Boards name themselves.</b> Every panel is titled with the board id parsed out of its
+        own state topic. The discovery payload calls all three of them &ldquo;PM2.5&rdquo;, so the
+        published name is never allowed to be the identity.</p>
+      <p><b>Freshly opened.</b> Readings are published without the retain flag, so a page that has
+        just loaded shows <em>threaded &mdash; waiting for the first pick</em> even for a perfectly
+        healthy board. Nothing is stored unless you save it above, and then only in this browser
+        on this device.</p>
+    </div>
   </div>
 </div>
 
@@ -412,8 +532,227 @@ body[data-demo] .cloth::before{
 (function () {
   'use strict';
 
+  // ================================================================ language
+  // Most of the people this wall is for read Thai, and the youngest of them read only
+  // Thai. The Thai below was NOT translated from the English beside it — it was written
+  // the way a Thai adult actually tells a child to stay indoors — so an English row and
+  // its Thai row are two originals, not a source and a copy. Nothing here may be
+  // re-worded to make the two "match": that is how you get calqued Thai that reads as
+  // machine output to the only people who need it.
+  //
+  // Rows marked EN-ONLY are deliberately absent from `th` and fall back to English. They
+  // are diagnostics for whoever maintains the wall, and the honest gap is better than
+  // inventing Thai to fill it.
+  var STR = {
+    en: {
+      'verdict.good':      'Go outside. The air is clean.',
+      'verdict.moderate':  'Air is okay. Outdoor play is fine.',
+      'verdict.sensitive': 'Sensitive groups take care.',
+      'verdict.unhealthy': 'Unhealthy — stay indoors.',
+      'verdict.verybad':   'Very unhealthy — stay indoors.',
+      'verdict.hazardous': 'Hazardous — stay inside.',
+      'verdict.unknown':   'No reading — air quality unknown.',
+
+      'band.good':      'Good',
+      'band.moderate':  'Moderate',
+      'band.sensitive': 'Unhealthy for sensitive groups',
+      'band.unhealthy': 'Unhealthy',
+      'band.verybad':   'Very unhealthy',
+      'band.hazardous': 'Hazardous',
+      'band.none':      'Not rated',
+
+      'state.offline':   'offline',
+      'state.noreading': 'no reading',
+      'state.stale':     'stale',
+      'state.waiting':   'waiting',
+      'state.live':      'live',
+      'state.fault':     'sensor fault',
+
+      'conn.connecting':  'connecting',
+      'conn.connected':   'connected',
+      'conn.retrying':    'reconnecting',
+      'conn.refused':     'The broker refused this connection.',
+      'conn.unreachable': 'Cannot reach the broker.',
+      'conn.hint':        'Press s to enter the details.',
+
+      'demo.warn': 'SIMULATED DATA, NOT A REAL READING',
+      'demo.at':   'every board faked at',
+
+      'time.justnow':    'just now',
+      'time.secondsAgo': '{n}s ago',
+      'time.minutesAgo': '{n}m ago',
+      'time.hoursAgo':   '{n}h ago',
+
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'US EPA PM2.5 scale',
+
+      // ---- this version's own vocabulary -------------------------------
+      // The loom metaphor is the design. In English it names the panel state; in Thai
+      // there is no vetted weaving idiom to name it with, so the Thai rows carry the
+      // plain state word and the metaphor stays where it does not need words at all —
+      // in the cloth itself, which is the same in every language.
+      'loom.live':    'WEAVING',
+      'loom.stale':   'CUT',
+      'loom.waiting': 'THREADED',
+      'loom.offline': 'LOOM EMPTY',
+      'loom.unknown': 'NO READING',
+      'loom.fault':   'SNARLED',
+
+      'census.live':    'weaving',
+      'census.waiting': 'threaded',
+      'census.stale':   'cut',
+      'census.fault':   'snarled',
+      'census.offline': 'empty',
+      'census.total':   '{n} boards',
+      'census.none':    'no boards described yet',
+
+      'ask.q': 'SHOULD WE GO OUTSIDE?',            // EN-ONLY, see applyLang()
+
+      'src.worst': 'From the worst live reading on this wall, {v} {u} — {scale}',
+      'src.none':  'No board is weaving, so this wall will not guess. {scale}',
+
+      'link.topics': '{n} topics',
+
+      'meta.updated':      'updated {t}',
+      'meta.offline':      'offline {t}',
+      'meta.cover':        'cloth {n}% closed',             // EN-ONLY
+      'meta.availUnknown': 'availability unknown',          // EN-ONLY
+      'meta.templated':    'raw value — template not applied',  // EN-ONLY
+
+      'time.never':   'never',
+      'time.daysAgo': '{n}d ago',                  // EN-ONLY, see agoIn()
+
+      'demo.nosettings': 'demo mode · broker settings are disabled',
+
+      // EN-ONLY: the loom's footnote on a panel, and the curtain's technical half.
+      'note.offlineLast':  'The loom is empty. Its last reading was {v} {u}, {ago}.',
+      'note.offlineNever': 'The loom is empty — this board has published no reading.',
+      'note.waiting':      'Warp is on, waiting for the first pick. Readings are not retained, so this clears on the next publish.',
+      'note.stale':        'The cloth was cut: this reading expired after {n}s. Treat it as unknown, not as current air.',
+      'note.fault':        'Snarled — the sensor reported a concentration below zero, which is not a reading.',
+      'note.unknown':      'The board published "{v}", which is not a reading.',
+      'note.nonnumeric':   'This payload is not a number, so the US EPA scale does not apply to it.'
+    },
+
+    th: {
+      'verdict.good':      'อากาศดี ออกไปเล่นได้เลย',
+      'verdict.moderate':  'อากาศพอใช้ได้ ออกไปข้างนอกได้ตามปกติ',
+      'verdict.sensitive': 'ถ้าแพ้ง่าย เลี่ยงออกข้างนอกไว้ก่อน',
+      'verdict.unhealthy': 'อากาศไม่ดี อยู่ในบ้านดีกว่า',
+      'verdict.verybad':   'อากาศแย่มาก อย่าเพิ่งออกไปข้างนอก',
+      'verdict.hazardous': 'อันตราย อยู่ในบ้าน ปิดประตูหน้าต่างให้หมด',
+      'verdict.unknown':   'ยังไม่มีค่า ไม่รู้ว่าอากาศเป็นยังไง',
+
+      'band.good':      'ดี',
+      'band.moderate':  'ปานกลาง',
+      'band.sensitive': 'เริ่มมีผลกับคนแพ้ง่าย',
+      'band.unhealthy': 'ไม่ดีต่อสุขภาพ',
+      'band.verybad':   'แย่มาก',
+      'band.hazardous': 'อันตราย',
+      'band.none':      'ไม่มีเกณฑ์',
+
+      'state.offline':   'ไม่ได้ส่งข้อมูล',
+      'state.noreading': 'ยังไม่มีค่า',
+      'state.stale':     'ค่าเก่า',
+      'state.waiting':   'กำลังรอ',
+      'state.live':      'สด',
+      'state.fault':     'เซ็นเซอร์มีปัญหา',
+
+      'conn.connecting':  'กำลังเชื่อมต่อ',
+      'conn.connected':   'เชื่อมต่อแล้ว',
+      'conn.retrying':    'กำลังเชื่อมต่อใหม่',
+      'conn.refused':     'เข้าระบบไม่ได้ บัญชีนี้ไม่มีสิทธิ์',
+      'conn.unreachable': 'ติดต่อ broker ไม่ได้',
+      'conn.hint':        'กด s เพื่อใส่ข้อมูลเข้าระบบ',
+
+      'demo.warn': 'ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง',
+      'demo.at':   'ตั้งค่าทุกบอร์ดเป็น',
+
+      'time.justnow':    'เมื่อกี้',
+      'time.secondsAgo': '{n} วินาทีที่แล้ว',
+      'time.minutesAgo': '{n} นาทีที่แล้ว',
+      'time.hoursAgo':   '{n} ชั่วโมงที่แล้ว',
+
+      'unit.ugm3': 'µg/m³',                        // a unit, not prose — never translated
+      'scale.epa': 'เกณฑ์ PM2.5 ของ US EPA',
+
+      'loom.live':    'สด',
+      'loom.stale':   'ค่าเก่า',
+      'loom.waiting': 'กำลังรอ',
+      'loom.offline': 'ไม่ได้ส่งข้อมูล',
+      'loom.unknown': 'ยังไม่มีค่า',
+      'loom.fault':   'เซ็นเซอร์มีปัญหา',
+
+      'census.live':    'สด',
+      'census.waiting': 'กำลังรอ',
+      'census.stale':   'ค่าเก่า',
+      'census.fault':   'เซ็นเซอร์มีปัญหา',
+      'census.offline': 'ไม่ได้ส่งข้อมูล',
+      'census.total':   '{n}',
+      'census.none':    'ยังไม่มีค่า',
+
+      // The English rows around these carry framing prose. The Thai rows carry the
+      // number, the unit and the vetted attribution and stop there, rather than reaching
+      // for Thai nobody vetted.
+      'src.worst': '{v} {u} · {scale}',
+      'src.none':  '{scale}',
+
+      'link.topics': '{n} topics',                 // a wire term, like broker above
+
+      // The time is the half of the meta row a reader actually uses, so it is Thai. The
+      // rest of that row is loom diagnostics and stays English (a bare "48%" beside a
+      // timestamp told a Thai reader less than the English phrase does).
+      'meta.updated': '{t}',
+      'meta.offline': '{t}',
+
+      'time.never': 'ยังไม่มีค่า',
+
+      'demo.nosettings': 'ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง'
+    }
+  };
+
+  var LANG_KEY = 'air-weave.lang.v1';
+
+  // ?lang= wins, then this browser's saved choice, then what the browser itself asks
+  // for, then English. Storage access throws outright in a private window, so every
+  // touch of it is wrapped — a wall that cannot remember a language must still show one.
+  function pickLang() {
+    var q = null;
+    try { q = new URLSearchParams(location.search).get('lang'); } catch (e) {}
+    if (q) { q = String(q).trim().toLowerCase(); if (q === 'th' || q === 'en') return q; }
+
+    var saved = null;
+    try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
+    if (saved === 'th' || saved === 'en') return saved;
+
+    var nav = '';
+    try { nav = navigator.language || (navigator.languages && navigator.languages[0]) || ''; } catch (e) {}
+    if (String(nav).toLowerCase().indexOf('th') === 0) return 'th';
+
+    return 'en';
+  }
+
+  var LANG = pickLang();
+  function ALT() { return LANG === 'th' ? 'en' : 'th'; }
+
+  // Missing key falls back to English, then to the key itself. A gap is loud in
+  // development and never blank on a wall — "undefined" must never reach a panel.
+  function tIn(lang, key, vars) {
+    var s = STR[lang] ? STR[lang][key] : null;
+    if (s == null) s = STR.en[key];
+    if (s == null) s = key;
+    s = String(s);
+    if (vars) {
+      s = s.replace(/\{(\w+)\}/g, function (m, k) {
+        return vars[k] === undefined || vars[k] === null ? m : String(vars[k]);
+      });
+    }
+    return s;
+  }
+  function t(key, vars) { return tIn(LANG, key, vars); }
+
   // ---------------------------------------------------------------- config
-  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
   var DEFAULT_PORT = '1884';            // the MQTT-over-WebSocket listener
   var STORE_KEY = 'air-weave.conn.v1';
   var MAX_SUBS = 64;                    // hard ceiling; a browser must never firehose a broker
@@ -422,37 +761,17 @@ body[data-demo] .cloth::before{
 
   // US EPA PM2.5 AQI breakpoints, micrograms per cubic metre.
   // One source of truth for the panels, the sett card and the spoken answer.
+  // A band carries a KEY, not a sentence. Every word it is ever printed with —
+  // 'band.<key>' for the name, 'verdict.<key>' for what to do about it — is looked up
+  // at paint time, so switching language cannot leave one band speaking the other one.
   var BANDS = [
-    { max: 12.0,  label: 'Good',            note: 'the air is clean',
-      say: 'Yes — go outside and play.',
-      th:  'อากาศดี ออกไปเล่นข้างนอกได้เลย',
-      demo: 6,   r: '0 – 12.0' },
-    { max: 35.4,  label: 'Moderate',        note: 'fine for most of us',
-      say: 'Yes — outside is fine for most of us.',
-      th:  'ออกไปข้างนอกได้ ใครไม่สบายให้พักก่อน',
-      demo: 24,  r: '12.1 – 35.4' },
-    { max: 55.4,  label: 'Unhealthy for sensitive groups', note: 'short trips outside',
-      say: 'Yes, but keep it short if you cough or wheeze.',
-      th:  'ออกไปได้แป๊บเดียว ใครไอหรือหอบให้อยู่ในร่ม',
-      demo: 45,  r: '35.5 – 55.4' },
-    { max: 150.4, label: 'Unhealthy',       note: 'stay in today',
-      say: 'Better to stay inside today.',
-      th:  'วันนี้อยู่ในร่มดีกว่า',
-      demo: 100, r: '55.5 – 150.4' },
-    { max: 250.4, label: 'Very unhealthy',  note: 'windows shut',
-      say: 'Stay inside. Keep the windows shut.',
-      th:  'อยู่ในร่ม ปิดหน้าต่างไว้',
-      demo: 200, r: '150.5 – 250.4' },
-    { max: Infinity, label: 'Hazardous',    note: 'mask if you must go',
-      say: 'Stay inside. Wear a mask if you must go out.',
-      th:  'อยู่ในร่ม ถ้าต้องออกไปให้ใส่หน้ากาก',
-      demo: 320, r: '250.5 +' }
+    { key: 'good',      max: 12.0,     demo: 6,   r: '0 – 12.0' },
+    { key: 'moderate',  max: 35.4,     demo: 24,  r: '12.1 – 35.4' },
+    { key: 'sensitive', max: 55.4,     demo: 45,  r: '35.5 – 55.4' },
+    { key: 'unhealthy', max: 150.4,    demo: 100, r: '55.5 – 150.4' },
+    { key: 'verybad',   max: 250.4,    demo: 200, r: '150.5 – 250.4' },
+    { key: 'hazardous', max: Infinity, demo: 320, r: '250.5 +' }
   ];
-
-  var NO_ANSWER = {
-    say: 'We cannot say yet — no board is sending a reading.',
-    th:  'ยังบอกไม่ได้ ตอนนี้ไม่มีบอร์ดไหนส่งค่ามา'
-  };
 
   // Home Assistant discovery allows abbreviated keys. Expand the ones we read.
   var ALIASES = {
@@ -528,17 +847,22 @@ body[data-demo] .cloth::before{
     return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || '');
   }
 
-  function ago(ts) {
-    if (!ts) return 'never';
+  // Digits stay Arabic in both languages: these are numbers on a health display and a
+  // Thai reader reads a PM2.5 value in the same digits an English one does.
+  function agoIn(lang, ts) {
+    if (!ts) return tIn(lang, 'time.never');
     var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-    if (s < 2) return 'just now';
-    if (s < 60) return s + 's ago';
+    if (s < 2) return tIn(lang, 'time.justnow');
+    if (s < 60) return tIn(lang, 'time.secondsAgo', { n: s });
     var m = Math.floor(s / 60);
-    if (m < 60) return m + 'm ago';
+    if (m < 60) return tIn(lang, 'time.minutesAgo', { n: m });
     var h = Math.floor(m / 60);
-    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
-    return Math.floor(h / 24) + 'd ago';
+    // Past a day, a language with no vetted day-unit keeps counting in hours. "30 hours
+    // ago" is exactly true, and it beats an English "1d ago" stranded on a Thai wall.
+    if (h < 24 || !(STR[lang] && STR[lang]['time.daysAgo'])) return tIn(lang, 'time.hoursAgo', { n: h });
+    return tIn(lang, 'time.daysAgo', { n: Math.floor(h / 24) });
   }
+  function ago(ts) { return agoIn(LANG, ts); }
 
   // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
   function parseValue(raw) {
@@ -610,12 +934,30 @@ body[data-demo] .cloth::before{
     notes.hidden = notes.children.length === 0;
   }
 
-  function fail(sentence, sub) {
-    $('takeover-msg').textContent = sentence;
-    $('takeover-sub').textContent = sub || 'It keeps trying on its own. Press s to change the broker.';
+  // The curtain holds a KEY, not a sentence, so switching language repaints it in place
+  // instead of leaving the one screen that has to be understood in the wrong language.
+  // The calm sentence is said in both; the technical half underneath stays English,
+  // because it is addressed to whoever fixes the broker.
+  var lastFail = null;
+  function fail(key, detail) {
+    lastFail = { key: key, detail: detail || '' };
+    paintFail();
     takeover.hidden = false;
   }
-  function clearFail() { takeover.hidden = true; }
+  function paintFail() {
+    if (!lastFail) return;
+    var alt = ALT();
+    var msg = $('takeover-msg');
+    msg.textContent = tIn(LANG, lastFail.key);
+    msg.lang = LANG;
+    var a = $('takeover-alt');
+    a.textContent = tIn(alt, lastFail.key);
+    a.lang = alt;
+    $('takeover-sub').innerHTML =
+      (lastFail.detail ? esc(lastFail.detail) + ' ' : '') +
+      '<span lang="' + LANG + '">' + esc(t('conn.hint')) + '</span>';
+  }
+  function clearFail() { lastFail = null; takeover.hidden = true; }
 
   // ---------------------------------------------------------------- subscribe
   // subRaw is the ONLY thing that talks to the broker and it is private to topics authored
@@ -919,7 +1261,8 @@ body[data-demo] .cloth::before{
       '<div class="cloth"><div class="inlay"><span class="p-num"></span><span class="p-unit"></span></div></div>' +
       '<footer class="p-foot">' +
         '<div class="p-band"></div><div class="p-say"></div><div class="p-th" lang="th"></div>' +
-        '<div class="p-meta"><span class="p-now"></span><span class="p-tpc mono"></span></div>' +
+        '<div class="p-note" lang="en"></div>' +
+        '<div class="p-meta"><span class="p-now"></span><span class="p-tpc mono" lang="en"></span></div>' +
       '</footer>';
     var card = {
       root: root,
@@ -930,6 +1273,8 @@ body[data-demo] .cloth::before{
       band: root.querySelector('.p-band'),
       say: root.querySelector('.p-say'),
       th: root.querySelector('.p-th'),
+      note: root.querySelector('.p-note'),
+      meta: root.querySelector('.p-meta'),
       now: root.querySelector('.p-now'),
       tpc: root.querySelector('.p-tpc')
     };
@@ -938,19 +1283,18 @@ body[data-demo] .cloth::before{
     return card;
   }
 
-  // Words placed in the big slot are AUTHORED here, so they may be capitalised safely.
-  // The unit and any raw payload are printed verbatim, never transformed.
-  var STATE_WORD = {
-    live: 'WEAVING', stale: 'CUT', waiting: 'THREADED',
-    offline: 'LOOM EMPTY', unknown: 'NO READING', fault: 'SNARLED'
-  };
-
+  // The badge word is AUTHORED — 'loom.live' in the string table, capitalised there in
+  // English and never by a CSS transform. Uppercasing by stylesheet would be a bug
+  // waiting to happen on this page: it does nothing to Thai glyphs, but it maps µ to M,
+  // and this project has already shipped µg/m³ as mg/m³ once that way.
   function render(ent) {
     var c = ent.card || build(ent);
     var st = stateOf(ent);
     var avail = availabilityOf(ent);
+    var alt = ALT();
     c.root.setAttribute('data-state', st);
-    c.state.textContent = STATE_WORD[st] || st;
+    c.state.textContent = t('loom.' + st) || st;
+    c.state.lang = LANG;
 
     c.id.textContent = ent.title;          // the board id, parsed out of its own state topic
     c.tpc.textContent = ent.stateTopic;
@@ -968,30 +1312,45 @@ body[data-demo] .cloth::before{
     c.root.setAttribute('data-weave', weave);
 
     var cover = null;
-    if ((weave === 'cloth' || weave === 'faded') && ent.value && ent.value.kind === 'number' && ent.value.n1 >= 0) {
+    // Only a LIVE value weaves. An expired reading used to drive the sett too, so
+    // an expired panel painted a full band-reactive cloth from a dead number — the
+    // whole ground of the panel advertising a band nobody is currently measuring,
+    // which is the one thing a woven wall says loudest and from furthest away. An
+    // expired panel now falls through to the bare sett and says only what it knows.
+    if (weave === 'cloth' && ent.value && ent.value.kind === 'number' && ent.value.n1 >= 0) {
       var w = weaveFor(ent.value.n1);
       setSett(c.root, w);
       cover = w.cover;
     } else if (weave === 'cloth') {
       setSett(c.root, { pitch: 20, thread: 2.4, twill: 0.06, cover: 0 });  // a live non-numeric payload
+    } else if (weave === 'faded') {
+      setSett(c.root, { pitch: 20, thread: 1.6, twill: 0.03, cover: 0 });  // drained, band-less
     }
 
     // --- the inlay ------------------------------------------------------
+    // lang is set per case, not once: an authored word is Thai or English by the tabs,
+    // but a payload and a reading are wire text and are marked as neither. That keeps
+    // the Thai typography rules — which loosen tracking and allow a break anywhere —
+    // off the one element that must never break.
     if (st === 'offline') {
-      c.num.textContent = 'offline';
+      c.num.textContent = t('state.offline');
       c.num.setAttribute('data-kind', 'word');
+      c.num.lang = LANG;
       c.unit.textContent = '';
     } else if (st === 'waiting') {
-      c.num.textContent = 'no reading yet';
+      c.num.textContent = t('state.noreading');
       c.num.setAttribute('data-kind', 'word');
+      c.num.lang = LANG;
       c.unit.textContent = '';
     } else if (st === 'unknown') {
-      c.num.textContent = ent.value ? ent.value.text : 'unknown';
+      c.num.textContent = ent.value ? ent.value.text : t('state.noreading');
       c.num.setAttribute('data-kind', 'word');
+      c.num.lang = ent.value ? 'en' : LANG;      // a raw payload is neither language
       c.unit.textContent = '';
     } else {
       c.num.textContent = ent.value.text;
       c.num.setAttribute('data-kind', ent.value.kind === 'number' ? 'num' : 'word');
+      c.num.lang = 'en';
       c.unit.textContent = ent.unit;      // verbatim off the wire: µg/m³ stays µg/m³
     }
     // Digits never break, so a payload longer than any plausible reading steps down to a
@@ -999,46 +1358,50 @@ body[data-demo] .cloth::before{
     c.num.setAttribute('data-long', c.num.textContent.length > 7 ? '1' : '0');
 
     // --- the words ------------------------------------------------------
+    // Two lines, one sentence: the reader's language and then the other one. A panel with
+    // no live number says so in BOTH — 'ยังไม่มีค่า ไม่รู้ว่าอากาศเป็นยังไง' — instead of
+    // leaving the Thai line blank the way this version used to for every state but a band.
+    // This slot answers one question — WHICH EPA BAND IS THIS? — so when there is no
+    // live number the answer is 'Not rated', not the state word over again. The badge
+    // and the big slot already say offline; saying it a third time here taught a reader
+    // nothing and pushed the one sentence that matters further down the panel.
+    var bandKey = 'band.none', sayKey = 'verdict.unknown', note = '';
     if (band) {
-      c.band.textContent = band.label;
-      c.say.textContent = band.say;
-      c.th.textContent = band.th;
+      bandKey = 'band.' + band.key;
+      sayKey = 'verdict.' + band.key;
     } else if (st === 'offline') {
-      c.band.textContent = 'Nothing on the loom';
-      c.say.textContent = ent.value && ent.value.kind === 'number'
-        ? 'This board stopped reporting. Its last reading was ' + ent.value.text + ' ' + ent.unit + ', ' + ago(ent.at) + '.'
-        : 'This board has reported offline and has published no reading.';
-      c.th.textContent = '';
+      note = ent.value && ent.value.kind === 'number'
+        ? tIn('en', 'note.offlineLast', { v: ent.value.text, u: ent.unit, ago: agoIn('en', ent.at) })
+        : tIn('en', 'note.offlineNever');
     } else if (st === 'waiting') {
-      c.band.textContent = 'Threaded up';
-      c.say.textContent = 'Warp is on, waiting for the first pick. Readings are not retained, so this clears on the next publish.';
-      c.th.textContent = '';
+      note = tIn('en', 'note.waiting');
     } else if (st === 'stale') {
-      c.band.textContent = 'Cloth cut';
-      c.say.textContent = 'This reading expired after ' + ent.expire + 's. Treat it as unknown, not as current air.';
-      c.th.textContent = '';
+      note = tIn('en', 'note.stale', { n: ent.expire });
     } else if (st === 'fault') {
-      c.band.textContent = 'Snarled';
-      c.say.textContent = 'The sensor reported a concentration below zero, which is not a reading.';
-      c.th.textContent = '';
+      note = tIn('en', 'note.fault');
+    } else if (st === 'unknown') {
+      note = tIn('en', 'note.unknown', { v: ent.value ? ent.value.text : '' });
     } else {
-      c.band.textContent = 'No band';
-      c.say.textContent = 'This payload is not a number, so the US EPA scale does not apply to it.';
-      c.th.textContent = '';
+      note = tIn('en', 'note.nonnumeric');                 // live, but not a number
     }
+    c.band.textContent = t(bandKey);        c.band.lang = LANG;
+    c.say.textContent  = t(sayKey);         c.say.lang  = LANG;
+    c.th.textContent   = tIn(alt, sayKey);  c.th.lang   = alt;
+    c.note.textContent = note;              // the loom's own footnote — always English
 
     // --- meta -----------------------------------------------------------
     var bits = [];
     if (st === 'offline') {
       var seen = ent.availAt || (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0);
-      bits.push('offline ' + ago(seen));
+      bits.push(t('meta.offline', { t: ago(seen) }));
     } else {
-      bits.push('updated ' + ago(ent.at));
+      bits.push(t('meta.updated', { t: ago(ent.at) }));
     }
-    if (cover !== null) bits.push('cloth ' + Math.round(cover * 100) + '% closed');
-    if (avail === 'unknown' && st !== 'offline') bits.push('availability unknown');
-    if (ent.templated) bits.push('raw value — template not applied');
+    if (cover !== null) bits.push(t('meta.cover', { n: Math.round(cover * 100) }));
+    if (avail === 'unknown' && st !== 'offline') bits.push(t('meta.availUnknown'));
+    if (ent.templated) bits.push(t('meta.templated'));
     c.now.textContent = bits.join(' · ');
+    c.meta.lang = LANG;
   }
 
   // ---------------------------------------------------------------- the answer
@@ -1046,13 +1409,13 @@ body[data-demo] .cloth::before{
   // reading, because a clean board next door does not make the smoke outside safe — and if
   // nothing is live it says so rather than borrowing yesterday's cloth.
   function speak() {
-    var worst = null, live = 0, off = 0, wait = 0, stale = 0, bad = 0;
+    var worst = null, worstEnt = null, live = 0, off = 0, wait = 0, stale = 0, bad = 0;
     entities.forEach(function (e) {
       var st = stateOf(e);
       if (st === 'live') {
         live++;
         if (e.value && e.value.kind === 'number' && e.value.n1 >= 0) {
-          if (worst === null || e.value.n1 > worst) worst = e.value.n1;
+          if (worst === null || e.value.n1 > worst) { worst = e.value.n1; worstEnt = e; }
         }
       } else if (st === 'offline') off++;
       else if (st === 'waiting') wait++;
@@ -1061,30 +1424,45 @@ body[data-demo] .cloth::before{
     });
 
     var band = worst === null ? null : bandFor(worst);
-    $('verdict').textContent = band ? band.say : NO_ANSWER.say;
-    $('verdict-th').textContent = band ? band.th : NO_ANSWER.th;
-    $('verdict-src').textContent = band
-      ? 'From the worst live reading on this wall, ' + worst.toFixed(1) + ' µg/m³ — US EPA PM2.5 scale.'
-      : 'No board is weaving, so this wall will not guess. US EPA PM2.5 scale.';
+    var alt = ALT();
+    var vkey = band ? 'verdict.' + band.key : 'verdict.unknown';
+    var v = $('verdict'), vth = $('verdict-th'), src = $('verdict-src');
+    v.textContent = t(vkey);            v.lang = LANG;
+    vth.textContent = tIn(alt, vkey);   vth.lang = alt;
+    // Printed as the board published it, character for character — the SAME string the
+    // panel shows. Reformatting it here to one decimal put "0" on the panel and "0.0" in
+    // the sentence above it: one reading, two numbers, on one wall. A reader cannot tell
+    // which came off the wire, and this page's whole claim is that nothing is invented.
+    // The English row frames it in a sentence; the Thai row is the number, the unit and
+    // the vetted attribution, and stops there rather than reaching for unvetted Thai.
+    src.textContent = band
+      ? t('src.worst', {
+          v: (worstEnt && worstEnt.value && worstEnt.value.text) || String(worst),
+          u: t('unit.ugm3'),
+          scale: t('scale.epa')
+        })
+      : t('src.none', { scale: t('scale.epa') });
+    src.lang = LANG;
 
     // The mixed state, stated in words. Two of three looms being empty is the normal case
     // here, and normal is exactly what a wall must never hide.
     var total = entities.size;
     var parts = [];
-    if (live) parts.push(live + ' weaving');
-    if (wait) parts.push(wait + ' threaded');
-    if (stale) parts.push(stale + ' cut');
-    if (bad) parts.push(bad + ' snarled');
-    if (off) parts.push(off + ' loom' + (off === 1 ? '' : 's') + ' empty');
+    if (live) parts.push(live + ' ' + t('census.live'));
+    if (wait) parts.push(wait + ' ' + t('census.waiting'));
+    if (stale) parts.push(stale + ' ' + t('census.stale'));
+    if (bad) parts.push(bad + ' ' + t('census.fault'));
+    if (off) parts.push(off + ' ' + t('census.offline'));
     $('census').innerHTML = total
-      ? '<em>' + total + ' board' + (total === 1 ? '' : 's') + ' · </em>' + esc(parts.join(' · '))
-      : '<em>no boards described yet</em>';
+      ? '<em>' + esc(t('census.total', { n: total })) + ' · </em>' + esc(parts.join(' · '))
+      : '<em>' + esc(t('census.none')) + '</em>';
+    $('census').lang = LANG;
 
     // The sentence itself is left exactly as it renders on a real wall — that is the thing
     // being judged — but this page must never claim a live reading it does not have.
     if (DEMO) {
-      $('verdict-src').textContent =
-        'DEMO — every number on this screen is simulated. No sensor and no broker are connected.';
+      src.textContent = t('demo.warn');
+      src.lang = LANG;
     }
   }
 
@@ -1099,16 +1477,24 @@ body[data-demo] .cloth::before{
   }
 
   function paintLink() {
-    $('link').innerHTML = connState === 'connected'
-      ? 'loom on <b>' + esc(lastUrl) + '</b> · ' + subs.size + ' topics'
-      : esc(CONN_TEXT[connState] || connState) + (lastUrl ? ' · ' + esc(lastUrl) : '');
+    var el = $('link');
+    el.lang = LANG;
+    if (connState === 'connected') {
+      el.innerHTML = esc(t('conn.connected')) + ' · <b lang="en">' + esc(lastUrl) + '</b> · ' +
+                     esc(t('link.topics', { n: subs.size }));
+    } else {
+      el.textContent = t(CONN_KEY[connState] || 'conn.connecting') +
+                       (lastUrl ? ' · ' + lastUrl : '');
+    }
   }
 
-  var CONN_TEXT = {
-    idle: 'not connected', connecting: 'connecting…', connected: 'connected',
-    reconnecting: 'reconnecting…', closed: 'disconnected',
-    error: 'cannot reach the broker', fatal: 'connection refused',
-    demo: 'DEMO — no broker connection is open'
+  // 'idle' is only ever the instant before the first connect() on a page that always
+  // connects on load, so it says connecting rather than inventing a seventh state.
+  var CONN_KEY = {
+    idle: 'conn.connecting', connecting: 'conn.connecting', connected: 'conn.connected',
+    reconnecting: 'conn.retrying', closed: 'conn.retrying',
+    error: 'conn.unreachable', fatal: 'conn.refused',
+    demo: 'demo.warn'
   };
   function setConn(state) { connState = state; paintLink(); }
 
@@ -1142,8 +1528,8 @@ body[data-demo] .cloth::before{
   function connect(cfg) {
     if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
       setConn('fatal');
-      fail('This wall could not load the library it needs to listen to the sensors.',
-           'It needs unpkg.com/mqtt@5.15.2. Check this machine’s network, or keep a local copy of the library beside this file.');
+      fail('conn.unreachable',
+           'This wall could not load the library it needs to listen to the sensors. It needs unpkg.com/mqtt@5.15.2. Check this machine’s network, or keep a local copy of the library beside this file.');
       return;
     }
 
@@ -1162,8 +1548,8 @@ body[data-demo] .cloth::before{
     // A page served over HTTPS cannot open a plaintext ws:// socket, and the browser will
     // not say so out loud — it just never connects.
     if (!cfg.tls && location.protocol === 'https:') {
-      fail('This page is loaded over HTTPS, so the browser blocks its plain connection to the sensors.',
-           'Press s and tick TLS (wss) with the secure WebSocket port, or open this file straight from disk.');
+      fail('conn.unreachable',
+           'This page is loaded over HTTPS, so the browser blocks its plain connection to the sensors. Tick TLS (wss) with the secure WebSocket port, or open this file straight from disk.');
       return;
     }
 
@@ -1180,7 +1566,8 @@ body[data-demo] .cloth::before{
       });
     } catch (e) {
       setConn('fatal');
-      fail('This wall could not start its connection to the sensors.', String(e && e.message || e));
+      fail('conn.unreachable',
+           'This wall could not start its connection to the sensors. ' + String(e && e.message || e));
       return;
     }
 
@@ -1196,8 +1583,10 @@ body[data-demo] .cloth::before{
       if (discoveryTimer) clearTimeout(discoveryTimer);
       discoveryTimer = setTimeout(function () {
         if (entities.size === 0 && others.size === 0 && filteredOut.size === 0 && connState === 'connected') {
-          fail('The wall is connected, but no sensor has described itself yet.',
-               'Retained discovery messages replay the moment we subscribe, so an empty loom usually means nothing has been published for these boards yet.');
+          // Connected, but nothing has described itself: the honest sentence for that is
+          // the same one a panel with no number uses — there is no reading.
+          fail('verdict.unknown',
+               'The wall is connected, but no sensor has described itself yet. Retained discovery messages replay the moment we subscribe, so an empty loom usually means nothing has been published for these boards yet.');
         }
       }, 5000);
       layout();
@@ -1218,8 +1607,8 @@ body[data-demo] .cloth::before{
       if (manualStop || connState === 'fatal') return;
       if (!everConnected) {
         setConn('error');
-        fail('This wall cannot reach the air sensors at ' + lastUrl + ' — ask whoever runs the network to check that the broker is up.',
-             'A browser can only use the MQTT-over-WebSocket port, and it is never told why a handshake failed. Retrying every 4 seconds. Press s to change it.');
+        fail('conn.unreachable',
+             'Nothing answered at ' + lastUrl + ' — ask whoever runs the network to check that the broker is up. A browser can only use the MQTT-over-WebSocket port, and it is never told why a handshake failed. Retrying every 4 seconds.');
       } else {
         setConn('reconnecting');
         // Panels keep their last state and age into CUT on their own; that is honest, so the
@@ -1235,12 +1624,12 @@ body[data-demo] .cloth::before{
         manualStop = true;
         try { client.end(true); } catch (e) {}
         client = null;
-        fail('The sensor broker refused this wall: ' + d.text + '.',
-             'Retrying has stopped because retrying cannot fix it. Press s to enter the right details.');
+        fail('conn.refused',
+             'The broker said: ' + d.text + '. Retrying has stopped because retrying cannot fix it.');
       } else {
         setConn('error');
-        fail('This wall cannot reach the air sensors at ' + lastUrl + ' — ask whoever runs the network to check that the broker is up.',
-             d.text + '. Retrying every 4 seconds. Press s to change the broker.');
+        fail('conn.unreachable',
+             'Nothing answered at ' + lastUrl + ' — ' + d.text + '. Retrying every 4 seconds.');
       }
     });
   }
@@ -1280,8 +1669,10 @@ body[data-demo] .cloth::before{
       of: function () { return '-63'; } },
     { key: 'uptime', obj: 'uptime', name: 'Uptime', unit: 's', cls: 'duration',
       of: function () { return String(93600 + Math.round((Date.now() - demoT0) / 1000)); } },
+    // A simulated WIRE payload, not a label on this page: it stays in the language the
+    // firmware publishes in, whichever way the tabs are set.
     { key: 'air_quality_level', obj: 'air_quality_level', name: 'Air Quality Level', unit: '', cls: '',
-      of: function (v) { var b = bandFor(v); return b ? b.label : 'unknown'; } }
+      of: function (v) { var b = bandFor(v); return b ? STR.en['band.' + b.key] : 'unknown'; } }
   ];
   var demoT0 = Date.now();
   var demoTimer = null;
@@ -1331,22 +1722,24 @@ body[data-demo] .cloth::before{
   }
   // Backdate what "arrived". A cut cloth and a board that went quiet twenty minutes ago are
   // states this wall must render, and nobody is going to wait twenty minutes to see them.
+  // `at`, not `t`: t() is the string lookup now, and a local shadowing it inside a
+  // function that later needs a translated word is a silent bug.
   function demoAge(b, secs) {
-    var t = Date.now() - secs * 1000;
+    var at = Date.now() - secs * 1000;
     var set = byState.get('dbk/' + b.id + '/pm2_5');
-    if (set) set.forEach(function (k) { var e = entities.get(k); if (e) e.at = t; });
+    if (set) set.forEach(function (k) { var e = entities.get(k); if (e) e.at = at; });
   }
   function demoAgeAvail(b, secs) {
-    var t = Date.now() - secs * 1000;
+    var at = Date.now() - secs * 1000;
     var set = byAvail.get('dbk/' + b.id + '/status');
-    if (set) set.forEach(function (k) { var e = entities.get(k); if (e) e.availAt = t; });
-    if (boardStatus.has(b.id)) boardStatus.get(b.id).at = t;
+    if (set) set.forEach(function (k) { var e = entities.get(k); if (e) e.availAt = at; });
+    if (boardStatus.has(b.id)) boardStatus.get(b.id).at = at;
   }
 
   // µ is printed, never transformed. No text-transform touches this string.
   function demoNum(v) {
     var b = bandFor(v);
-    return v.toFixed(1) + ' µg/m³' + (b ? ' · ' + b.label : '');
+    return v.toFixed(1) + ' ' + t('unit.ugm3') + (b ? ' · ' + t('band.' + b.key) : '');
   }
   function fitDemo() {
     // The bands are fixed, so the page has to be told how much room they take. Measured,
@@ -1354,7 +1747,34 @@ body[data-demo] .cloth::before{
     document.body.style.paddingTop = ($('demo-top').offsetHeight + 14) + 'px';
     document.body.style.paddingBottom = ($('demo-bot').offsetHeight + 14) + 'px';
   }
-  function demoMark(text) { $('demo-val').textContent = text; fitDemo(); }
+  // The mark is kept as a FUNCTION, not a finished string: switching language has to
+  // repaint the warning too, and a demo screen that half-changed language would be the
+  // one screen on this wall where a reader could not tell what they were looking at.
+  var demoMarkFn = null;
+  function demoMark(fn) {
+    demoMarkFn = fn;
+    var el = $('demo-val');
+    el.textContent = fn();
+    el.lang = LANG;
+    fitDemo();
+  }
+
+  function paintDemo() {
+    if (!DEMO) return;
+    var alt = ALT();
+    var warn = $('demo-warn'), warnAlt = $('demo-warn-alt');
+    warn.textContent = t('demo.warn');            warn.lang = LANG;
+    warnAlt.textContent = tIn(alt, 'demo.warn');  warnAlt.lang = alt;
+    // Both languages in the bottom band as well, so a photograph of either edge of the
+    // screen carries the warning in a language the person holding it can read.
+    $('demo-bot-text').innerHTML =
+      'DEMO · <span lang="' + LANG + '">' + esc(t('demo.warn')) + '</span>' +
+      ' · <span lang="' + alt + '">' + esc(tIn(alt, 'demo.warn')) + '</span>';
+    setNote('demo', '<b>' + esc(tIn('en', 'demo.warn')) + '.</b> It was asked for in this page’s ' +
+      'address (<span class="mono">?demo=' + esc(DEMO.raw) + '</span>), it is not saved anywhere, ' +
+      'and no connection to the sensors is open. Reload without that parameter to see the real air.');
+    if (demoMarkFn) demoMark(demoMarkFn);
+  }
 
   function demoFlat(v) {
     DEMO_FLEET.forEach(function (b) { demoStatus(b, 'online'); demoValue(b, v); });
@@ -1378,39 +1798,53 @@ body[data-demo] .cloth::before{
     var raw = q.get('demo');
     if (raw === null) return null;
     var s = String(raw).trim().toLowerCase();
-    if (s === 'cycle') return { mode: 'cycle', raw: s };
+    if (s === '' || s === 'cycle') return { mode: 'cycle', raw: s };
     if (s === 'mixed') return { mode: 'mixed', raw: s };
     var i = DEMO_KEYS.indexOf(s);
     if (i >= 0) return { mode: 'flat', value: BANDS[i].demo, raw: s };
     var n = Number(s);
-    if (s !== '' && Number.isFinite(n) && n >= 0 && n < 100000) {
+    if (Number.isFinite(n) && n >= 0 && n < 100000) {
       return { mode: 'flat', value: Math.trunc(n * 10) / 10, raw: s };
     }
-    // An unreadable ?demo= falls through to the real wall. Real air is never the unsafe
-    // answer to a typo; a page that silently faked one would be.
-    return null;
+    // An unreadable ?demo= FAILS TOWARD THE DEMO. This file used to argue the other
+    // way — "real air is never the unsafe answer to a typo" — and that is true right
+    // up until the person who typed the typo believes they are looking at a
+    // simulation. Then a genuine 0 µg/m³ is photographed and passed around as the
+    // Hazardous mock-up, and the wall said nothing at all while it happened: no
+    // marker, no notice, a live socket. The mixed fleet invents no band out of the
+    // bad token and the mark prints the token back with a cross through it. Every
+    // wall in this folder now answers a bad token the same way, because one control
+    // on the contact sheet drives all twenty and they cannot each hold a policy.
+    return { mode: 'mixed', raw: s, bad: String(raw) };
   }
 
   function startDemo(spec) {
     DEMO = spec;                                   // set before anything renders
+    // The two bands cover every crop of a photograph of the SCREEN, but not a crop
+    // of the browser chrome above it: a tab strip, a bookmark and a screenshot of
+    // the window frame carry the title and nothing else.
+    document.title = 'DEMO — ' + document.title;
     document.body.setAttribute('data-demo', spec.mode);
     $('demo-top').hidden = false;
     $('demo-bot').hidden = false;
     setConn('demo');
-    $('link-hint').textContent = 'demo mode · broker settings are disabled';
+    $('link-hint').textContent = t('demo.nosettings');
+    $('link-hint').lang = LANG;
     $('store-hint').textContent = 'Demo mode is on. Nothing was read from or written to this device.';
 
-    setNote('demo', '<b>DEMO MODE — every reading on this wall is invented.</b> It was asked for in ' +
-      'this page’s address (<span class="mono">?demo=' + esc(spec.raw) + '</span>), it is not saved ' +
-      'anywhere, and no connection to the sensors is open. Reload without that parameter to see the ' +
-      'real air.');
+    paintDemo();
 
     DEMO_FLEET.forEach(demoDiscover);
 
     if (spec.mode === 'mixed') {
       demoMixed();
-      demoMark('MIXED FLEET · DBK-002 live at ' + demoNum(87.4) +
-               ' · DBK-001 cut (expired) · DBK-010 offline');
+      demoMark(function () {
+        return 'DBK-002 ' + t('state.live') + ' ' + demoNum(87.4) +
+               ' · DBK-001 ' + t('state.stale') + ' · DBK-010 ' + t('state.offline') +
+               // Echoed exactly as typed, with a cross: whoever put a bad token in
+               // the address bar reads their own token back.
+               (spec.bad ? ' · ?demo=' + spec.bad + ' ✗' : '');
+      });
       demoTimer = setInterval(function () {
         var live = DEMO_FLEET[1];
         demoStatus(live, 'online'); demoValue(live, 87.4);   // the one board still publishing
@@ -1420,14 +1854,14 @@ body[data-demo] .cloth::before{
       var step = function () {
         var v = BANDS[i].demo;
         demoFlat(v);
-        demoMark('CYCLING ALL SIX BANDS, 4s EACH · now ' + demoNum(v));
+        demoMark(function () { return t('demo.at') + ' ' + demoNum(v); });
         i = (i + 1) % BANDS.length;
       };
       step();
       demoTimer = setInterval(step, 4000);
     } else {
       demoFlat(spec.value);
-      demoMark('EVERY BOARD SIMULATED AT ' + demoNum(spec.value));
+      demoMark(function () { return t('demo.at') + ' ' + demoNum(spec.value); });
       // Republished on the same cadence a board would, so a static demo does not quietly
       // age into "cut" while somebody is looking at it.
       demoTimer = setInterval(function () { demoFlat(spec.value); }, 10000);
@@ -1443,13 +1877,65 @@ body[data-demo] .cloth::before{
     BANDS.forEach(function (b) {
       var el = document.createElement('div');
       el.className = 'sw';
-      el.innerHTML = '<div class="tex"></div><b></b><em></em>';
-      el.querySelector('b').textContent = b.label;
-      el.querySelector('em').textContent = b.r;
+      el.setAttribute('data-band', b.key);      // the label is looked up, not baked in
+      el.innerHTML = '<div class="tex"></div><b></b><em lang="en"></em>';
+      el.querySelector('b').textContent = t('band.' + b.key);
+      el.querySelector('em').textContent = b.r;   // a range of numbers, in either language
       setSett(el, weaveFor(b.demo));
       host.appendChild(el);
     });
   })();
+
+  // ---------------------------------------------------------------- language
+  // Everything a reader can see is repainted from the string table in place. Nothing
+  // reloads: the socket stays open, no panel loses its value or its age, and a wall in a
+  // classroom does not go blank because somebody pressed a key.
+  function applyLang() {
+    document.documentElement.lang = LANG;
+
+    // The eyebrow has no vetted Thai, and inventing a Thai question here would put
+    // machine-written words at the top of a wall children read. On a Thai wall it steps
+    // aside instead: the vetted verdict sentence below already answers it on its own.
+    var q = $('ask-q');
+    q.textContent = STR.en['ask.q'];
+    q.hidden = (LANG !== 'en');
+
+    var scale = $('sett-scale');
+    scale.textContent = t('scale.epa') + ' · ' + t('unit.ugm3');
+    scale.lang = LANG;
+    Array.prototype.forEach.call(document.querySelectorAll('#setts .sw'), function (el) {
+      var b = el.querySelector('b');
+      b.textContent = t('band.' + el.getAttribute('data-band'));
+      b.lang = LANG;
+    });
+
+    Array.prototype.forEach.call($('langs').querySelectorAll('button'), function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-lang') === LANG ? 'true' : 'false');
+    });
+
+    var hint = $('link-hint');
+    hint.textContent = DEMO ? t('demo.nosettings') : t('conn.hint');
+    hint.lang = LANG;
+
+    paintLink();
+    paintFail();
+    paintDemo();
+    entities.forEach(render);
+    speak();
+  }
+
+  function setLang(next) {
+    if (next !== 'en' && next !== 'th') return;
+    if (next === LANG) return;
+    LANG = next;
+    try { localStorage.setItem(LANG_KEY, next); } catch (e) {}   // private mode throws
+    applyLang();
+  }
+
+  $('langs').addEventListener('click', function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button[data-lang]') : null;
+    if (btn) setLang(btn.getAttribute('data-lang'));
+  });
 
   // ---------------------------------------------------------------- settings
   var form = $('form');
@@ -1515,8 +2001,17 @@ body[data-demo] .cloth::before{
 
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && !sheet.hidden) { closeSheet(); return; }
-    var t = ev.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    var el = ev.target;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+    // "l" for language, deliberately not "t" or "s": "s" already opens the broker sheet
+    // and must keep doing exactly that. Checked BEFORE the demo guard below — a demo
+    // screen still has to be readable in the language of whoever is standing in front
+    // of it, even though its settings are locked.
+    if (ev.key === 'l' || ev.key === 'L') {
+      ev.preventDefault();
+      setLang(LANG === 'th' ? 'en' : 'th');
+      return;
+    }
     // In demo mode the broker sheet is unreachable: its only button connects.
     if (DEMO) return;
     if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); if (sheet.hidden) openSheet(); else closeSheet(); }
@@ -1525,6 +2020,10 @@ body[data-demo] .cloth::before{
   // ---------------------------------------------------------------- boot
   // Demo is decided first and decides everything: if the address asked for it, this page
   // never touches storage and never opens a connection. Otherwise nothing below changes.
+  // The language is settled before the first paint, so nothing flashes English on a Thai
+  // wall on the way in.
+  applyLang();
+
   var demoSpec = readDemo();
   if (demoSpec) {
     speak();

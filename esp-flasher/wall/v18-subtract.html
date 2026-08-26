@@ -10,14 +10,17 @@
    The deletions ARE the design; they are listed in the footer note, in the page,
    because a subtraction you cannot see is indistinguishable from an omission.
 
-   Two rules survive from the source dashboard and are load-bearing here:
+   Three rules survive from the source dashboard and are load-bearing here:
    1. NOTHING is ever uppercased by CSS. text-transform:uppercase maps "µ" to "M",
       which silently turns µg/m³ into mg/m³ — a 1000x unit error caused by styling.
-      There is no text-transform DECLARATION anywhere below; the only occurrence of
-      the word in this file is inside this comment, where it cannot reach any text.
+      There is no such DECLARATION anywhere below; the only occurrences of the word
+      in this file are inside comments, where they cannot reach any text. "DEMO" is
+      typed in capitals in the markup instead.
    2. The reading is sized off its CONTAINER (cqmin), never the viewport (vw).
       A vw-sized number inside a container whose width comes from layout broke
       "163.3" into "163." + "3" — failing exactly in the hazardous range.
+   3. The number never wraps. Thai prose must. Those are two different rules and
+      they are applied to two different sets of elements; see the Thai block below.
    ========================================================================= */
 :root{
   --bg:#0d141b;          /* neutral ground: used only when we do NOT have a reading */
@@ -62,11 +65,16 @@ body{
    for .hero's own gap/padding, which is why those use vmin above. */
 .q{
   margin:0;font-size:clamp(.7rem,4.2cqmin,2.1rem);font-weight:500;
-  opacity:.72;letter-spacing:.01em;
+  opacity:.72;letter-spacing:.01em;overflow-wrap:anywhere;
 }
+/* The verdict used to be one word ("No."), so it could be set at 20cqmin with .94
+   leading. It is now a reviewed sentence in each language — "Very unhealthy — stay
+   indoors." / "อากาศแย่มาก อย่าเพิ่งออกไปข้างนอก" — so the ceiling comes down and
+   the leading opens up. It is still the largest thing on the wall by a wide margin. */
 .a{
-  margin:0;font-size:clamp(2rem,20cqmin,11rem);font-weight:800;
-  line-height:.94;letter-spacing:-.035em;text-wrap:balance;
+  margin:0;font-size:clamp(1.5rem,11.5cqmin,6rem);font-weight:800;
+  line-height:1.06;letter-spacing:-.02em;text-wrap:balance;
+  overflow-wrap:anywhere;
 }
 .read{
   margin:0;display:flex;align-items:baseline;justify-content:center;gap:.28em;
@@ -76,7 +84,7 @@ body{
 }
 .num{font-variant-numeric:tabular-nums;letter-spacing:-.025em}
 .unit{font-size:.46em;font-weight:500;opacity:.78}   /* verbatim off the wire */
-.src{margin:0;font-size:clamp(.66rem,3.3cqmin,1.45rem);opacity:.72;text-wrap:balance}
+.src{margin:0;font-size:clamp(.66rem,3.3cqmin,1.45rem);opacity:.72;text-wrap:balance;overflow-wrap:anywhere}
 
 /* ---------- the boards that are not answering ---------- */
 .roster{
@@ -85,22 +93,99 @@ body{
   padding:clamp(.25rem,1.2vmin,.9rem) 0;
 }
 .roster:empty{display:none}
+/* The roster names the boards the answer did NOT come from. At opacity .6 it measured
+   3.54:1 — the one caveat on a page whose whole claim is honesty, rendered below the
+   threshold at which a passer-by can read it. A dashed border still marks a dead board
+   as deliberate; the ink no longer has to be faint to say so. */
 .pill{
   display:flex;align-items:baseline;gap:.5em;
   border:1px dashed currentColor;border-radius:999px;
-  padding:.3em .85em;font-size:clamp(.62rem,1.5vmin,.95rem);
-  opacity:.6;white-space:nowrap;
+  padding:.3em .85em;font-size:clamp(.66rem,1.6vmin,1rem);
+  opacity:.95;max-width:100%;
 }
-.pill b{font-weight:700;letter-spacing:.01em}
-.pill[data-live="1"]{border-style:solid;opacity:.88}
+/* nowrap moved off .pill and onto the two things that actually need it. Thai has no
+   word boundaries, so "เซ็นเซอร์มีปัญหา" in a nowrap pill pushes the roster past the
+   edge of the wall; the reason a board is silent is prose and may wrap. */
+.pill b{font-weight:700;letter-spacing:.01em;white-space:nowrap}
+.pill .v{overflow-wrap:anywhere}
+/* A live pill's value IS a reading. It may never break — that is the bug that split
+   "163.3" into "163." and "3", and it is a bug in either language. */
+.pill[data-live="1"] .v{white-space:nowrap;overflow-wrap:normal}
+.pill[data-live="1"]{border-style:solid;opacity:1}
 .pill span{font-variant-numeric:tabular-nums}
 
+/* The rationale, on the panel where the rest of the deleted chrome lives. */
+.why-h{margin:1.4rem 0 .3rem;font-size:.95rem;font-weight:700;letter-spacing:.01em}
+.why{font-size:.82rem;line-height:1.6;opacity:.92;max-width:64ch}
+.why p{margin:0 0 .6rem}
+.why b{font-weight:650}
+
 /* ---------- the deletions, written down ---------- */
+/* One line, and it names the standard — so it is readable, not a watermark. */
 .note{
-  margin:0 auto;max-width:104ch;text-align:center;
-  font-size:clamp(.55rem,1.25vmin,.78rem);line-height:1.55;opacity:.5;
+  margin:0 auto;max-width:70ch;text-align:center;
+  font-size:clamp(.66rem,1.5vmin,.9rem);line-height:1.55;opacity:.92;
 }
-.note b{font-weight:650;opacity:.9}
+.note b{font-weight:650;opacity:1}
+
+/* ---------- Thai --------------------------------------------------------------
+   Three facts, each of which has broken a Thai page before this one:
+
+   1. Thai has NO SPACES BETWEEN WORDS. The spaces inside the strings in STR.th are
+      clause boundaries — where English would put a comma or a full stop. They are
+      not word gaps, they are not padding, and nothing here may "tidy" them.
+      The corollary is a layout problem: the browser has no word boundary to break
+      on, so a long Thai run overflows instead of wrapping. Hence overflow-wrap on
+      every Thai PROSE block above — and on none of the numeric ones.
+   2. Thai stacks marks above AND below the line (สั้ ญู ปิ). The Latin leading used
+      on .a and .calm p clips them, so every Thai block is given more room here.
+   3. letter-spacing separates a combining mark from the letter it belongs to. The
+      negative tracking that makes a Latin display line look tight makes a Thai one
+      look broken, so it is zeroed rather than reduced.
+
+   The stack names real Thai faces and then stops. No webfont is linked: this page
+   has to come up on a wall with no network, so the system face is accepted.
+   -------------------------------------------------------------------------- */
+:root{--thai:'Noto Sans Thai','IBM Plex Sans Thai','Sarabun'}
+html[lang="th"] body,
+.th{
+  font-family:var(--thai),ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+.th{line-height:1.6}
+html[lang="th"] .a{font-size:clamp(1.4rem,10cqmin,5rem);line-height:1.34;letter-spacing:0}
+html[lang="th"] .q,
+html[lang="th"] .src,
+html[lang="th"] .pill,
+html[lang="th"] .demo{line-height:1.6}
+html[lang="th"] .note{line-height:1.7}
+html[lang="th"] .calm p{line-height:1.55;letter-spacing:0}
+/* The reading is the one thing on this page that is not prose. It keeps its Latin
+   metrics, its tabular figures and its refusal to break, in both languages. */
+html[lang="th"] .read{line-height:1.2}
+.num{word-break:normal;overflow-wrap:normal}
+
+/* ---------- the language switch ------------------------------------------------
+   The quietest control that is still always reachable. It sits OUTSIDE #screen on
+   purpose: paintFail() hides #screen when the wall collapses to one calm sentence,
+   and that sentence has to be switchable too. currentColor, so it stays legible on
+   all six band grounds and on the neutral one without being told about any of them.
+   The keyboard route is "l"; "s" was already taken by the settings sheet. */
+.lang{
+  position:fixed;z-index:45;
+  right:clamp(.35rem,1.5vmin,1.1rem);bottom:clamp(.3rem,1.2vmin,.9rem);
+  display:flex;gap:.15rem;align-items:center;
+  font-size:clamp(.62rem,1.35vmin,.85rem);
+}
+.lang button{
+  font:inherit;font-weight:650;letter-spacing:.04em;
+  background:transparent;color:currentColor;border:1px solid transparent;
+  border-radius:6px;padding:.2em .55em;opacity:.5;
+}
+.lang button[data-on="1"]{opacity:.95;border-color:currentColor}
+.lang button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+/* The one-line note is centred and the switch is in the corner; on a narrow wall
+   they would meet. Reserve the corner. */
+.note{padding-bottom:1.9em}
 
 /* ---------- demo mode: the one addition, and it shouts ---------------------
    Subtraction stops at the safety line. A health wall that prints an invented
@@ -141,6 +226,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .calm p{
   margin:0;max-width:24ch;font-size:clamp(1.1rem,4.5vmin,2.6rem);
   font-weight:600;line-height:1.3;letter-spacing:-.02em;text-wrap:balance;
+  overflow-wrap:anywhere;
+}
+.calm p.calm-hint{
+  margin:.7em auto 0;font-size:clamp(.72rem,2.1vmin,1.15rem);font-weight:500;
+  line-height:1.5;letter-spacing:0;opacity:.72;
 }
 
 /* ---------- everything that was removed from the wall, kept behind "s" ------ */
@@ -185,12 +275,12 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
      not a keystroke, not a reload. See DEMO MODE in the script. -->
 <aside class="demo" id="demo" hidden>
   <b>DEMO</b>
-  <!-- ตัวอย่าง · ข้อมูลจำลอง ไม่ใช่ค่าฝุ่นจริง  — written as code points so no
-       pipeline, editor or copy-paste can quietly damage the Thai. -->
-  <span>&#3605;&#3633;&#3623;&#3629;&#3618;&#3656;&#3634;&#3591; &#183;
-        &#3586;&#3657;&#3629;&#3617;&#3641;&#3621;&#3592;&#3635;&#3621;&#3629;&#3591;
-        &#3652;&#3617;&#3656;&#3651;&#3594;&#3656;&#3588;&#3656;&#3634;&#3613;&#3640;&#3656;&#3609;&#3592;&#3619;&#3636;&#3591;</span>
-  <span>simulated readings &mdash; no monitor is connected</span>
+  <!-- BOTH languages, always, whichever way the switch is set. This is the one line
+       on the page that may not depend on which language the passer-by reads: a wall
+       showing an invented number has to say so to everybody who can see the number.
+       Filled from STR.th and STR.en directly, never through t(). -->
+  <span class="th" id="demo-th"></span>
+  <span id="demo-en"></span>
   <span class="what" id="demo-what"></span>
 </aside>
 <div class="demo-ring" id="demo-ring" hidden aria-hidden="true"></div>
@@ -198,9 +288,12 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
 <main id="screen">
 
   <section class="hero">
-    <!-- The question is not decoration: delete it and the answer below it -->
-    <!-- becomes a bare word with no referent. This is the pair that survives. -->
-    <p class="q">Should we go outside?</p>
+    <!-- The question framed a one-word answer: "No." on its own has no referent.
+         The reviewed verdict is a whole sentence that carries its own referent, so
+         the question is no longer load-bearing — and there is no reviewed Thai for
+         it. It is filled by paintStatic() in English and hidden in Thai rather than
+         translated here; inventing the Thai is the one thing this layer may not do. -->
+    <p class="q" id="q"></p>
     <p class="a" id="answer">&hellip;</p>
     <p class="read" id="read" hidden><span class="num" id="num"></span><span class="unit" id="unit"></span></p>
     <p class="src" id="src"></p>
@@ -209,24 +302,27 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
   <section class="roster" id="roster"></section>
 
   <footer class="note">
-    <b>What was subtracted, and why.</b> Six-band legend &rarr; you are in one band, not six.
-    Connection chip, broker address, sensor and subscription counters &rarr; a number on the
-    screen is the proof it works. One card per board &rarr; a card promises a reading a dead
-    board has not got. PM1, PM10, Wi-Fi, uptime &rarr; none of them changes the answer.
-    Timestamps, topic strings, colour swatches, the advice line under the verdict &rarr;
-    <em>&ldquo;No.&rdquo;</em> needs no footnote. Nothing was destroyed: every deleted field is
-    still on this page, one keystroke away &mdash; press <b>s</b>.
-    <br>
-    <b>What is left cannot lose another piece.</b> Remove the question and the answer means
-    nothing; remove the answer and only adults can read the screen; remove the number and no
-    one can check it; remove the unit &micro;g/m&sup3; and the number means nothing; remove
-    the board name and you do not know whose air; remove the offline row and the screen starts
-    lying. Bands are the <b>US EPA PM2.5</b> standard, in &micro;g/m&sup3;.
+    <span id="note-scale"></span>
+    <!-- English only, and deliberately: it is addressed to whoever maintains the wall,
+         not to whoever reads the air off it. Hidden in Thai by paintStatic(). -->
+    <span id="note-tail">&middot; Every field this wall subtracted is still here, one
+    keystroke away &mdash; press <b>s</b>; <b>l</b> switches TH/EN.</span>
   </footer>
 
 </main>
 
-<section class="calm" id="calm" hidden><p id="calm-text"></p></section>
+<section class="calm" id="calm" hidden>
+  <div>
+    <p id="calm-text"></p>
+    <p class="calm-hint" id="calm-hint" hidden></p>
+  </div>
+</section>
+
+<!-- Outside #screen and outside .calm, so it survives both. See .lang in the style. -->
+<nav class="lang" id="lang" aria-label="Language">
+  <button type="button" id="lang-th" data-on="0">TH</button>
+  <button type="button" id="lang-en" data-on="0">EN</button>
+</nav>
 
 <section class="panel" id="panel" hidden>
   <div class="sheet">
@@ -246,6 +342,24 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
         <button type="button" class="ghost" id="btn-close">Close</button>
       </div>
     </form>
+    <h2 class="why-h">What was subtracted, and why</h2>
+    <div class="why">
+      <p><b>Removed from the wall.</b> Six-band legend &rarr; you are in one band, not six.
+      Connection chip, broker address, sensor and subscription counters &rarr; a number on the
+      screen is the proof it works. One card per board &rarr; a card promises a reading a dead
+      board has not got. PM1, PM10, Wi-Fi, uptime &rarr; none of them changes the answer.
+      Timestamps, topic strings, colour swatches, the advice line under the verdict &rarr;
+      <em>&ldquo;No.&rdquo;</em> needs no footnote. Nothing was destroyed: every deleted field
+      is still on this page, on this panel.</p>
+      <p><b>What is left cannot lose another piece.</b> Remove the question and the answer
+      means nothing; remove the answer and only adults can read the screen; remove the number
+      and no one can check it; remove the unit &micro;g/m&sup3; and the number means nothing;
+      remove the board name and you do not know whose air; remove the offline row and the
+      screen starts lying.</p>
+      <p><b>And the argument goes behind the keypress too.</b> This block was 982 of the
+      1,014 characters on the wall &mdash; the case for subtraction, printed at 2.78:1, was
+      97% of the words on a page about removing words. It reads better here.</p>
+    </div>
     <div class="diag">
       <div>state <span id="d-conn">idle</span> &middot; broker <span id="d-host">&mdash;</span>
            &middot; sensors <span id="d-ents">0</span> &middot; subs <span id="d-subs">0</span></div>
@@ -266,6 +380,169 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
   'use strict';
 
   /* ===================================================================
+     LANGUAGE LAYER
+
+     Most people who walk past this wall read Thai. The wall was English.
+
+     The Thai below is REVIEWED COPY, not a translation performed here. It is
+     written against Thai discourse frames — "อากาศดี ออกไปเล่นได้เลย" is what a
+     Thai adult says to a child about going outside, and it is not the sentence
+     you get by translating "Go outside. The air is clean." word for word. So:
+     the table is data, it is copied verbatim, and nothing in this file composes
+     a Thai sentence out of fragments. Where a string on this page has no
+     reviewed Thai, the string is shown in English only and hidden in Thai —
+     never machine-translated into it. Those two cases are 'q.ask' and
+     'src.worst', and both are named as English-only right here.
+
+     Spaces inside the Thai strings are CLAUSE boundaries, the job a comma or a
+     full stop does in English. Thai does not put spaces between words. Do not
+     add them, do not remove them, do not collapse them.
+     =================================================================== */
+
+  var LANG_KEY = 'air-wall.lang.v1';
+
+  var STR = {
+    en: {
+      'verdict.good':      'Go outside. The air is clean.',
+      'verdict.moderate':  'Air is okay. Outdoor play is fine.',
+      'verdict.sensitive': 'Sensitive groups take care.',
+      'verdict.unhealthy': 'Unhealthy — stay indoors.',
+      'verdict.verybad':   'Very unhealthy — stay indoors.',
+      'verdict.hazardous': 'Hazardous — stay inside.',
+      'verdict.unknown':   'No reading — air quality unknown.',
+
+      'band.good':      'Good',
+      'band.moderate':  'Moderate',
+      'band.sensitive': 'Unhealthy for sensitive groups',
+      'band.unhealthy': 'Unhealthy',
+      'band.verybad':   'Very unhealthy',
+      'band.hazardous': 'Hazardous',
+      'band.none':      'Not rated',
+
+      'state.offline':   'offline',
+      'state.noreading': 'no reading',
+      'state.stale':     'stale',
+      'state.waiting':   'waiting',
+      'state.live':      'live',
+      'state.fault':     'sensor fault',
+
+      'conn.connecting':  'connecting',
+      'conn.connected':   'connected',
+      'conn.retrying':    'reconnecting',
+      'conn.refused':     'The broker refused this connection.',
+      'conn.unreachable': 'Cannot reach the broker.',
+      'conn.hint':        'Press s to enter the details.',
+
+      'demo.warn': 'SIMULATED DATA, NOT A REAL READING',
+      'demo.at':   'every board faked at',
+
+      'time.justnow':    'just now',
+      'time.secondsAgo': '{n}s ago',
+      'time.minutesAgo': '{n}m ago',
+      'time.hoursAgo':   '{n}h ago',
+
+      // A unit, not prose. Identical in both tables on purpose — and spelled with
+      // the MICRO SIGN, never the letter M. µg/m³ vs mg/m³ is a factor of a thousand.
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'US EPA PM2.5 scale',
+
+      // ---- English only. STR.th has no entry for these two, which is what makes
+      // them disappear in Thai instead of being invented. Reached through has(),
+      // never through t(), because t() falls back to English by design.
+      'q.ask':     'Should we go outside?',
+      'src.worst': 'worst of {n}'
+    },
+    th: {
+      'verdict.good':      'อากาศดี ออกไปเล่นได้เลย',
+      'verdict.moderate':  'อากาศพอใช้ได้ ออกไปข้างนอกได้ตามปกติ',
+      'verdict.sensitive': 'ถ้าแพ้ง่าย เลี่ยงออกข้างนอกไว้ก่อน',
+      'verdict.unhealthy': 'อากาศไม่ดี อยู่ในบ้านดีกว่า',
+      'verdict.verybad':   'อากาศแย่มาก อย่าเพิ่งออกไปข้างนอก',
+      'verdict.hazardous': 'อันตราย อยู่ในบ้าน ปิดประตูหน้าต่างให้หมด',
+      'verdict.unknown':   'ยังไม่มีค่า ไม่รู้ว่าอากาศเป็นยังไง',
+
+      'band.good':      'ดี',
+      'band.moderate':  'ปานกลาง',
+      'band.sensitive': 'เริ่มมีผลกับคนแพ้ง่าย',
+      'band.unhealthy': 'ไม่ดีต่อสุขภาพ',
+      'band.verybad':   'แย่มาก',
+      'band.hazardous': 'อันตราย',
+      'band.none':      'ไม่มีเกณฑ์',
+
+      'state.offline':   'ไม่ได้ส่งข้อมูล',
+      'state.noreading': 'ยังไม่มีค่า',
+      'state.stale':     'ค่าเก่า',
+      'state.waiting':   'กำลังรอ',
+      'state.live':      'สด',
+      'state.fault':     'เซ็นเซอร์มีปัญหา',
+
+      'conn.connecting':  'กำลังเชื่อมต่อ',
+      'conn.connected':   'เชื่อมต่อแล้ว',
+      'conn.retrying':    'กำลังเชื่อมต่อใหม่',
+      'conn.refused':     'เข้าระบบไม่ได้ บัญชีนี้ไม่มีสิทธิ์',
+      'conn.unreachable': 'ติดต่อ broker ไม่ได้',
+      'conn.hint':        'กด s เพื่อใส่ข้อมูลเข้าระบบ',
+
+      'demo.warn': 'ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง',
+      'demo.at':   'ตั้งค่าทุกบอร์ดเป็น',
+
+      'time.justnow':    'เมื่อกี้',
+      'time.secondsAgo': '{n} วินาทีที่แล้ว',
+      'time.minutesAgo': '{n} นาทีที่แล้ว',
+      'time.hoursAgo':   '{n} ชั่วโมงที่แล้ว',
+
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'เกณฑ์ PM2.5 ของ US EPA'
+    }
+  };
+
+  // ?lang= wins, then this browser's saved choice, then the browser's own language,
+  // then English. localStorage throws outright in some private modes — reading it is
+  // not allowed to stop a wall from coming up.
+  function pickLang() {
+    var q = null;
+    try { q = new URLSearchParams(location.search); } catch (e) {}
+    var url = q && q.get('lang');
+    if (url) {
+      url = String(url).toLowerCase();
+      if (url === 'th' || url === 'en') return url;
+    }
+    try {
+      var saved = localStorage.getItem(LANG_KEY);
+      if (saved === 'th' || saved === 'en') return saved;
+    } catch (e) {}
+    try {
+      var nav = String((navigator.languages && navigator.languages[0]) ||
+                       navigator.language || '').toLowerCase();
+      if (nav.indexOf('th') === 0) return 'th';
+    } catch (e) {}
+    return 'en';
+  }
+
+  var LANG = pickLang();
+
+  // Never returns undefined. A missing key falls back to English and then to the key
+  // itself, so a gap shows up as "band.verybad" on a screen in development and never
+  // as a blank space on a wall.
+  function t(key, vars) {
+    var s = (STR[LANG] || STR.en)[key];
+    if (typeof s !== 'string') s = STR.en[key];
+    if (typeof s !== 'string') s = key;
+    if (vars) {
+      s = s.replace(/\{(\w+)\}/g, function (whole, name) {
+        return Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : whole;
+      });
+    }
+    return s;
+  }
+
+  // "Does the ACTIVE language have its own words for this?" — the deliberate-omission
+  // test, kept out of t() so t() keeps falling back to English for everything else.
+  function has(key) {
+    return Object.prototype.hasOwnProperty.call(STR[LANG] || {}, key);
+  }
+
+  /* ===================================================================
      DATA LAYER — carried over from tools/mqtt-dashboard.html unchanged.
      Discovery parsing, alias expansion, re-index on re-config, wildcard
      refusal, availability, expiry, EPA truncate-then-band. Only the
@@ -273,7 +550,7 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
      =================================================================== */
 
   // ---------------------------------------------------------------- config
-  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser cannot open the raw-TCP listener at all;
                                         // pointing at it fails exactly like bad credentials.
@@ -283,16 +560,22 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
   var DEFAULT_FILTER = 'dbk/';
 
   // US EPA PM2.5 breakpoints, micrograms per cubic metre — one source of truth.
-  // `say` is the answer to the question at the top of the screen. Good and Moderate
-  // give the same answer on purpose: the honest difference between them is the band
-  // name, not the instruction, and inventing a distinction would be a fifth element.
+  //
+  // `key` is the only thing the screen reads: it selects verdict.<key> and band.<key>
+  // out of STR, so the wording of both lives in one reviewed table instead of being
+  // spelled twice here in one language. The band a reading falls into is arithmetic;
+  // what to say about it is copy, and they are now stored apart.
+  //
+  // `label` stays, in English, and is NOT what the wall prints. It is the payload the
+  // demo publishes on dbk/DBK-002/air_quality_level — bytes on the wire, imitating what
+  // a board really sends. Translating a wire value would be translating the fleet.
   var BANDS = [
-    { max: 12.0,  label: 'Good',                           note: 'air is fine',           say: 'Yes.',            v: '--band-good', r: '0 – 12.0',       bg: '#8ce7ab', ink: '#04301b' },
-    { max: 35.4,  label: 'Moderate',                       note: 'acceptable',            say: 'Yes.',            v: '--band-mod',  r: '12.1 – 35.4',    bg: '#ffd75e', ink: '#3a2a00' },
-    { max: 55.4,  label: 'Unhealthy for sensitive groups', note: 'sensitive people care', say: 'Only briefly.',   v: '--band-usg',  r: '35.5 – 55.4',    bg: '#ff9f5a', ink: '#3d1a00' },
-    { max: 150.4, label: 'Unhealthy',                      note: 'limit time outdoors',   say: 'No.',             v: '--band-unh',  r: '55.5 – 150.4',   bg: '#ff8080', ink: '#3d0009' },
-    { max: 250.4, label: 'Very unhealthy',                 note: 'stay indoors',          say: 'No.',             v: '--band-vun',  r: '150.5 – 250.4',  bg: '#c9a3ff', ink: '#240a3d' },
-    { max: Infinity, label: 'Hazardous',                   note: 'stay indoors',          say: 'No.',             v: '--band-haz',  r: '250.5 +',        bg: '#ff4d6d', ink: '#2b0009' }
+    { max: 12.0,  key: 'good',      label: 'Good',                           note: 'air is fine',           v: '--band-good', r: '0 – 12.0',       bg: '#8ce7ab', ink: '#04301b' },
+    { max: 35.4,  key: 'moderate',  label: 'Moderate',                       note: 'acceptable',            v: '--band-mod',  r: '12.1 – 35.4',    bg: '#ffd75e', ink: '#3a2a00' },
+    { max: 55.4,  key: 'sensitive', label: 'Unhealthy for sensitive groups', note: 'sensitive people care', v: '--band-usg',  r: '35.5 – 55.4',    bg: '#ff9f5a', ink: '#3d1a00' },
+    { max: 150.4, key: 'unhealthy', label: 'Unhealthy',                      note: 'limit time outdoors',   v: '--band-unh',  r: '55.5 – 150.4',   bg: '#ff8080', ink: '#3d0009' },
+    { max: 250.4, key: 'verybad',   label: 'Very unhealthy',                 note: 'stay indoors',          v: '--band-vun',  r: '150.5 – 250.4',  bg: '#c9a3ff', ink: '#240a3d' },
+    { max: Infinity, key: 'hazardous', label: 'Hazardous',                   note: 'stay indoors',          v: '--band-haz',  r: '250.5 +',        bg: '#ff4d6d', ink: '#2b0009' }
   ];
 
   var NEUTRAL_BG = '#0d141b', NEUTRAL_INK = '#eef4fa';
@@ -345,16 +628,17 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
     return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
   }
 
+  // Hours are the last unit, in both languages: the reviewed table stops at hours, and
+  // a diagnostics line reading "48h ago" is exact where "2d ago" would need a Thai
+  // sentence nobody has reviewed. Digits stay Arabic — Thai readers read PM2.5 in them.
   function ago(ts) {
-    if (!ts) return 'never';
+    if (!ts) return t('state.noreading');
     var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-    if (s < 2) return 'just now';
-    if (s < 60) return s + 's ago';
+    if (s < 2) return t('time.justnow');
+    if (s < 60) return t('time.secondsAgo', { n: s });
     var m = Math.floor(s / 60);
-    if (m < 60) return m + 'm ago';
-    var h = Math.floor(m / 60);
-    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
-    return Math.floor(h / 24) + 'd ago';
+    if (m < 60) return t('time.minutesAgo', { n: m });
+    return t('time.hoursAgo', { n: Math.floor(m / 60) });
   }
 
   // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
@@ -422,9 +706,21 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
   }
   function clearAlert(id) { delete notes[id]; paintDiag(); }
 
+  // connState stays an untranslated token — everything else in this file branches on it.
+  // Only its rendering is language-dependent, and the English engineering detail some
+  // call sites pass is appended as-is: the panel is an operator surface, not the wall.
+  var CONN_LABEL = { connecting: 'conn.connecting', connected: 'conn.connected', reconnecting: 'conn.retrying' };
+  var connDetail = '';
   function setConn(state, detail) {
     connState = state;
-    $('d-conn').textContent = detail || state;
+    connDetail = detail || '';
+    paintConn();
+  }
+  function paintConn() {
+    var key = CONN_LABEL[connState];
+    $('d-conn').textContent = key
+      ? t(key) + (connDetail ? ' · ' + connDetail : '')
+      : (connDetail || connState);
   }
   function refreshCounts() {
     $('d-ents').textContent = String(entities.size);
@@ -721,12 +1017,12 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
   }
 
   // Plain-language reason a board is not giving us a number. Never a digit.
-  function whyNot(st, ent) {
-    if (st === 'offline') return 'offline';
-    if (st === 'waiting') return 'no reading yet';
-    if (st === 'stale') return 'reading expired';
-    if (st === 'fault') return 'sensor fault';
-    return 'no reading';
+  function whyNot(st) {
+    if (st === 'offline') return t('state.offline');
+    if (st === 'waiting') return t('state.waiting');
+    if (st === 'stale') return t('state.stale');
+    if (st === 'fault') return t('state.fault');
+    return t('state.noreading');
   }
 
   function paint() {
@@ -756,29 +1052,40 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
     var answer, srcText, numText = '', unitText = '', showRead = false;
     var band = null;
 
+    // Every sentence below comes out of STR. The board id, the digits and the unit do
+    // not: an id is a name, a reading is a number, and a unit is a unit.
     if (!rows.length) {
-      answer = 'We don’t know.';
+      answer = t('verdict.unknown');
+      // Two vetted state words instead of one unvetted sentence. "connected · waiting"
+      // is the whole truth about a broker that has answered and a fleet that has not.
       srcText = connState === 'connected'
-        ? 'no monitor has announced itself yet'
-        : 'connecting to the monitors…';
+        ? t('conn.connected') + ' · ' + t('state.waiting')
+        : t('conn.connecting');
       ground(NEUTRAL_BG, NEUTRAL_INK);
     } else if (hero && hero.st === 'live') {
       band = bandFor(hero.ent.value.n1);
-      answer = band ? band.say : 'We don’t know.';
+      answer = band ? t('verdict.' + band.key) : t('verdict.unknown');
       numText = hero.ent.value.text;                 // exactly what the board published
       unitText = hero.ent.unit;                      // verbatim, never uppercased
       showRead = true;
-      srcText = hero.ent.title + ' · ' + (band ? band.label : 'unclassified') +
-                ' · US EPA PM2.5';
-      if (live.length > 1) srcText = 'worst of ' + live.length + ' · ' + srcText;
+      srcText = hero.ent.title + ' · ' + (band ? t('band.' + band.key) : t('band.none')) +
+                ' · ' + t('scale.epa');
+      // English-only, and it disappears in Thai rather than being invented there. What
+      // it says is still on the screen either way: the roster below prints the other
+      // boards and their numbers, so "the answer is the worst one" stays checkable.
+      if (live.length > 1 && has('src.worst')) {
+        srcText = t('src.worst', { n: live.length }) + ' · ' + srcText;
+      }
       ground(band ? band.bg : NEUTRAL_BG, band ? band.ink : NEUTRAL_INK);
     } else if (hero) {
-      answer = 'We don’t know.';
-      srcText = hero.ent.title + ' · ' + whyNot(hero.st, hero.ent);
+      answer = t('verdict.unknown');
+      srcText = hero.ent.title + ' · ' + whyNot(hero.st);
       ground(NEUTRAL_BG, NEUTRAL_INK);
     } else {
-      answer = 'We don’t know.';
-      srcText = 'all ' + rows.length + ' monitor' + (rows.length === 1 ? ' is' : 's are') + ' offline';
+      answer = t('verdict.unknown');
+      // "3 · offline" rather than an English sentence with a plural rule in it. The
+      // count is a digit in both languages and the state word is reviewed in both.
+      srcText = rows.length + ' · ' + t('state.offline');
       ground(NEUTRAL_BG, NEUTRAL_INK);
     }
 
@@ -790,12 +1097,13 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
         var isLive = r.st === 'live' && r.ent.value && r.ent.value.kind === 'number';
         return {
           name: r.ent.title,
-          val: isLive ? r.ent.value.text + ' ' + r.ent.unit : whyNot(r.st, r.ent),
+          val: isLive ? r.ent.value.text + ' ' + r.ent.unit : whyNot(r.st),
           live: isLive
         };
       });
 
-    var sig = [answer, srcText, numText, unitText, showRead,
+    // LANG joins the signature so a switch always repaints, even when nothing else moved.
+    var sig = [LANG, answer, srcText, numText, unitText, showRead,
                pills.map(function (p) { return p.name + '|' + p.val + '|' + p.live; }).join(',')].join('');
     if (sig !== lastSig) {
       lastSig = sig;
@@ -814,6 +1122,7 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
         var n = document.createElement('b');
         n.textContent = p.name;
         var v = document.createElement('span');
+        v.className = 'v';        // wraps when it is a reason, never when it is a reading
         v.textContent = p.val;
         el.appendChild(n); el.appendChild(v);
         host.appendChild(el);
@@ -839,12 +1148,20 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
   }
 
   // ---------------------------------------------------------------- failure
+  // Four causes, two reviewed sentences. A wall does not need to distinguish "the
+  // library did not download" from "the port is closed" — from in front of it they are
+  // the same fact, and the reviewed Thai for that fact is conn.unreachable. The exact
+  // English diagnosis is not lost: every one of these paths also calls setAlert(), and
+  // that text is waiting on the panel behind "s" for whoever comes to fix it.
   var CALM = {
-    lib: 'This screen could not load the part that talks to the monitors. Reconnect it to the network and reload.',
-    auth: 'The monitors refused this screen’s login. Press s and enter the right details.',
-    mixed: 'Open this page from the file itself. A secure page cannot reach the monitors’ plain connection.',
-    unreachable: 'This screen cannot reach the monitors. Check the hub is switched on, then press s.'
+    lib:         'conn.unreachable',
+    auth:        'conn.refused',
+    mixed:       'conn.unreachable',
+    unreachable: 'conn.unreachable'
   };
+  // "Press s" is only printed where pressing s is genuinely the fix. A page whose
+  // script never loaded is not repaired by the settings sheet, so it does not say so.
+  var CALM_HINT = { auth: true, unreachable: true };
   function paintFail() {
     var show = '';
     if (failKind === 'lib' || failKind === 'auth' || failKind === 'mixed') show = failKind;
@@ -853,7 +1170,10 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
     else if (failKind === 'unreachable' && !everConnected && entities.size === 0 &&
              connectStartedAt && Date.now() - connectStartedAt > 9000) show = 'unreachable';
 
-    $('calm-text').textContent = show ? CALM[show] : '';
+    $('calm-text').textContent = show ? t(CALM[show]) : '';
+    var hint = show && CALM_HINT[show] ? t('conn.hint') : '';
+    $('calm-hint').textContent = hint;
+    $('calm-hint').hidden = !hint;
     $('calm').hidden = !show;
     $('screen').hidden = !!show;
     if (show) ground(NEUTRAL_BG, NEUTRAL_INK);
@@ -1152,21 +1472,29 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
 
   // The mark has to carry the VALUE, not just the word: "DEMO" alone leaves a reader
   // wondering which part of the screen is pretending.
+  // The bar above this line already says SIMULATED DATA in both languages, so this
+  // line no longer has to repeat the word "simulating" — it carries the VALUES, which
+  // is the part "DEMO" alone leaves a reader guessing at.
   function demoMark(scene) {
     var parts = [];
     if (DEMO.mode === 'mixed') {
       scene.forEach(function (b) {
-        parts.push(b.id + ' ' + (!b.up ? 'offline'
-          : b.age > 900 ? 'reading expired'
+        parts.push(b.id + ' ' + (!b.up ? t('state.offline')
+          : b.age > 900 ? t('state.stale')
           : demoTrunc(b.pm) + ' ' + UG));
       });
     } else {
       var v = scene[0].pm, band = bandFor(Math.trunc(v * 10) / 10);
-      parts.push('all three monitors ' + demoTrunc(v) + ' ' + UG + (band ? ' · ' + band.label : ''));
-      if (DEMO.mode === 'cycle') parts.push('cycling every 4s');
+      parts.push(t('demo.at') + ' ' + demoTrunc(v) + ' ' + UG +
+                 (band ? ' · ' + t('band.' + band.key) : ''));
+      // A glyph and a duration rather than an English clause: this one fragment has no
+      // reviewed Thai and does not need any, because it is not words.
+      if (DEMO.mode === 'cycle') parts.push('↻ 4s');
     }
-    if (DEMO.bad) parts.push('?demo=' + DEMO.bad + ' was not understood — showing the usual fleet');
-    $('demo-what').textContent = 'simulating ' + parts.join(' · ');
+    // Echoed back exactly as typed, with a cross. Whoever put a bad value in the address
+    // bar is reading their own token, in whatever language they typed it.
+    if (DEMO.bad) parts.push('?demo=' + DEMO.bad + ' ✗');
+    $('demo-what').textContent = parts.join(' · ');
   }
 
   function demoStart() {
@@ -1183,6 +1511,49 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
     }, DEMO.mode === 'cycle' ? 4000 : 15000);
   }
 
+  // ---------------------------------------------------------------- language ("l")
+  // Everything on the wall is drawn from state on every paint, so switching language
+  // is a repaint and nothing more. No reload: a reload drops the MQTT connection, and
+  // a wall that goes blank for two seconds every time somebody prods the corner is a
+  // wall people stop trusting. lastSig is cleared because the signature is what stops
+  // paint() from touching the DOM when nothing changed, and the words just changed.
+  function paintStatic() {
+    // The question, English only — see the note in the markup and STR.en['q.ask'].
+    var ask = has('q.ask') ? t('q.ask') : '';
+    $('q').textContent = ask;
+    $('q').hidden = !ask;
+
+    $('note-scale').textContent = t('scale.epa') + ' · ' + t('unit.ugm3') + ' ';
+    $('note-tail').hidden = !has('q.ask');   // the same English-only rule, same switch
+
+    // Both languages, always. Read straight out of the tables, never through t().
+    $('demo-th').textContent = STR.th['demo.warn'];
+    $('demo-en').textContent = STR.en['demo.warn'];
+
+    $('lang-th').setAttribute('data-on', LANG === 'th' ? '1' : '0');
+    $('lang-en').setAttribute('data-on', LANG === 'en' ? '1' : '0');
+    $('lang-th').setAttribute('aria-pressed', LANG === 'th' ? 'true' : 'false');
+    $('lang-en').setAttribute('aria-pressed', LANG === 'en' ? 'true' : 'false');
+  }
+
+  function applyLang(next, persist) {
+    if (next !== 'th' && next !== 'en') next = 'en';
+    LANG = next;
+    // So the browser breaks lines and picks faces the way the language needs.
+    document.documentElement.setAttribute('lang', LANG);
+    if (persist) { try { localStorage.setItem(LANG_KEY, LANG); } catch (e) {} }
+    paintStatic();
+    paintConn();
+    lastSig = '';
+    paint();                                   // repaints the hero, roster, panel, curtain
+    if (DEMO) demoMark(demoScene());
+  }
+
+  function toggleLang() { applyLang(LANG === 'th' ? 'en' : 'th', true); }
+
+  $('lang-th').addEventListener('click', function () { applyLang('th', true); });
+  $('lang-en').addEventListener('click', function () { applyLang('en', true); });
+
   // ---------------------------------------------------------------- settings ("s")
   var panel = $('panel');
   function openPanel() { panel.hidden = false; paintDiag(); $('f-host').focus(); }
@@ -1195,6 +1566,7 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
       return;
     }
     if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); panel.hidden ? openPanel() : closePanel(); }
+    else if (ev.key === 'l' || ev.key === 'L') { ev.preventDefault(); toggleLang(); }
     else if (ev.key === 'Escape') closePanel();
   });
   $('btn-close').addEventListener('click', closePanel);
@@ -1283,6 +1655,11 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
   }
 
   DEMO = parseDemo();
+
+  // Language before anything is drawn, so the wall never shows one language and then
+  // flips. applyLang() is also the whole re-render path, so boot and the switch take
+  // exactly the same route and there is no second, subtly different first paint.
+  applyLang(LANG, false);
 
   if (DEMO) {
     // Storage is not read here at all, let alone written: a demo takes nothing from

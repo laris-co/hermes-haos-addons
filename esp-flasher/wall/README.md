@@ -131,9 +131,9 @@ twenty chances to get availability wrong.
 
 ### Measured facts they are built against
 
-- **Broker**: the Home Assistant host running Mosquitto. **Port 1884 is MQTT-over-WebSocket** (an `Upgrade`
-  returns `101` with `Sec-WebSocket-Protocol: mqtt`). A browser *cannot* use 1883 — that is
-  raw TCP, and pointing a browser at it fails in a way that looks exactly like bad
+- **Broker**: the Home Assistant host running Mosquitto. **Port 1884 is MQTT-over-WebSocket**
+  (an `Upgrade` returns `101` with `Sec-WebSocket-Protocol: mqtt`). A browser *cannot* use
+  1883 — that is raw TCP, and pointing a browser at it fails in a way that looks exactly like bad
   credentials. If a wall says it cannot connect, check the port before you check the
   password.
 - **Live topics**
@@ -259,6 +259,91 @@ designer/inspiration, a one-line brief and a link.
 - Previews are `pointer-events: none` under a full-bleed overlay link, so a click anywhere
   on a thumbnail opens that version full size instead of poking at a miniature wall.
 - All links are relative. The sheet works opened straight off disk.
+
+---
+
+## Demo mode — `?demo=`
+
+For most of the year the only live board reads **0 µg/m³** and the other two are dark. That
+is the one state these layouts are least likely to break in, and the states that matter —
+Moderate, Unhealthy, Hazardous — arrive in the season that gives nobody time to fix a
+layout. `163.3` wrapped mid-digit into `163.` and `3` for exactly this reason: nobody had
+watched a three-digit reading until one arrived.
+
+So every wall takes a simulated reading from the URL.
+
+| `?demo=` | What it does |
+|---|---|
+| `good` `moderate` `sensitive` `unhealthy` `verybad` `hazardous` | every board reads a value from the middle of that EPA band |
+| *any number* — `163.3`, `250.5`, `0`, `1000` | every board publishes that exact string; the wall truncates it to one decimal the way it truncates a sensor payload, then classifies it |
+| `mixed` | the fleet as it usually is: one board live at `163.3`, one asleep with no reading, one whose last word is older than `expire_after` |
+| `cycle` | walks all six bands in order, about four seconds each |
+| present but unreadable — `?demo=` or `?demo=banana` | falls back to `mixed` **and says so**; it never falls through to live air |
+
+Two properties make it trustworthy rather than a second renderer:
+
+- **The fake readings go through the real code path.** Instead of a broker the wall is handed
+  a stub client with no URL and no socket, and the demo publishes through `onMessage()` — the
+  same function the broker's bytes land in. Discovery parsing, aliasing, the availability and
+  expiry indexes, EPA banding, the headline and the layout are the shipped ones. If the demo
+  looks right the wall looks right; if the demo breaks, the wall would have broken too.
+- **Band-reactive photographs are driven by it too.** The glass set picks its ground from the
+  live worst band, so a demo band cross-fades `img/` exactly as a real reading would.
+
+### The safety rule
+
+This is a **health display**, in a room that includes children, during a burning season.
+Fake clean air on a real wall could send a child outside during a hazardous episode; fake
+hazardous air alarms a household for nothing. Both are why the following is not negotiable
+and not a preference:
+
+1. **Mock data must be impossible to mistake for a reading.** The marker is persistent, not
+   a toast: a sticky full-bleed hazard-taped bar that is still on screen at the bottom of a
+   long page, legible in a photograph of the screen. It carries the word **DEMO** and
+   **ตัวอย่าง**, *and the value being simulated* — "163.3 µg/m³ (Very Unhealthy)", not merely
+   "demo mode". Every wall also stamps its own document (`html.demo`, a `data-demo`
+   attribute, a `DEMO ·` title prefix) so the tab and a cropped screenshot say it too.
+2. **Opt-in from the URL and nowhere else.** No default, no stored flag, no `localStorage`,
+   no timer, no "remember this". Drop the parameter and reload and the page is byte-for-byte
+   the wall it was before. A control that *sets* demo mode may only do it by writing
+   `?demo=` into the address bar — never by holding it in a variable the URL does not show.
+3. **A demo page opens no MQTT connection at all.** Not a filtered one, not a read-only one.
+   One screen must never be able to carry a real reading and an invented one at the same
+   time, so the two can never be on the same page to be confused.
+4. **Credentials and the demo flag travel together or not at all.** They are composed into
+   one query string by one function, so signing in can never silently drop the flag and put
+   live air behind a DEMO banner.
+
+### The band bench on the contact sheet
+
+`index.html` drives all twenty previews at once. Under the masthead there is a row of
+buttons — **Live**, the six EPA bands, **Mixed fleet**, **Cycle all six** — plus a box for an
+exact value with `163.3` and `250.5` as one-click chips, because those are the two long
+strings that break layouts: one wrapped mid-digit once, and the other is the first value
+that is Hazardous rather than Very Unhealthy. Beside the selection the sheet prints the EPA
+band name and its numeric range, so what is being simulated is named, not inferred.
+
+Choosing a band re-points every preview's `src` *and* every full-size link, so opening a wall
+from a demo sheet keeps the same setting. Choosing **Live** removes the parameter everywhere.
+The choice is written to the sheet's own address bar and to nothing else — reload without it
+and the sheet is live again. The credentials are never written there.
+
+When demo mode is on the sheet grows the same hazard-taped sticky bar, tabs every thumbnail
+**DEMO**, and prefixes its tab title.
+
+**It checks rather than assumes.** A sheet that tabbed a thumbnail `DEMO` while that wall was
+quietly ignoring the parameter would be mislabelling a real reading, which is the same class
+of harm as the reverse. So once per one and a half seconds the sheet reads each preview's
+document for the marks a demo wall sets, and reports a count: previews that took the setting,
+previews that ignored it — tabbed **LIVE · ?demo= ignored** instead, with the demo ring
+removed — and previews it could not check, which are counted as unknown and never as
+verified. Opened from `file://` an iframe is a foreign origin and nothing can be read, so
+everything is reported unknown and the sheet tells you to look for each wall's own DEMO bar
+in its thumbnail.
+
+At the time of writing, versions **11–20 implement `?demo=` and 21–30 do not**. You never
+have to trust that sentence: open the sheet with any `?demo=` value and the bench counts them
+for you.
 
 ---
 
