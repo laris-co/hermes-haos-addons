@@ -131,7 +131,7 @@ twenty chances to get availability wrong.
 
 ### Measured facts they are built against
 
-- **Broker**: catlab, `192.168.1.143`. **Port 1884 is MQTT-over-WebSocket** (an `Upgrade`
+- **Broker**: the Home Assistant host running Mosquitto. **Port 1884 is MQTT-over-WebSocket** (an `Upgrade`
   returns `101` with `Sec-WebSocket-Protocol: mqtt`). A browser *cannot* use 1883 — that is
   raw TCP, and pointing a browser at it fails in a way that looks exactly like bad
   credentials. If a wall says it cannot connect, check the port before you check the
@@ -170,7 +170,7 @@ standard behind it is a mood, not a measurement.
 
 - **No configuration UI on load.** Connect immediately from `localStorage` (wrapped in
   try/catch — it throws in private mode), else from `?u=` / `?p=` in the URL, else
-  anonymously to `192.168.1.143:1884`. Settings live behind pressing **`s`**. A wall display
+  anonymously to the page's own host on port `1884`. Settings live behind pressing **`s`**. A wall display
   is switched on, not filled in.
 - **Failure is one calm sentence.** When a wall cannot connect, the whole screen becomes a
   single plain-language instruction, not a stack of red boxes.
