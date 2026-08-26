@@ -1,0 +1,1333 @@
+<!doctype html>
+<!--
+  lab-preview.html — offline pixel-accurate preview of the dbk OLED display.
+
+  WHAT THIS IS
+    A hand-port of the ESPHome display lambda in lab/dbk.yaml (the ESPHome lab dir,
+    `~/.haos-oracle/lab` on the flashing host — deliberately NOT an absolute path here:
+    this file is committed, and the operator's home layout is not the repo's business),
+    lines 731-808 (the `display:` -> `lambda:` block for the SSD1306 128x32 panel),
+    re-implemented in JavaScript on a 1-bit 128x32 canvas buffer. Glyphs are the REAL
+    baked bitmaps extracted from the successful native build
+    (.esphome/build/dbk/src/main.cpp), not a browser font approximation.
+
+    Purpose: walk every display state (splash progress, wifi countdown, AP window,
+    MQTT dot, sensor staleness, PM values) without hardware and without a reflash.
+
+  PORTED  2026-08-26
+  SOURCE  lab/dbk.yaml lines 731-808 (lambda) + 436-723 (font definitions)
+
+  !! THIS IS A HAND PORT. IT DOES NOT READ dbk.yaml AT RUNTIME. !!
+  If the lambda changes, this file must be re-synced BY HAND — the two will silently
+  disagree otherwise. Same for the fonts: re-run the extractor and re-inline FONTS
+  after any font/glyph change or ESPHome upgrade.
+
+  Self-contained: no network requests of any kind. Works from file://.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dbk display preview</title>
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#12161c; --panel2:#0e1218; --line:#242c36; --line2:#1a212a;
+    --fg:#c6d2df; --dim:#7d8b9b; --accent:#7fd6ff; --warn:#ffb454; --bad:#ff6b6b; --ok:#7ee787;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  /* Studio backdrop: a cool pool of light behind the panel plus a vignette, so
+     the lit glass is the brightest thing on the page. Pure CSS — this file must
+     stay self-contained and work from file://. */
+  body{
+    background:
+      radial-gradient(1200px 520px at 38% 8%, #1b2634 0%, rgba(27,38,52,0) 62%),
+      radial-gradient(900px 600px at 88% 100%, #141c27 0%, rgba(20,28,39,0) 60%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--fg);
+    font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    padding:20px 18px 48px;
+  }
+  /* One scrollbar on this page: the document's. Anything nested is a bug.
+     Style it dark — the OS default renders white and reads as a seam on a
+     dark page. */
+  html{scrollbar-color:#39424f #11151b;scrollbar-width:thin}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:#11151b}
+  ::-webkit-scrollbar-thumb{background:#39424f;border-radius:6px}
+  ::-webkit-scrollbar-thumb:hover{background:#4a5665}
+  ::-webkit-scrollbar-corner{background:#11151b}
+
+  /* Wider than the old 1200 so the 128x32 panel can be shown genuinely large.
+     The canvas is max-width:100%, so this only ever grows the panel — it can
+     never reintroduce a horizontal scrollbar. */
+  .wrap{max-width:1560px;margin:0 auto}
+  header.top{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px}
+  h1{font-size:16px;margin:0 0 4px;letter-spacing:.02em}
+  h1 .sub{color:var(--dim);font-weight:400}
+  .meta{color:var(--dim);font-size:11.5px}
+  .meta code{color:var(--accent)}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:18px;align-items:start}
+  /* minmax(0,…) on the collapsed column too. A bare `1fr` is minmax(AUTO,1fr),
+     and that auto floor lets the column grow to the canvas's min-content width
+     — the panel then pushed the whole document wide instead of scaling down.
+     Measured: at a 760px viewport the page overflowed by 373px until this
+     rule carried minmax(0,…) as well. */
+  @media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr)}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card + .card{margin-top:14px}
+  .card h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 10px;font-weight:600}
+
+  /* ---- the panel ---- */
+  /* The panel NEVER scrolls. A nested scrollbar inside the page's own is
+     always a bug here: the canvas is scaled art, so it should shrink to fit
+     rather than clip. overflow:hidden is deliberate, not a papered-over
+     overflow — the canvas rule below guarantees it fits before it clips. */
+  .bezel{
+    position:relative;
+    background:
+      linear-gradient(180deg,#222b36 0%,#161d26 18%,#10151c 100%);
+    border:1px solid #323d4a; border-radius:14px;
+    padding:26px 24px;
+    box-shadow:
+      inset 0 1px 0 #45525f,
+      inset 0 -1px 0 #0a0d12,
+      0 18px 48px rgba(0,0,0,.62),
+      0 2px 0 rgba(255,255,255,.03);
+    overflow:hidden;
+  }
+  /* Glass reflection: one soft diagonal sheen across the top of the module.
+     pointer-events:none so it never eats a click on the panel. */
+  .bezel::after{
+    content:""; position:absolute; inset:0; border-radius:14px; pointer-events:none;
+    background:linear-gradient(158deg,rgba(255,255,255,.055) 0%,rgba(255,255,255,0) 38%);
+  }
+  .glass{
+    background:#000; border-radius:4px; padding:0; line-height:0;
+    box-shadow:inset 0 0 0 1px #000, 0 0 0 1px #313b47;
+    max-width:100%; width:max-content; margin:0 auto;
+  }
+  /* max-width wins over the element's own width attribute, so a zoom level
+     wider than the column scales down instead of overflowing. pixelated keeps
+     the blocks hard-edged even at a fractional effective scale. */
+  canvas{
+    display:block; max-width:100%; height:auto;
+    image-rendering:pixelated; image-rendering:crisp-edges;
+  }
+  .panelfoot{display:flex;justify-content:space-between;gap:12px;margin-top:10px;color:var(--dim);font-size:11px;flex-wrap:wrap}
+
+  /* ---- state readout ---- */
+  .trace{margin:0;padding:0;list-style:none;font-size:12px}
+  .trace li{display:flex;gap:10px;padding:3px 0;border-bottom:1px dashed var(--line2)}
+  .trace li:last-child{border-bottom:0}
+  .trace .k{color:var(--dim);flex:0 0 96px}
+  .trace .v{color:var(--fg);flex:1 1 auto;word-break:break-word}
+  .trace .v em{color:var(--accent);font-style:normal}
+
+  /* ---- controls ---- */
+  .row{display:flex;align-items:center;gap:8px;margin:7px 0;flex-wrap:wrap}
+  .row label.n{flex:0 0 108px;color:var(--dim)}
+  input[type=range]{flex:1 1 120px;min-width:110px;accent-color:var(--accent)}
+  input[type=number],input[type=time],select{
+    background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+    border-radius:6px;padding:4px 6px;font:inherit;font-size:12px;
+  }
+  input[type=number]{width:96px}
+  button{
+    background:#1a212a;color:var(--fg);border:1px solid var(--line);border-radius:6px;
+    padding:4px 9px;font:inherit;font-size:11.5px;cursor:pointer;
+  }
+  button:hover{border-color:#3c4a58;color:#fff}
+  button.on{background:#20313d;border-color:#3f6b83;color:#dff3ff}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+  .sw{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .sw input{accent-color:var(--accent)}
+  .hint{color:var(--dim);font-size:11px;margin:6px 0 0}
+  hr.sep{border:0;border-top:1px solid var(--line2);margin:12px 0}
+
+  /* ---- flash ---- */
+  .flash{
+    display:inline-block;background:#1d2f3c;border:1px solid #3f6b83;color:#dff3ff;
+    border-radius:8px;padding:9px 14px;text-decoration:none;font-weight:600;font-size:13px;
+  }
+  .flash:hover{background:#254458;color:#fff}
+
+  .banner{border-radius:8px;padding:9px 12px;margin:0 0 14px;font-size:12px;border:1px solid}
+  .banner.warn{background:#2a2113;border-color:#7a5a1e;color:var(--warn)}
+  .banner.bad{background:#2a1414;border-color:#7a2b2b;color:var(--bad)}
+  .banner[hidden]{display:none}
+  .pill{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+  .pill.ok{color:var(--ok);border-color:#2c5c3a}
+  .pill.bad{color:var(--bad);border-color:#7a2b2b}
+  footer.bot{color:var(--dim);font-size:11px;margin-top:22px;border-top:1px solid var(--line);padding-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>dbk display preview <span class="sub">— SSD1306 128&times;32, 1-bit</span></h1>
+    <div class="meta">
+      hand-port of <code>dbk.yaml</code> lambda, lines <code>731-808</code> &middot; ported 2026-08-26 &middot;
+      re-sync by hand if the lambda changes &middot; <span id="selftest" class="pill">self-test …</span>
+    </div>
+  </header>
+
+  <div id="fontWarn" class="banner warn" hidden>
+    <b>TEXT PLACEMENT IS APPROXIMATE.</b> The baked glyph bitmaps could not be loaded, so text is
+    being drawn with a monospace canvas-font approximation. Pixel positions, widths and alignment
+    do <b>not</b> match the real firmware. Re-run the font extractor and re-inline the data.
+  </div>
+
+  <div id="devWarn" class="banner bad" hidden></div>
+
+  <div class="grid">
+
+    <!-- ============ LEFT: panel + state ============ -->
+    <div>
+      <div class="card">
+        <h2>Panel</h2>
+        <div class="bezel">
+          <div class="glass"><canvas id="screen" width="768" height="192"></canvas></div>
+        </div>
+        <div class="panelfoot">
+          <span>128 &times; 32 &middot; rotation 0 &middot; auto_clear on &middot; update_interval 1s</span>
+          <span id="litcount">— px lit</span>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label class="n" for="zoom">zoom</label>
+          <input type="range" id="zoom" min="2" max="16" step="1" value="8">
+          <span id="zoomv" style="color:var(--dim)">8&times;</span>
+          <label class="n" style="flex:0 0 auto" for="phos">phosphor</label>
+          <select id="phos">
+            <option value="ice">ice blue</option>
+            <option value="amber">amber</option>
+            <option value="green">green</option>
+            <option value="white">white</option>
+          </select>
+          <label class="sw"><input type="checkbox" id="grid" checked> grid</label>
+          <label class="sw"><input type="checkbox" id="glow" checked> glow</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>State readout — which branch is rendering</h2>
+        <ul class="trace" id="trace"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Flash real firmware</h2>
+        <a class="flash" id="flashlink" href="#" target="_blank" rel="noopener">Flash real firmware &rarr;</a>
+        <p class="hint">
+          Opens the real ESPHome Device Builder page for this device in a new tab — click
+          <b>Install</b> there to compile and flash. Flashing over USB takes the serial port
+          (nothing else can hold <code>/dev/cu.usbmodem*</code> while it runs).
+        </p>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: controls ============ -->
+    <div>
+      <div class="card">
+        <h2>millis() — elapsed since boot</h2>
+        <div class="row">
+          <button id="play">&#9654; play</button>
+          <select id="speed">
+            <option value="0.25">0.25&times;</option>
+            <option value="1" selected>1&times;</option>
+            <option value="4">4&times;</option>
+            <option value="20">20&times;</option>
+          </select>
+          <span id="millisfmt" style="color:var(--dim)"></span>
+        </div>
+        <div class="row">
+          <label class="sw"><input type="checkbox" id="realrate" checked> 1 Hz (real panel)</label>
+          <span class="hint" style="margin:0">off = free-run</span>
+        </div>
+        <p class="hint"><code>update_interval: 1s</code> (<code>dbk.yaml:730</code>) — the writer
+          runs once a second and there is no other update trigger, so the panel only ever renders
+          whole-second frames. With <b>1 Hz</b> on, play steps <code>millis</code> in exact 1000 ms
+          increments, which is why the splash bar jumps 0 → 32 → 64 px and never reaches 95:
+          that is the real hardware behaviour. Free-run sweeps all 96 widths — smoother, but it
+          shows frames the panel cannot produce.</p>
+        <div class="row">
+          <input type="range" id="ms" min="0" max="60000" step="50" value="1000">
+        </div>
+        <div class="row">
+          <label class="n" for="msnum">millis</label>
+          <input type="number" id="msnum" min="0" step="100" value="1000">
+          <label class="n" style="flex:0 0 auto" for="span">span</label>
+          <select id="span">
+            <option value="10000">10 s</option>
+            <option value="60000" selected>60 s</option>
+            <option value="300000">5 min</option>
+            <option value="1200000">20 min</option>
+          </select>
+        </div>
+        <div class="btnrow">
+          <button data-jump="splash">Splash (1s)</button>
+          <button data-jump="checking">Checking (10s)</button>
+          <button data-jump="live">Live (60s)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>wifi_component.is_connected()</h2>
+        <div class="row">
+          <label class="sw"><input type="checkbox" id="wifi" checked> connected</label>
+          <span class="hint" style="margin:0">drives header-left, wifi icon</span>
+        </div>
+        <div class="row">
+          <label class="n" for="since">disc. since</label>
+          <input type="number" id="since" min="0" step="100" value="0">
+          <span id="sinceinfo" style="color:var(--dim);font-size:11px"></span>
+        </div>
+        <p class="hint"><code>wifi_disconnected_since_ms</code> — 0 means "use millis() directly" (never connected).</p>
+        <div class="btnrow">
+          <button data-jump="w90">(90s) countdown</button>
+          <button data-jump="ap15">(AP 15m)</button>
+          <button data-jump="aps">(AP 40s)</button>
+          <button data-jump="ap0">(AP 0s)</button>
+        </div>
+        <p class="hint">Four buttons, four branches — one per <code>printf</code> in
+          <code>dbk.yaml:758-769</code>. <code>(AP 40s)</code> covers the easily-missed
+          <code>(AP %lus)</code> branch, live only for <code>elapsed_seconds</code> 931-989:
+          a 59-second window in a 990-second timeline.</p>
+      </div>
+
+      <div class="card">
+        <h2>mqtt / clock</h2>
+        <div class="row">
+          <label class="sw"><input type="checkbox" id="mqtt" checked> mqtt_connected</label>
+          <span class="hint" style="margin:0">filled vs hollow dot</span>
+        </div>
+        <hr class="sep">
+        <div class="row">
+          <label class="sw"><input type="checkbox" id="tvalid" checked> network_time.now().is_valid()</label>
+        </div>
+        <div class="row">
+          <label class="n" for="clock">clock</label>
+          <input type="time" id="clock" value="12:34">
+          <span class="hint" style="margin:0">shown as <code>%H:%M</code></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>PMSx003 sensor</h2>
+        <div class="row">
+          <label class="sw"><input type="checkbox" id="hasstate" checked> pms_pm25.has_state()</label>
+        </div>
+        <div class="row">
+          <label class="n" for="pmsmode">last update</label>
+          <select id="pmsmode">
+            <option value="auto" selected>auto (fresh, = millis)</option>
+            <option value="manual">manual value</option>
+          </select>
+        </div>
+        <div class="row">
+          <label class="n" for="lastpms">last_pms_ms</label>
+          <input type="number" id="lastpms" min="0" step="100" value="0" disabled>
+          <span id="staleinfo" style="color:var(--dim);font-size:11px"></span>
+        </div>
+        <div class="btnrow">
+          <button data-jump="stale">Stale (&gt;10s)</button>
+          <button data-jump="never">Never updated (0)</button>
+          <button data-jump="fresh">Fresh</button>
+        </div>
+        <hr class="sep">
+        <div class="row">
+          <label class="n" for="pm1">PM1</label><input type="number" id="pm1" step="1" value="7">
+          <label class="n" style="flex:0 0 auto" for="pm25">PM2.5</label><input type="number" id="pm25" step="1" value="42">
+        </div>
+        <div class="row">
+          <label class="n" for="pm10">PM10</label><input type="number" id="pm10" step="1" value="100">
+          <button data-jump="reset" style="margin-left:auto">reset all</button>
+        </div>
+        <div class="row">
+          <label class="sw"><input type="checkbox" id="pm1state" checked> pms_pm1.has_state()</label>
+          <label class="sw"><input type="checkbox" id="pm10state" checked> pms_pm10.has_state()</label>
+        </div>
+        <p class="hint">Values print as <code>%.0f</code>. <code>font_value</code> only has
+          <code>0-9</code> and space — anything else (a <code>-</code>, a <code>.</code>, or the
+          <code>n a n</code> of a stateless sensor) renders as the firmware's hollow
+          "missing glyph" box, exactly as the panel would.</p>
+        <p class="hint">The lambda gates <b>only</b> on <code>pms_pm25.has_state()</code>
+          (<code>dbk.yaml:794</code>) but then reads <code>pms_pm1.state</code> and
+          <code>pms_pm10.state</code> unconditionally (<code>:806</code>, <code>:808</code>). An
+          ESPHome <code>Sensor</code> with no state holds <code>NAN</code>, so those two boxes
+          reproduce the real <code>nan</code> → three hollow boxes output that the PM2.5 switch
+          can never reach (it takes the SENSOR ERROR branch instead).</p>
+      </div>
+
+      <div class="card">
+        <h2>Device</h2>
+        <div class="row">
+          <label class="n" for="devsel">?device=</label>
+          <select id="devsel"></select>
+        </div>
+        <p class="hint" id="devnote"></p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="bot">
+    Hand port &middot; not generated from YAML &middot; primitives follow ESPHome
+    <code>display.cpp</code> / <code>font.cpp</code> / <code>ssd1306_base.cpp</code> semantics
+    (inclusive rects, exclusive line spans, MSB-first unpadded glyph bitstreams, OR-only text).
+    <code>flip_x</code>/<code>flip_y</code> are SSD1306 wiring commands and are deliberately ignored.
+  </footer>
+</div>
+
+<script>
+"use strict";
+(function (global) {
+
+/* =====================================================================
+   0. BAKED FONT DATA — extracted from .esphome/build/dbk/src/main.cpp
+   Shape: { font_id: { baseline,height,descender,xheight,capheight,bpp,
+                       glyphs: { "<char>": {cp,w,h,ox,oy,adv,rows:[[0/1,...],...]} } } }
+   ===================================================================== */
+var FONTS = {"font_icons":{"baseline":9,"height":10,"descender":2,"xheight":0,"capheight":0,"bpp":1,"source_array":"font_glyph_id","glyphs":{"\udb81\udda9":{"cp":984489,"w":9,"h":7,"ox":1,"oy":2,"adv":10,"rows":[[0,1,1,1,1,1,1,0,0],[1,0,0,0,0,0,0,1,0],[0,0,1,1,1,1,0,0,0],[0,1,0,0,0,0,1,0,0],[0,0,0,1,1,0,0,0,0],[0,0,0,1,1,0,0,0,0],[0,0,0,0,0,0,0,0,0]]},"\udb81\uddaa":{"cp":984490,"w":10,"h":7,"ox":0,"oy":2,"adv":10,"rows":[[1,1,0,1,1,1,1,1,0,0],[0,1,1,0,0,0,0,1,1,0],[0,0,0,1,0,1,1,0,0,0],[0,0,1,1,1,0,1,1,0,0],[0,0,0,0,0,1,0,0,0,0],[0,0,0,0,1,1,1,0,0,0],[0,0,0,0,1,1,0,1,0,0]]}}},"font_header":{"baseline":11,"height":13,"descender":3,"xheight":5,"capheight":7,"bpp":1,"source_array":"font_glyph_id_2","glyphs":{" ":{"cp":32,"w":1,"h":1,"ox":0,"oy":10,"adv":6,"rows":[[0]]},"!":{"cp":33,"w":2,"h":7,"ox":2,"oy":4,"adv":6,"rows":[[1,0],[1,0],[1,0],[1,0],[1,0],[0,0],[1,1]]},"\"":{"cp":34,"w":2,"h":3,"ox":2,"oy":3,"adv":6,"rows":[[1,1],[1,1],[1,1]]},"#":{"cp":35,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,0,1,0,1,0],[0,0,1,0,1,0],[0,1,1,1,1,1],[0,0,1,0,1,0],[1,1,1,1,1,0],[0,1,0,1,0,0],[0,1,0,1,0,0]]},"$":{"cp":36,"w":4,"h":9,"ox":1,"oy":3,"adv":6,"rows":[[0,0,1,0],[1,1,1,1],[1,0,0,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,1,0]]},"%":{"cp":37,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[1,1,1,0,0,0],[1,0,1,0,1,0],[0,1,1,1,0,0],[0,0,1,0,0,0],[0,0,1,1,1,1],[0,1,0,1,0,1],[0,0,0,1,1,1]]},"&":{"cp":38,"w":5,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,0,0],[1,0,1,0,0],[1,0,1,0,0],[1,1,0,0,0],[1,0,1,0,1],[1,0,0,1,0],[1,1,1,1,1]]},"'":{"cp":39,"w":1,"h":3,"ox":2,"oy":3,"adv":6,"rows":[[1],[1],[1]]},"(":{"cp":40,"w":2,"h":10,"ox":2,"oy":3,"adv":6,"rows":[[0,1],[0,1],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[0,1]]},")":{"cp":41,"w":2,"h":10,"ox":2,"oy":3,"adv":6,"rows":[[1,0],[1,0],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[1,0],[1,0]]},"*":{"cp":42,"w":4,"h":5,"ox":1,"oy":4,"adv":6,"rows":[[0,0,1,0],[1,0,1,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]]},"+":{"cp":43,"w":4,"h":5,"ox":1,"oy":5,"adv":6,"rows":[[0,0,1,0],[0,0,1,0],[1,1,1,1],[0,0,1,0],[0,0,1,0]]},",":{"cp":44,"w":1,"h":3,"ox":2,"oy":10,"adv":6,"rows":[[1],[1],[1]]},"-":{"cp":45,"w":4,"h":1,"ox":1,"oy":7,"adv":6,"rows":[[1,1,1,1]]},".":{"cp":46,"w":2,"h":1,"ox":2,"oy":10,"adv":6,"rows":[[1,1]]},"/":{"cp":47,"w":4,"h":8,"ox":1,"oy":4,"adv":6,"rows":[[0,0,0,1],[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,1,0,0],[0,1,0,0],[0,1,0,0],[1,0,0,0]]},"0":{"cp":48,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"1":{"cp":49,"w":3,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[0,1,1],[1,0,1],[0,0,1],[0,0,1],[0,0,1],[0,0,1],[0,0,1]]},"2":{"cp":50,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,0],[1,0,0,0,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,1,0,0,0],[0,1,1,1,1]]},"3":{"cp":51,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,0],[1,0,0,0,1],[0,0,0,0,1],[0,0,1,1,0],[0,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]]},"4":{"cp":52,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,0,0,1,1,0],[0,0,1,0,1,0],[0,0,1,0,1,0],[0,1,0,0,1,0],[1,1,1,1,1,1],[0,0,0,0,1,0],[0,0,0,0,1,0]]},"5":{"cp":53,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,1]]},"6":{"cp":54,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[0,1,1,0],[1,0,0,0],[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"7":{"cp":55,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,1,0,0],[1,1,0,0]]},"8":{"cp":56,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"9":{"cp":57,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]]},":":{"cp":58,"w":1,"h":5,"ox":3,"oy":6,"adv":6,"rows":[[1],[0],[0],[0],[1]]},";":{"cp":59,"w":2,"h":7,"ox":2,"oy":6,"adv":6,"rows":[[0,1],[0,0],[0,0],[0,0],[0,1],[0,1],[1,0]]},"<":{"cp":60,"w":4,"h":4,"ox":1,"oy":6,"adv":6,"rows":[[0,0,1,1],[1,1,0,0],[0,1,1,0],[0,0,0,1]]},"=":{"cp":61,"w":4,"h":3,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[0,0,0,0],[1,1,1,1]]},">":{"cp":62,"w":4,"h":4,"ox":1,"oy":6,"adv":6,"rows":[[1,1,0,0],[0,0,1,1],[0,1,1,0],[1,0,0,0]]},"?":{"cp":63,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,0,0,0],[0,1,1,0]]},"@":{"cp":64,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,0,1,1,1,0],[0,1,0,1,0,1],[1,0,1,1,0,1],[1,0,1,1,0,1],[1,0,1,1,0,1],[1,0,0,0,1,0],[0,1,1,1,0,0]]},"A":{"cp":65,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,0,1,1,0,0],[0,0,1,1,0,0],[0,0,1,1,0,0],[0,1,0,0,1,0],[0,1,1,1,1,0],[0,1,0,0,1,0],[1,0,0,0,0,1]]},"B":{"cp":66,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"C":{"cp":67,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,1],[1,1,1,1]]},"D":{"cp":68,"w":5,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,0,0],[1,0,0,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,1,0],[1,1,1,0,0]]},"E":{"cp":69,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,1,1,1]]},"F":{"cp":70,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0]]},"G":{"cp":71,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,1],[0,1,0,0,1],[1,0,0,0,0],[1,0,0,1,1],[1,0,0,0,1],[0,1,0,0,1],[0,0,1,1,1]]},"H":{"cp":72,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1]]},"I":{"cp":73,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0],[1,1,1,1]]},"J":{"cp":74,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,0,0,0,1],[0,0,0,0,1],[0,0,0,0,1],[0,0,0,0,1],[0,0,0,0,1],[1,1,0,0,1],[0,1,1,1,0]]},"K":{"cp":75,"w":5,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,0,0,1,1],[1,0,1,0,0],[1,1,1,0,0],[1,1,0,0,0],[1,0,1,0,0],[1,0,0,1,0],[1,0,0,1,1]]},"L":{"cp":76,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]]},"M":{"cp":77,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,1,1,1],[1,1,0,1],[1,0,0,1],[1,0,0,1]]},"N":{"cp":78,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,0,0,1],[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]]},"O":{"cp":79,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"P":{"cp":80,"w":5,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0]]},"Q":{"cp":81,"w":6,"h":8,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,1,0],[0,1,0,0,1,0],[1,0,0,0,0,1],[1,0,0,0,0,1],[1,0,0,0,0,1],[0,1,0,0,1,0],[0,1,1,1,1,0],[0,0,0,0,1,1]]},"R":{"cp":82,"w":5,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1,0],[1,0,0,1,0],[1,0,0,1,0],[1,1,1,1,0],[1,0,1,0,0],[1,0,0,1,0],[1,0,0,1,1]]},"S":{"cp":83,"w":5,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1,0],[1,0,0,1,1],[1,0,0,0,0],[0,1,1,0,0],[0,0,0,1,0],[1,0,0,0,1],[1,1,1,1,0]]},"T":{"cp":84,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[1,1,1,1,1,1],[0,0,0,1,0,0],[0,0,0,1,0,0],[0,0,0,1,0,0],[0,0,0,1,0,0],[0,0,0,1,0,0],[0,0,0,1,0,0]]},"U":{"cp":85,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"V":{"cp":86,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[1,1,0,0,1,1],[0,1,0,0,1,0],[0,1,0,0,1,0],[0,1,0,0,1,0],[0,0,1,1,0,0],[0,0,1,1,0,0],[0,0,1,1,0,0]]},"W":{"cp":87,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[1,0,0,1,0,1],[1,0,1,1,0,1],[0,1,1,1,0,1],[0,1,1,1,1,0],[0,1,1,0,1,0],[0,1,0,0,1,0],[0,1,0,0,1,0]]},"X":{"cp":88,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[1,1,0,0,1,1],[0,1,0,0,1,0],[0,0,1,1,0,0],[0,0,0,1,0,0],[0,0,1,1,0,0],[0,1,0,0,1,0],[1,1,0,0,1,1]]},"Y":{"cp":89,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[1,1,0,0,1,1],[0,1,0,0,1,0],[0,0,1,1,0,0],[0,0,1,1,0,0],[0,0,1,0,0,0],[0,0,1,0,0,0],[0,0,1,0,0,0]]},"Z":{"cp":90,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0],[1,0,0,0],[1,1,1,1]]},"[":{"cp":91,"w":2,"h":10,"ox":2,"oy":3,"adv":6,"rows":[[1,1],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,1]]},"\\":{"cp":92,"w":4,"h":8,"ox":1,"oy":4,"adv":6,"rows":[[1,0,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,0,1,0],[0,0,1,0],[0,0,0,1],[0,0,0,1]]},"]":{"cp":93,"w":2,"h":10,"ox":2,"oy":3,"adv":6,"rows":[[1,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[1,1]]},"^":{"cp":94,"w":4,"h":4,"ox":1,"oy":4,"adv":6,"rows":[[0,1,1,0],[0,1,1,0],[0,1,1,0],[1,0,0,1]]},"_":{"cp":95,"w":4,"h":1,"ox":1,"oy":11,"adv":6,"rows":[[1,1,1,1]]},"`":{"cp":96,"w":2,"h":1,"ox":2,"oy":4,"adv":6,"rows":[[1,1]]},"a":{"cp":97,"w":4,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[0,0,0,1],[1,1,1,1],[1,0,0,1],[1,1,1,1]]},"b":{"cp":98,"w":4,"h":8,"ox":1,"oy":3,"adv":6,"rows":[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"c":{"cp":99,"w":4,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,0],[1,0,0,1],[1,1,1,1]]},"d":{"cp":100,"w":4,"h":8,"ox":1,"oy":3,"adv":6,"rows":[[0,0,0,1],[0,0,0,1],[0,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"e":{"cp":101,"w":4,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,0],[1,1,1,1]]},"f":{"cp":102,"w":5,"h":8,"ox":1,"oy":3,"adv":6,"rows":[[0,0,1,1,1],[0,1,0,0,0],[0,1,0,0,0],[1,1,1,1,0],[0,1,0,0,0],[0,1,0,0,0],[0,1,0,0,0],[0,1,0,0,0]]},"g":{"cp":103,"w":4,"h":7,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[1,1,1,1]]},"h":{"cp":104,"w":4,"h":8,"ox":1,"oy":3,"adv":6,"rows":[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1]]},"i":{"cp":105,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[0,0,1,0],[0,0,0,0],[1,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0],[1,1,1,1]]},"j":{"cp":106,"w":3,"h":9,"ox":1,"oy":4,"adv":6,"rows":[[0,0,1],[0,0,0],[1,1,1],[0,0,1],[0,0,1],[0,0,1],[0,0,1],[0,0,1],[1,1,1]]},"k":{"cp":107,"w":5,"h":8,"ox":1,"oy":3,"adv":6,"rows":[[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,1,1,0],[1,1,0,0,0],[1,1,1,0,0],[1,0,1,0,0],[1,0,0,1,1]]},"l":{"cp":108,"w":4,"h":8,"ox":1,"oy":3,"adv":6,"rows":[[1,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0],[1,1,1,1]]},"m":{"cp":109,"w":6,"h":5,"ox":0,"oy":6,"adv":6,"rows":[[1,1,1,1,1,1],[1,0,0,1,0,1],[1,0,0,1,0,1],[1,0,0,1,0,1],[1,0,0,1,0,1]]},"n":{"cp":110,"w":4,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1]]},"o":{"cp":111,"w":4,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"p":{"cp":112,"w":4,"h":7,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,0],[1,0,0,0]]},"q":{"cp":113,"w":4,"h":7,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]]},"r":{"cp":114,"w":3,"h":5,"ox":2,"oy":6,"adv":6,"rows":[[1,1,1],[1,0,0],[1,0,0],[1,0,0],[1,0,0]]},"s":{"cp":115,"w":4,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[1,0,0,0],[0,1,1,1],[1,0,0,1],[1,1,1,1]]},"t":{"cp":116,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[0,1,0,0],[0,1,0,0],[1,1,1,1],[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,1,1]]},"u":{"cp":117,"w":4,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]]},"v":{"cp":118,"w":6,"h":5,"ox":0,"oy":6,"adv":6,"rows":[[1,1,0,0,1,1],[0,1,0,0,1,0],[0,0,1,1,0,0],[0,0,1,1,0,0],[0,0,1,1,0,0]]},"w":{"cp":119,"w":6,"h":5,"ox":0,"oy":6,"adv":6,"rows":[[1,0,0,1,0,1],[1,0,1,1,0,1],[0,1,1,1,1,0],[0,1,0,0,1,0],[0,1,0,0,1,0]]},"x":{"cp":120,"w":5,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,0,0,1,1],[0,1,1,0,0],[0,1,1,0,0],[0,1,1,0,0],[1,0,0,1,1]]},"y":{"cp":121,"w":6,"h":7,"ox":0,"oy":6,"adv":6,"rows":[[1,1,0,0,1,1],[0,1,0,0,1,0],[0,0,1,1,0,0],[0,0,1,1,0,0],[0,0,1,1,0,0],[0,0,1,0,0,0],[0,1,1,0,0,0]]},"z":{"cp":122,"w":4,"h":5,"ox":1,"oy":6,"adv":6,"rows":[[1,1,1,1],[0,0,1,0],[0,1,0,0],[1,1,0,0],[1,1,1,1]]},"{":{"cp":123,"w":3,"h":10,"ox":2,"oy":3,"adv":6,"rows":[[0,0,1],[0,1,0],[0,1,0],[0,1,0],[1,0,0],[1,0,0],[0,1,0],[0,1,0],[0,1,0],[0,0,1]]},"|":{"cp":124,"w":1,"h":9,"ox":3,"oy":4,"adv":6,"rows":[[1],[1],[1],[1],[1],[1],[1],[1],[1]]},"}":{"cp":125,"w":3,"h":10,"ox":2,"oy":3,"adv":6,"rows":[[1,0,0],[1,0,0],[0,1,0],[0,1,0],[0,1,0],[0,1,1],[0,1,0],[0,1,0],[1,0,0],[1,0,0]]},"~":{"cp":126,"w":6,"h":2,"ox":0,"oy":7,"adv":6,"rows":[[0,1,1,0,0,1],[1,0,0,1,1,0]]},"\u00a0":{"cp":160,"w":1,"h":1,"ox":0,"oy":10,"adv":6,"rows":[[0]]},"\u00a2":{"cp":162,"w":4,"h":7,"ox":1,"oy":5,"adv":6,"rows":[[0,0,1,0],[1,1,0,1],[1,0,0,1],[1,0,0,0],[1,0,0,1],[0,1,1,1],[0,0,1,0]]},"\u00a3":{"cp":163,"w":5,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[0,1,1,1,0],[1,0,0,1,0],[1,0,0,0,0],[1,1,1,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,1]]},"\u00a5":{"cp":165,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[1,1,0,0,1,1],[0,1,0,0,1,0],[0,0,1,1,0,0],[0,1,1,1,1,0],[0,0,1,0,0,0],[0,1,1,1,1,0],[0,0,1,0,0,0]]},"\u00a9":{"cp":169,"w":6,"h":5,"ox":0,"oy":6,"adv":6,"rows":[[0,1,1,1,1,0],[1,0,1,1,0,1],[1,1,0,0,0,1],[1,0,1,1,0,1],[0,1,1,1,1,0]]},"\u00ae":{"cp":174,"w":6,"h":5,"ox":0,"oy":6,"adv":6,"rows":[[0,1,1,1,1,0],[1,0,1,1,0,1],[1,0,1,1,0,1],[1,0,1,1,0,1],[0,1,1,1,1,0]]},"\u00b0":{"cp":176,"w":2,"h":2,"ox":2,"oy":4,"adv":6,"rows":[[1,1],[1,1]]},"\u00b7":{"cp":183,"w":2,"h":1,"ox":2,"oy":7,"adv":6,"rows":[[1,1]]},"\u00d7":{"cp":215,"w":4,"h":4,"ox":1,"oy":6,"adv":6,"rows":[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]]},"\u00f7":{"cp":247,"w":4,"h":5,"ox":1,"oy":5,"adv":6,"rows":[[0,1,1,0],[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,1,1,0]]},"\u2013":{"cp":8211,"w":6,"h":1,"ox":0,"oy":7,"adv":6,"rows":[[1,1,1,1,1,1]]},"\u2014":{"cp":8212,"w":6,"h":1,"ox":0,"oy":7,"adv":6,"rows":[[1,1,1,1,1,1]]},"\u2018":{"cp":8216,"w":2,"h":3,"ox":2,"oy":3,"adv":6,"rows":[[0,1],[1,0],[1,0]]},"\u2019":{"cp":8217,"w":2,"h":3,"ox":2,"oy":3,"adv":6,"rows":[[0,1],[0,1],[1,0]]},"\u201c":{"cp":8220,"w":3,"h":3,"ox":2,"oy":3,"adv":6,"rows":[[1,0,1],[1,1,0],[1,1,0]]},"\u201d":{"cp":8221,"w":3,"h":3,"ox":1,"oy":3,"adv":6,"rows":[[0,1,1],[0,1,1],[1,0,1]]},"\u2022":{"cp":8226,"w":2,"h":2,"ox":2,"oy":6,"adv":6,"rows":[[1,1],[1,1]]},"\u2026":{"cp":8230,"w":5,"h":1,"ox":1,"oy":10,"adv":6,"rows":[[1,1,1,1,1]]},"\u20ac":{"cp":8364,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[0,1,1,1],[0,1,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,0],[0,1,0,0],[0,1,1,1]]},"\u2122":{"cp":8482,"w":5,"h":3,"ox":0,"oy":4,"adv":6,"rows":[[1,1,0,1,1],[0,1,1,0,1],[0,1,1,0,1]]},"\u2212":{"cp":8722,"w":4,"h":1,"ox":1,"oy":7,"adv":6,"rows":[[1,1,1,1]]}}},"font_label":{"baseline":8,"height":9,"descender":2,"xheight":4,"capheight":5,"bpp":1,"source_array":"font_glyph_id_3","glyphs":{" ":{"cp":32,"w":1,"h":1,"ox":0,"oy":7,"adv":4,"rows":[[0]]},"!":{"cp":33,"w":1,"h":5,"ox":2,"oy":3,"adv":4,"rows":[[1],[1],[1],[0],[1]]},"\"":{"cp":34,"w":2,"h":1,"ox":1,"oy":3,"adv":4,"rows":[[1,1]]},"#":{"cp":35,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,0,1],[1,1,1,1],[0,1,1,0],[1,1,1,1],[0,1,1,0]]},"$":{"cp":36,"w":3,"h":7,"ox":1,"oy":2,"adv":4,"rows":[[0,1,0],[1,1,0],[1,0,1],[1,1,0],[0,0,1],[1,1,1],[0,1,0]]},"%":{"cp":37,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,1,0,0],[1,1,1,0],[0,0,1,0],[0,1,1,1],[0,0,1,1]]},"&":{"cp":38,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[0,1,1,0],[0,1,0,0],[1,0,1,1],[0,1,1,1]]},"'":{"cp":39,"w":1,"h":1,"ox":1,"oy":3,"adv":4,"rows":[[1]]},"(":{"cp":40,"w":2,"h":8,"ox":1,"oy":2,"adv":4,"rows":[[0,1],[0,1],[1,0],[1,0],[1,0],[1,0],[0,1],[0,1]]},")":{"cp":41,"w":2,"h":8,"ox":1,"oy":2,"adv":4,"rows":[[1,0],[1,0],[0,1],[0,1],[0,1],[0,1],[1,0],[1,0]]},"*":{"cp":42,"w":3,"h":3,"ox":1,"oy":3,"adv":4,"rows":[[0,1,0],[1,1,1],[1,1,0]]},"+":{"cp":43,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[0,0,1,0],[1,1,1,1],[0,0,1,0],[0,0,1,0]]},",":{"cp":44,"w":1,"h":2,"ox":1,"oy":7,"adv":4,"rows":[[1],[1]]},"-":{"cp":45,"w":2,"h":1,"ox":1,"oy":5,"adv":4,"rows":[[1,1]]},".":{"cp":46,"w":1,"h":1,"ox":2,"oy":7,"adv":4,"rows":[[1]]},"/":{"cp":47,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[0,0,1],[0,1,0],[0,1,0],[1,0,0],[1,0,0]]},"0":{"cp":48,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[0,1,1,0]]},"1":{"cp":49,"w":2,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1],[0,1],[0,1],[0,1],[0,1]]},"2":{"cp":50,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[0,0,1,0],[0,1,0,0],[1,1,1,1]]},"3":{"cp":51,"w":3,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1],[1,0,1],[0,1,1],[0,0,1],[1,1,1]]},"4":{"cp":52,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,0,1,0],[0,1,1,0],[0,1,1,0],[1,1,1,1],[0,0,1,0]]},"5":{"cp":53,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,1],[1,0,0],[1,1,1],[0,0,1],[1,1,0]]},"6":{"cp":54,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[1,0,0,0],[1,1,1,1],[1,0,0,1],[0,1,1,0]]},"7":{"cp":55,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,1,1,1],[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,1,0,0]]},"8":{"cp":56,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,0],[1,0,1],[1,1,0],[1,0,1],[1,1,0]]},"9":{"cp":57,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,0],[1,0,1],[1,1,1],[0,0,1],[1,1,0]]},":":{"cp":58,"w":1,"h":4,"ox":2,"oy":4,"adv":4,"rows":[[1],[0],[0],[1]]},";":{"cp":59,"w":1,"h":5,"ox":2,"oy":4,"adv":4,"rows":[[1],[0],[0],[1],[1]]},"<":{"cp":60,"w":2,"h":3,"ox":1,"oy":4,"adv":4,"rows":[[0,1],[1,0],[0,1]]},"=":{"cp":61,"w":3,"h":2,"ox":1,"oy":5,"adv":4,"rows":[[1,1,1],[1,1,1]]},">":{"cp":62,"w":3,"h":3,"ox":1,"oy":4,"adv":4,"rows":[[1,0,0],[0,1,1],[1,1,0]]},"?":{"cp":63,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,0],[0,0,1],[0,1,0],[0,1,0],[0,1,0]]},"@":{"cp":64,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,1],[1,1,1,1],[1,1,1,1],[1,1,1,1],[0,1,1,0]]},"A":{"cp":65,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,0,1,0],[0,1,1,0],[0,1,1,0],[0,1,1,1],[1,0,0,1]]},"B":{"cp":66,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,0],[1,0,1],[1,1,0],[1,0,1],[1,1,0]]},"C":{"cp":67,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[1,0,0,0],[1,0,0,1],[0,1,1,0]]},"D":{"cp":68,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,0],[1,0,1],[1,0,1],[1,0,1],[1,1,0]]},"E":{"cp":69,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,1],[1,0,0],[1,1,0],[1,0,0],[1,1,1]]},"F":{"cp":70,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,1],[1,0,0],[1,1,0],[1,0,0],[1,0,0]]},"G":{"cp":71,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[1,0,1,0],[1,0,0,1],[0,1,1,1]]},"H":{"cp":72,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]]},"I":{"cp":73,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]]},"J":{"cp":74,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,0,0,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]]},"K":{"cp":75,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,0,1],[1,1,0],[1,0,0],[1,1,0],[1,0,1]]},"L":{"cp":76,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,1,1]]},"M":{"cp":77,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,0,1],[1,1,1,1],[1,0,1,1],[1,0,1,1],[1,0,0,1]]},"N":{"cp":78,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,1,1],[1,0,0,1]]},"O":{"cp":79,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]]},"P":{"cp":80,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,1],[1,0,1],[1,1,1],[1,0,0],[1,0,0]]},"Q":{"cp":81,"w":4,"h":6,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,0,1]]},"R":{"cp":82,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,0],[1,0,1],[1,1,0],[1,1,0],[1,0,1]]},"S":{"cp":83,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,1]]},"T":{"cp":84,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,1,1,1],[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]]},"U":{"cp":85,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]]},"V":{"cp":86,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,0,1],[0,1,0,1],[0,1,1,0],[0,1,1,0],[0,0,1,0]]},"W":{"cp":87,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,1,1],[1,0,1,1],[0,1,1,1],[0,1,0,1],[0,1,0,1]]},"X":{"cp":88,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,1,1,0],[1,0,0,1]]},"Y":{"cp":89,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,0,1],[0,1,1,0],[0,1,1,0],[0,0,1,0],[0,0,1,0]]},"Z":{"cp":90,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,1,1,1],[0,0,1,0],[0,1,0,0],[0,1,0,0],[1,1,1,1]]},"[":{"cp":91,"w":2,"h":7,"ox":1,"oy":2,"adv":4,"rows":[[1,1],[1,0],[1,0],[1,0],[1,0],[1,0],[1,1]]},"\\":{"cp":92,"w":2,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,0],[1,0],[0,1],[0,1],[0,1]]},"]":{"cp":93,"w":2,"h":7,"ox":1,"oy":2,"adv":4,"rows":[[1,1],[0,1],[0,1],[0,1],[0,1],[0,1],[1,1]]},"^":{"cp":94,"w":2,"h":3,"ox":1,"oy":3,"adv":4,"rows":[[0,1],[1,1],[1,1]]},"_":{"cp":95,"w":3,"h":1,"ox":1,"oy":8,"adv":4,"rows":[[1,1,1]]},"`":{"cp":96,"w":2,"h":1,"ox":1,"oy":3,"adv":4,"rows":[[1,1]]},"a":{"cp":97,"w":3,"h":4,"ox":1,"oy":4,"adv":4,"rows":[[1,1,0],[0,1,1],[1,0,1],[1,1,1]]},"b":{"cp":98,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,0,0],[1,1,0],[1,0,1],[1,0,1],[1,1,0]]},"c":{"cp":99,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[1,0,0,0],[0,1,1,1]]},"d":{"cp":100,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,0,0,1],[0,1,1,1],[1,0,0,1],[1,0,0,1],[0,1,1,1]]},"e":{"cp":101,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[1,1,1,0],[0,1,1,1]]},"f":{"cp":102,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,1],[1,1,1],[1,0,0],[1,0,0],[1,0,0]]},"g":{"cp":103,"w":4,"h":5,"ox":0,"oy":4,"adv":4,"rows":[[0,1,1,1],[1,0,0,1],[1,0,0,1],[0,1,1,1],[1,1,1,1]]},"h":{"cp":104,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,0,0],[1,1,0],[1,0,1],[1,0,1],[1,0,1]]},"i":{"cp":105,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]]},"j":{"cp":106,"w":2,"h":7,"ox":1,"oy":3,"adv":4,"rows":[[0,1],[1,1],[0,1],[0,1],[0,1],[0,1],[1,0]]},"k":{"cp":107,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,0,0],[1,0,1],[1,1,0],[1,1,0],[1,0,1]]},"l":{"cp":108,"w":3,"h":5,"ox":1,"oy":3,"adv":4,"rows":[[1,1,0],[0,1,0],[0,1,0],[0,1,0],[1,1,1]]},"m":{"cp":109,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[1,1,1,1],[1,0,1,1],[1,0,1,1],[1,0,1,1]]},"n":{"cp":110,"w":3,"h":4,"ox":1,"oy":4,"adv":4,"rows":[[1,1,0],[1,0,1],[1,0,1],[1,0,1]]},"o":{"cp":111,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[0,1,1,0],[1,0,0,1],[1,0,0,1],[0,1,1,0]]},"p":{"cp":112,"w":3,"h":5,"ox":1,"oy":4,"adv":4,"rows":[[1,1,0],[1,0,1],[1,0,1],[1,1,0],[1,0,0]]},"q":{"cp":113,"w":4,"h":5,"ox":0,"oy":4,"adv":4,"rows":[[0,1,1,1],[1,0,0,1],[1,0,0,1],[0,1,1,1],[0,0,0,1]]},"r":{"cp":114,"w":3,"h":4,"ox":1,"oy":4,"adv":4,"rows":[[1,1,1],[1,0,0],[1,0,0],[1,0,0]]},"s":{"cp":115,"w":3,"h":4,"ox":1,"oy":4,"adv":4,"rows":[[1,1,0],[1,0,1],[0,1,1],[1,1,1]]},"t":{"cp":116,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,0,0],[1,1,1,1],[0,1,0,0],[0,1,0,0],[0,0,1,1]]},"u":{"cp":117,"w":3,"h":4,"ox":1,"oy":4,"adv":4,"rows":[[1,0,1],[1,0,1],[1,0,1],[1,1,1]]},"v":{"cp":118,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[1,0,0,1],[0,1,0,1],[0,1,1,0],[0,0,1,0]]},"w":{"cp":119,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[1,0,1,1],[1,0,1,1],[0,1,1,1],[0,1,0,1]]},"x":{"cp":120,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[1,0,0,1],[0,1,1,0],[0,0,1,0],[1,1,0,1]]},"y":{"cp":121,"w":4,"h":6,"ox":0,"oy":4,"adv":4,"rows":[[1,0,0,1],[0,1,0,1],[0,1,1,0],[0,0,1,0],[0,1,0,0],[1,0,0,0]]},"z":{"cp":122,"w":3,"h":4,"ox":1,"oy":4,"adv":4,"rows":[[1,1,1],[0,1,0],[1,0,0],[1,1,1]]},"{":{"cp":123,"w":2,"h":6,"ox":1,"oy":3,"adv":4,"rows":[[0,1],[0,1],[1,1],[0,1],[0,1],[0,1]]},"|":{"cp":124,"w":1,"h":6,"ox":2,"oy":3,"adv":4,"rows":[[1],[1],[1],[1],[1],[1]]},"}":{"cp":125,"w":2,"h":6,"ox":1,"oy":3,"adv":4,"rows":[[1,1],[0,1],[0,1],[0,1],[0,1],[1,0]]},"~":{"cp":126,"w":4,"h":2,"ox":0,"oy":5,"adv":4,"rows":[[1,1,0,1],[0,0,1,0]]},"\u00a0":{"cp":160,"w":1,"h":1,"ox":0,"oy":7,"adv":4,"rows":[[0]]},"\u00a2":{"cp":162,"w":4,"h":6,"ox":0,"oy":3,"adv":4,"rows":[[0,0,1,0],[0,1,1,0],[1,0,0,1],[1,0,0,0],[0,1,1,1],[0,0,1,0]]},"\u00a3":{"cp":163,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,1,1,1],[0,1,0,0],[1,1,1,0],[0,1,0,0],[1,1,1,1]]},"\u00a5":{"cp":165,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[1,0,0,1],[0,1,1,0],[1,1,1,1],[1,1,1,1],[0,0,1,0]]},"\u00a9":{"cp":169,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[0,1,1,0],[1,1,1,1],[1,1,1,1],[0,1,1,1]]},"\u00ae":{"cp":174,"w":4,"h":4,"ox":0,"oy":4,"adv":4,"rows":[[0,1,1,0],[1,1,1,1],[1,1,1,1],[0,1,1,1]]},"\u00b0":{"cp":176,"w":2,"h":2,"ox":1,"oy":3,"adv":4,"rows":[[1,1],[0,1]]},"\u00b7":{"cp":183,"w":1,"h":1,"ox":2,"oy":5,"adv":4,"rows":[[1]]},"\u00d7":{"cp":215,"w":3,"h":3,"ox":1,"oy":4,"adv":4,"rows":[[1,0,1],[0,1,0],[1,1,1]]},"\u00f7":{"cp":247,"w":4,"h":3,"ox":0,"oy":4,"adv":4,"rows":[[0,0,1,0],[1,1,1,1],[0,0,0,0]]},"\u2013":{"cp":8211,"w":4,"h":1,"ox":0,"oy":5,"adv":4,"rows":[[1,1,1,1]]},"\u2014":{"cp":8212,"w":4,"h":1,"ox":0,"oy":5,"adv":4,"rows":[[1,1,1,1]]},"\u2018":{"cp":8216,"w":1,"h":1,"ox":2,"oy":3,"adv":4,"rows":[[1]]},"\u2019":{"cp":8217,"w":1,"h":1,"ox":2,"oy":3,"adv":4,"rows":[[1]]},"\u201c":{"cp":8220,"w":2,"h":1,"ox":1,"oy":3,"adv":4,"rows":[[1,1]]},"\u201d":{"cp":8221,"w":2,"h":1,"ox":1,"oy":3,"adv":4,"rows":[[1,1]]},"\u2022":{"cp":8226,"w":2,"h":1,"ox":1,"oy":5,"adv":4,"rows":[[1,1]]},"\u2026":{"cp":8230,"w":4,"h":1,"ox":1,"oy":7,"adv":4,"rows":[[1,1,1,1]]},"\u20ac":{"cp":8364,"w":4,"h":5,"ox":0,"oy":3,"adv":4,"rows":[[0,0,1,1],[0,1,0,0],[1,1,1,0],[0,1,0,0],[0,1,1,1]]},"\u2122":{"cp":8482,"w":4,"h":2,"ox":0,"oy":3,"adv":4,"rows":[[1,1,1,1],[0,1,0,1]]},"\u2212":{"cp":8722,"w":2,"h":1,"ox":1,"oy":5,"adv":4,"rows":[[1,1]]}}},"font_value":{"baseline":11,"height":14,"descender":3,"xheight":5,"capheight":7,"bpp":1,"source_array":"font_glyph_id_4","glyphs":{" ":{"cp":32,"w":1,"h":1,"ox":0,"oy":10,"adv":3,"rows":[[0]]},"0":{"cp":48,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,0],[0,1,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[0,1,0,0,1],[0,1,1,1,0]]},"1":{"cp":49,"w":3,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[0,1,1],[1,0,1],[0,0,1],[0,0,1],[0,0,1],[0,0,1],[0,0,1]]},"2":{"cp":50,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,0],[0,0,0,0,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,1,0,0,0],[1,1,1,1,1]]},"3":{"cp":51,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,0],[0,0,0,0,1],[0,0,0,0,1],[0,0,1,1,0],[0,0,0,0,1],[0,0,0,0,1],[1,1,1,1,0]]},"4":{"cp":52,"w":6,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,0,0,1,0,0],[0,0,1,0,1,0],[0,0,1,0,1,0],[0,1,0,0,1,0],[1,1,1,1,1,1],[0,0,0,0,1,0],[0,0,0,0,1,0]]},"5":{"cp":53,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,1,1,1],[0,0,0,1],[0,0,0,1],[1,1,1,0]]},"6":{"cp":54,"w":4,"h":7,"ox":1,"oy":4,"adv":6,"rows":[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,1,1,1],[1,0,0,1],[1,0,0,1],[0,1,1,1]]},"7":{"cp":55,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[1,1,1,1,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,0,1,0],[0,0,0,1,0],[0,0,1,0,0],[0,0,1,0,0]]},"8":{"cp":56,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,0],[0,1,0,0,1],[0,1,0,0,1],[0,0,1,1,0],[0,1,0,0,1],[1,0,0,0,1],[0,1,1,1,1]]},"9":{"cp":57,"w":5,"h":7,"ox":0,"oy":4,"adv":6,"rows":[[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,1],[0,0,0,0,1],[0,0,0,0,1],[0,1,1,1,0]]}}}};
+
+/* =====================================================================
+   1. Font plumbing
+   ===================================================================== */
+
+// Approximation fallback metrics (ONLY used if FONTS is missing/unusable).
+var APPROX = {
+  font_header: { baseline: 11, height: 13, adv: 6, px: 10 },
+  font_label:  { baseline: 8,  height: 9,  adv: 4, px: 7 },
+  font_value:  { baseline: 11, height: 14, adv: 6, px: 10 },
+  font_icons:  { baseline: 9,  height: 10, adv: 10, px: 10 }
+};
+
+var FONTS_OK = (function () {
+  try {
+    var need = ["font_header", "font_label", "font_value", "font_icons"];
+    for (var i = 0; i < need.length; i++) {
+      var f = FONTS && FONTS[need[i]];
+      if (!f || !f.glyphs) return false;
+      var keys = Object.keys(f.glyphs);
+      if (!keys.length) return false;
+      var g = f.glyphs[keys[0]];
+      if (!g || !g.rows || typeof g.adv !== "number") return false;
+    }
+    return true;
+  } catch (e) { return false; }
+})();
+
+// Prepare a font: codepoint map + glyphs[0] (lowest codepoint — ESPHome sorts the array).
+function prepFont(id) {
+  var raw = FONTS_OK ? FONTS[id] : null;
+  var f = {
+    id: id,
+    baseline: raw ? raw.baseline : APPROX[id].baseline,
+    height: raw ? raw.height : APPROX[id].height,
+    byCp: new Map(),
+    approx: !raw,
+    approxAdv: APPROX[id].adv,
+    approxPx: APPROX[id].px,
+    first: null
+  };
+  if (raw) {
+    var keys = Object.keys(raw.glyphs);
+    for (var i = 0; i < keys.length; i++) {
+      var g = raw.glyphs[keys[i]];
+      f.byCp.set(g.cp, g);
+      if (!f.first || g.cp < f.first.cp) f.first = g;
+    }
+  } else {
+    f.first = { cp: 32, adv: f.approxAdv, w: 1, h: 1, ox: 0, oy: 0, rows: [[0]] };
+  }
+  return f;
+}
+
+// ---- approximate rasteriser (fallback only) ----
+var approxCanvas = null, approxCtx = null;
+function approxGlyph(font, cp) {
+  if (font.byCp.has(cp)) return font.byCp.get(cp);
+  if (typeof document === "undefined") return null;
+  if (!approxCanvas) {
+    approxCanvas = document.createElement("canvas");
+    approxCanvas.width = 48; approxCanvas.height = 48;
+    approxCtx = approxCanvas.getContext("2d", { willReadFrequently: true });
+  }
+  var PAD = 6;
+  approxCtx.clearRect(0, 0, 48, 48);
+  approxCtx.fillStyle = "#fff";
+  approxCtx.textBaseline = "alphabetic";
+  approxCtx.font = font.approxPx + "px ui-monospace, SFMono-Regular, Menlo, monospace";
+  approxCtx.fillText(String.fromCodePoint(cp), PAD, PAD + font.baseline);
+  var d = approxCtx.getImageData(0, 0, 48, 48).data;
+  var minx = 99, miny = 99, maxx = -1, maxy = -1;
+  for (var y = 0; y < 48; y++) for (var x = 0; x < 48; x++) {
+    if (d[(y * 48 + x) * 4 + 3] > 110) {
+      if (x < minx) minx = x; if (x > maxx) maxx = x;
+      if (y < miny) miny = y; if (y > maxy) maxy = y;
+    }
+  }
+  var g;
+  if (maxx < 0) {
+    g = { cp: cp, w: 1, h: 1, ox: 0, oy: 0, adv: font.approxAdv, rows: [[0]] };
+  } else {
+    var w = maxx - minx + 1, h = maxy - miny + 1, rows = [];
+    for (var ry = 0; ry < h; ry++) {
+      var row = [];
+      for (var rx = 0; rx < w; rx++) row.push(d[(((miny + ry) * 48) + (minx + rx)) * 4 + 3] > 110 ? 1 : 0);
+      rows.push(row);
+    }
+    g = { cp: cp, w: w, h: h, ox: minx - PAD, oy: miny - PAD, adv: font.approxAdv, rows: rows };
+  }
+  font.byCp.set(cp, g);
+  return g;
+}
+
+function glyphOf(font, cp) {
+  var g = font.byCp.get(cp);
+  if (g) return g;
+  if (font.approx) return approxGlyph(font, cp);
+  return null; // genuine missing glyph -> firmware draws a hollow box
+}
+
+/* =====================================================================
+   2. TextAlign (display.h:52-77) — masks, NOT a dense enum
+   ===================================================================== */
+var TA = {
+  TOP: 0x00, CENTER_VERTICAL: 0x01, BASELINE: 0x02, BOTTOM: 0x04,
+  LEFT: 0x00, CENTER_HORIZONTAL: 0x08, RIGHT: 0x10,
+  TOP_LEFT: 0x00, TOP_CENTER: 0x08, TOP_RIGHT: 0x10,
+  CENTER_LEFT: 0x01, CENTER: 0x09, CENTER_RIGHT: 0x11,
+  BASELINE_LEFT: 0x02, BASELINE_CENTER: 0x0A, BASELINE_RIGHT: 0x12,
+  BOTTOM_LEFT: 0x04, BOTTOM_CENTER: 0x0C, BOTTOM_RIGHT: 0x14
+};
+
+/* =====================================================================
+   3. Font::measure (font.cpp:266-297) and Display::get_text_bounds
+      (display.cpp:574-611)
+   ===================================================================== */
+function codepoints(str) {
+  var out = [];
+  for (var i = 0; i < str.length;) {
+    var cp = str.codePointAt(i);
+    out.push(cp);
+    i += cp > 0xFFFF ? 2 : 1;
+  }
+  return out;
+}
+
+function measure(font, str) {
+  var minX = 0, hasChar = false, x = 0;
+  var cps = codepoints(str);
+  for (var i = 0; i < cps.length; i++) {
+    var g = glyphOf(font, cps[i]);
+    if (!g) { x += font.first.adv; continue; }           // unknown: advance only
+    minX = hasChar ? Math.min(minX, x + g.ox) : g.ox;
+    x += g.adv;
+    hasChar = true;
+  }
+  return { width: x - minX, x_offset: minX, baseline: font.baseline, height: font.height };
+}
+
+function getTextBounds(x, y, str, font, align) {
+  var m = measure(font, str);
+  var xa = align & 0x18, ya = align & 0x07, x1, y1;
+  if (xa === 0x10)      x1 = x - m.width - m.x_offset;              // RIGHT
+  else if (xa === 0x08) x1 = x - Math.trunc((m.width + m.x_offset) / 2); // CENTER_H
+  else                  x1 = x;                                      // LEFT
+  if (ya === 0x04)      y1 = y - m.height;                           // BOTTOM
+  else if (ya === 0x02) y1 = y - m.baseline;                         // BASELINE
+  else if (ya === 0x01) y1 = y - Math.trunc(m.height / 2);           // CENTER_V
+  else                  y1 = y;                                      // TOP
+  return { x1: x1, y1: y1, width: m.width, height: m.height, x_offset: m.x_offset };
+}
+
+/* =====================================================================
+   4. C formatting helpers (printf / strftime string production only —
+      layout is identical to print, per display.cpp:513-519, 710-716)
+   ===================================================================== */
+function roundHalfEven(v) {
+  var f = Math.floor(v), d = v - f;
+  if (d > 0.5) return f + 1;
+  if (d < 0.5) return f;
+  return (f % 2 === 0) ? f : f + 1;
+}
+// C's %.0f NEVER switches to exponential notation; JS toFixed does at >= 1e21.
+// The magnitude is an exact integer double by then, so BigInt round-trips it.
+function intStr(r) {
+  return r >= 1e21 ? BigInt(r).toString() : r.toFixed(0);
+}
+function fmtFixed(v, prec) {
+  if (!isFinite(v)) return isNaN(v) ? "nan" : (v > 0 ? "inf" : "-inf");
+  if (prec === 0) {
+    // C keeps the SIGN of a negative result, negative zero included:
+    // printf("%.0f", -0.4) is "-0", not "0". That matters on this panel —
+    // font_value carries only space + 0-9, so the '-' becomes a hollow
+    // rectangle(x, y, first.adv, height) box and shifts the centred value.
+    // Do not "simplify" the sign away again. Rounding half-to-even is
+    // symmetric about zero, so taking |v| first is exact, not an approximation.
+    var neg = v < 0 || Object.is(v, -0);
+    return (neg ? "-" : "") + intStr(roundHalfEven(Math.abs(v)));
+  }
+  // NOT C-ACCURATE. toFixed rounds half-away-from-zero; C rounds half-to-even.
+  // Unreachable today (this lambda's only float conversion is %.0f). If a
+  // re-sync ever introduces %.1f, fix this branch before trusting its output.
+  return v.toFixed(prec);
+}
+// Minimal C printf: %%, %s, %d, %u, %lu, %llu, %.Nf
+function cfmt(fmt, args) {
+  var i = 0;
+  return String(fmt).replace(/%(%|s|l{0,2}[diu]|\.\d+f|f)/g, function (m, spec) {
+    if (spec === "%") return "%";
+    var a = args[i++];
+    if (spec === "s") return String(a);
+    if (/[diu]$/.test(spec)) return String(Math.trunc(a));
+    if (spec === "f") return fmtFixed(a, 6);
+    return fmtFixed(a, parseInt(spec.slice(1), 10));
+  });
+}
+function pad2(n) { return (n < 10 ? "0" : "") + n; }
+// Minimal C strftime over an ESPTime-like {hour,minute,second,...}
+function cstrftime(fmt, t) {
+  return String(fmt).replace(/%([HMSdmYyj%])/g, function (m, c) {
+    switch (c) {
+      case "H": return pad2(t.hour);
+      case "M": return pad2(t.minute);
+      case "S": return pad2(t.second || 0);
+      case "d": return pad2(t.day_of_month || 1);
+      case "m": return pad2(t.month || 1);
+      case "Y": return String(t.year || 1970);
+      case "y": return pad2((t.year || 1970) % 100);
+      case "%": return "%";
+      default: return m;
+    }
+  });
+}
+
+/* =====================================================================
+   5. The 1-bit display buffer + ESPHome drawing primitives
+      display.cpp:18-163 (lines/rects/circles), font.cpp:299-359 (text),
+      ssd1306_base.cpp:339-346 (per-pixel bounds drop, no clamping)
+   ===================================================================== */
+function Buf(w, h) {
+  this.w = w; this.h = h;
+  this.px = new Uint8Array(w * h);
+}
+Buf.prototype.clear = function () { this.px.fill(0); };
+Buf.prototype.lit = function () {
+  var n = 0; for (var i = 0; i < this.px.length; i++) n += this.px[i]; return n;
+};
+Buf.prototype.get = function (x, y) {
+  if (x < 0 || x >= this.w || y < 0 || y >= this.h) return 0;
+  return this.px[y * this.w + x];
+};
+// ssd1306_base.cpp:339-346 — out-of-range pixels are SILENTLY DROPPED, one at a time.
+Buf.prototype.draw_pixel_at = function (x, y, on) {
+  x = x | 0; y = y | 0;
+  if (x < 0 || x >= this.w || y < 0 || y >= this.h) return;
+  this.px[y * this.w + x] = on ? 1 : 0;
+};
+// display.cpp:88-92 — [x, x+width) exclusive
+Buf.prototype.horizontal_line = function (x, y, width, on) {
+  if (on === undefined) on = true;
+  for (var i = x; i < x + width; i++) this.draw_pixel_at(i, y, on);
+};
+// display.cpp:94-98 — [y, y+height) exclusive
+Buf.prototype.vertical_line = function (x, y, height, on) {
+  if (on === undefined) on = true;
+  for (var i = y; i < y + height; i++) this.draw_pixel_at(x, i, on);
+};
+// display.cpp:18-37 — Bresenham, both endpoints inclusive
+Buf.prototype.line = function (x1, y1, x2, y2, on) {
+  if (on === undefined) on = true;
+  var dx = Math.abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
+  var dy = -Math.abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
+  var err = dx + dy, e2;
+  for (;;) {
+    this.draw_pixel_at(x1, y1, on);
+    if (x1 === x2 && y1 === y2) break;
+    e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x1 += sx; }
+    if (e2 <= dx) { err += dx; y1 += sy; }
+  }
+};
+// display.cpp:100-105 — all four edges inclusive of the corners
+Buf.prototype.rectangle = function (x1, y1, w, h, on) {
+  if (on === undefined) on = true;
+  this.horizontal_line(x1, y1, w, on);
+  this.horizontal_line(x1, y1 + h - 1, w, on);
+  this.vertical_line(x1, y1, h, on);
+  this.vertical_line(x1 + w - 1, y1, h, on);
+};
+// display.cpp:107-112
+Buf.prototype.filled_rectangle = function (x1, y1, w, h, on) {
+  if (on === undefined) on = true;
+  for (var i = y1; i < y1 + h; i++) this.horizontal_line(x1, i, w, on);
+};
+// display.cpp:114-163 — midpoint circle, dx from -r, do/while (r=0 -> 1 pixel)
+Buf.prototype._circle = function (cx, cy, r, on, filled) {
+  var dx = -r, dy = 0, err = 2 - 2 * r, e2;
+  do {
+    this.draw_pixel_at(cx - dx, cy + dy, on);
+    this.draw_pixel_at(cx + dx, cy + dy, on);
+    this.draw_pixel_at(cx + dx, cy - dy, on);
+    this.draw_pixel_at(cx - dx, cy - dy, on);
+    if (filled) {
+      var w = 2 * (-dx) + 1;
+      this.horizontal_line(cx + dx, cy + dy, w, on);
+      this.horizontal_line(cx + dx, cy - dy, w, on);
+    }
+    e2 = err;
+    if (e2 < dy) { err += (++dy) * 2 + 1; if (-dx === dy && e2 <= dx) e2 = 0; }
+    if (e2 > dx) { err += (++dx) * 2 + 1; }
+  } while (dx <= 0);
+};
+Buf.prototype.circle = function (cx, cy, r, on) { this._circle(cx, cy, r, on === undefined ? true : on, false); };
+Buf.prototype.filled_circle = function (cx, cy, r, on) { this._circle(cx, cy, r, on === undefined ? true : on, true); };
+
+// font.cpp:299-359 — OR-only at bpp=1; a 0 bit draws NOTHING (never clears).
+Buf.prototype.font_print = function (xStart, yStart, font, str, on) {
+  if (on === undefined) on = true;
+  var xAt = xStart, cps = codepoints(str);
+  for (var i = 0; i < cps.length; i++) {
+    var g = glyphOf(font, cps[i]);
+    if (!g) {                                   // font.cpp:308-317 — hollow box, no offset_x
+      var w = font.first.adv;
+      this.rectangle(xAt, yStart, w, font.height, on);
+      xAt += w;
+      continue;
+    }
+    var gy0 = yStart + g.oy, gx0 = xAt + g.ox;
+    for (var ry = 0; ry < g.h; ry++) {
+      var row = g.rows[ry];
+      for (var rx = 0; rx < g.w; rx++) {
+        if (row[rx]) this.draw_pixel_at(gx0 + rx, gy0 + ry, on);
+      }
+    }
+    xAt += g.adv;
+  }
+};
+// display.cpp:506-660 — print(x,y,font,text) or print(x,y,font,align,text)
+Buf.prototype.print = function (x, y, font, a, b) {
+  var align = TA.TOP_LEFT, text;
+  if (typeof a === "string") { text = a; } else { align = a; text = b; }
+  var tb = getTextBounds(x, y, text, font, align);
+  this.font_print(tb.x1, tb.y1, font, text, true);
+  return tb;
+};
+// display.cpp:647-652 -> vprintf_ 513-519 (identical layout path)
+Buf.prototype.printf = function (x, y, font, align, fmt) {
+  var args = Array.prototype.slice.call(arguments, 5);
+  var s = cfmt(fmt, args);
+  if (s.length === 0) return null;             // vsnprintf <= 0 -> nothing drawn
+  return this.print(x, y, font, align, s);
+};
+// display.cpp:726-728 -> 710-716
+Buf.prototype.strftime = function (x, y, font, align, fmt, t) {
+  var s = cstrftime(fmt, t);
+  if (s.length === 0) return null;             // strftime == 0 -> nothing drawn
+  return this.print(x, y, font, align, s);
+};
+
+/* =====================================================================
+   6. uint32 helpers — the lambda's arithmetic is unsigned 32-bit
+   ===================================================================== */
+function u32(v) { return v >>> 0; }
+function u32sub(a, b) { return (a - b) >>> 0; }
+
+/* =====================================================================
+   7. DEVICES — per-device draw logic, keyed by device name.
+      Only `dbk` is implemented. Add another key (e.g. ancs-display-jc3248)
+      with its own render() to support it — no rewrite needed.
+   ===================================================================== */
+var DEVICES = {
+  "dbk": {
+    name: "dbk",
+    label: "DBK — Dustboy Kit For Kids",
+    configuration: "dbk.yaml",          // ESPHome dashboard /device/<configuration>
+    board: "esp32-c3-devkitm-1",
+    panel: { w: 128, h: 32, model: "SSD1306_128X32" },
+    source: "dbk.yaml lines 731-808",
+    fonts: ["font_header", "font_label", "font_value", "font_icons"],
+    controls: { wifi: true, mqtt: true, clock: true, pms: true },
+
+    /* ---------------------------------------------------------------
+       HAND PORT of the lambda. Branch order, coordinates and constants
+       are 1:1 with dbk.yaml:731-808. Do not "improve" the layout here.
+       --------------------------------------------------------------- */
+    render: function (it, F, s, T) {
+      var millis = s.millis;
+
+      // const uint32_t splash_duration_ms = 3 * 1000UL;
+      var splash_duration_ms = 3000;
+      if (millis < splash_duration_ms) {
+        it.print(64, 5, F.font_header, TA.TOP_CENTER, "Dustboy Kit For Kids");
+        it.rectangle(14, 24, 100, 6);
+        var progress_width = Math.floor(u32(millis * 96) / splash_duration_ms);
+        it.filled_rectangle(16, 26, progress_width, 2);
+        T("screen", "SPLASH — millis " + millis + " < 3000");
+        T("progress", "filled_rectangle(16,26," + progress_width + ",2) — " + progress_width + "/96 px");
+        return;
+      }
+
+      // ---- header left: clock or wifi countdown ----
+      if (s.wifi_connected) {
+        var now = { is_valid: s.time_valid, hour: s.clock_h, minute: s.clock_m, second: 0 };
+        if (now.is_valid) {
+          it.strftime(0, -1, F.font_header, TA.TOP_LEFT, "%H:%M", now);
+          T("header-L", 'clock — strftime "%H:%M" -> <em>"' + cstrftime("%H:%M", now) + '"</em>');
+        } else {
+          it.print(0, -1, F.font_header, TA.TOP_LEFT, "--:--");
+          T("header-L", 'time NOT valid -> <em>"--:--"</em>');
+        }
+      } else {
+        var disconnected_since = s.wifi_disconnected_since_ms;
+        var disconnected_ms = disconnected_since === 0 ? u32(millis) : u32sub(millis, disconnected_since);
+        var timeout_seconds = 90;
+        var ap_active_seconds = 15 * 60;
+        var elapsed_seconds = Math.floor(disconnected_ms / 1000);
+        if (elapsed_seconds < timeout_seconds) {
+          var remaining_seconds = timeout_seconds - elapsed_seconds;
+          it.printf(0, -1, F.font_header, TA.TOP_LEFT, "(%lus)", remaining_seconds);
+          T("header-L", 'wifi retry countdown -> <em>"' + cfmt("(%lus)", [remaining_seconds]) + '"</em>' +
+            " (elapsed " + elapsed_seconds + "s of 90s)");
+        } else if (elapsed_seconds < timeout_seconds + ap_active_seconds) {
+          var ap_elapsed_seconds = elapsed_seconds - timeout_seconds;
+          var remaining2 = ap_active_seconds - ap_elapsed_seconds;
+          if (remaining2 >= 60) {
+            var remaining_minutes = Math.floor((remaining2 + 59) / 60);
+            it.printf(0, -1, F.font_header, TA.TOP_LEFT, "(AP %lum)", remaining_minutes);
+            T("header-L", 'AP window, minutes -> <em>"' + cfmt("(AP %lum)", [remaining_minutes]) + '"</em>' +
+              " (" + remaining2 + "s left of 900s)");
+          } else {
+            it.printf(0, -1, F.font_header, TA.TOP_LEFT, "(AP %lus)", remaining2);
+            T("header-L", 'AP window, seconds -> <em>"' + cfmt("(AP %lus)", [remaining2]) + '"</em>');
+          }
+        } else {
+          it.print(0, -1, F.font_header, TA.TOP_LEFT, "(AP 0s)");
+          T("header-L", 'AP window expired -> <em>"(AP 0s)"</em> (elapsed ' + elapsed_seconds + "s >= 990s)");
+        }
+      }
+
+      // ---- mqtt dot ----
+      if (s.mqtt_connected) {
+        it.filled_circle(68, 5, 3);
+        T("mqtt dot", "filled_circle(68,5,3) — connected");
+      } else {
+        it.circle(68, 5, 3);
+        T("mqtt dot", "circle(68,5,3) — hollow, NOT connected");
+      }
+
+      // ---- wifi icon ----
+      if (s.wifi_connected) {
+        it.print(74, 0, F.font_icons, "󰖩");   // U+F05A9 mdi:wifi
+        T("wifi icon", "mdi:wifi U+F05A9");
+      } else {
+        it.print(74, 0, F.font_icons, "󰖪");   // U+F05AA mdi:wifi-off
+        T("wifi icon", "mdi:wifi-off U+F05AA");
+      }
+
+      it.print(124, -1, F.font_header, TA.TOP_RIGHT, "DBK");
+      it.horizontal_line(0, 11, 128);
+
+      // ---- body ----
+      if (millis < 30 * 1000) {
+        it.print(64, 18, F.font_header, TA.CENTER, "CHECKING SENSOR...");
+        T("body", '<em>CHECKING SENSOR...</em> — millis ' + millis + " < 30000");
+        return;
+      }
+
+      var stale = s.last_pms_update_ms === 0 || u32sub(millis, s.last_pms_update_ms) > 10 * 1000;
+      if (!s.pms_has_state || stale) {
+        it.print(64, 18, F.font_header, TA.CENTER, "SENSOR ERROR");
+        T("body", '<em>SENSOR ERROR</em> — ' +
+          (!s.pms_has_state ? "pms_pm25 has no state" : "") +
+          (!s.pms_has_state && stale ? " + " : "") +
+          (stale ? (s.last_pms_update_ms === 0 ? "last_pms_update_ms == 0"
+                 : "stale by " + (u32sub(millis, s.last_pms_update_ms) / 1000).toFixed(1) + "s (> 10s)") : ""));
+        return;
+      }
+
+      it.vertical_line(42, 11, 21);
+      it.vertical_line(85, 11, 21);
+
+      it.print(21, 11, F.font_label, TA.TOP_CENTER, "PM1");
+      it.print(64, 11, F.font_label, TA.TOP_CENTER, "PM2.5");
+      it.print(106, 11, F.font_label, TA.TOP_CENTER, "PM10");
+
+      it.printf(21, 19, F.font_value, TA.TOP_CENTER, "%.0f", s.pm1);
+      it.printf(64, 19, F.font_value, TA.TOP_CENTER, "%.0f", s.pm25);
+      it.printf(106, 19, F.font_value, TA.TOP_CENTER, "%.0f", s.pm10);
+
+      T("body", "<em>LIVE PM READINGS</em> — " +
+        'PM1 "' + fmtFixed(s.pm1, 0) + '" · PM2.5 "' + fmtFixed(s.pm25, 0) + '" · PM10 "' + fmtFixed(s.pm10, 0) + '"');
+    }
+  }
+};
+
+/* =====================================================================
+   8. Geometry self-test — the 15 verified fixtures from the semantics
+      report. Every one asserts get_text_bounds x_start/y_start AND the
+      resulting ink bounding box in the 128x32 buffer.
+   ===================================================================== */
+var FIXTURES = [
+  ["header", "TOP_CENTER", 64, 5, "Dustboy Kit For Kids", 119, 1, 4, 5, 5, 122, 8, 17],
+  ["header", "TOP_LEFT", 0, -1, "--:--", 29, 1, 0, -1, 1, 28, 5, 9],
+  ["header", "TOP_LEFT", 0, -1, "12:34", 29, 1, 0, -1, 1, 29, 3, 9],
+  ["header", "TOP_LEFT", 0, -1, "(AP 15m)", 46, 2, 0, -1, 2, 45, 2, 11],
+  ["header", "TOP_RIGHT", 124, -1, "DBK", 17, 1, 106, -1, 107, 123, 3, 9],
+  ["header", "CENTER", 64, 18, "CHECKING SENSOR...", 107, 1, 10, 12, 11, 115, 16, 22],
+  ["header", "CENTER", 64, 18, "SENSOR ERROR", 71, 1, 28, 12, 29, 99, 16, 22],
+  ["label", "TOP_CENTER", 21, 11, "PM1", 11, 1, 15, 11, 16, 25, 14, 18],
+  ["label", "TOP_CENTER", 64, 11, "PM2.5", 19, 1, 54, 11, 55, 73, 14, 18],
+  ["label", "TOP_CENTER", 106, 11, "PM10", 15, 1, 98, 11, 99, 113, 14, 18],
+  ["value", "TOP_CENTER", 21, 19, "7", 6, 0, 18, 19, 18, 22, 23, 29],
+  ["value", "TOP_CENTER", 64, 19, "42", 12, 0, 58, 19, 58, 68, 23, 29],
+  ["value", "TOP_CENTER", 106, 19, "100", 17, 1, 97, 19, 98, 113, 23, 29],
+  // The two icon fixtures assert the LIT bbox, which is narrower than the DECLARED
+  // glyph box (ox..ox+w-1, oy..oy+h-1): both MDI glyphs carry an empty trailing
+  // column, and U+F05A9 an empty last row. Verified straight off the PROGMEM bytes
+  // in .esphome/build/dbk/src/main.cpp -- uint8_t_id[0..7] = 7e 40 8f 08 41 80 c0 00
+  // (9x7 = 63 bits) and uint8_t_id[8..16] = df 18 61 60 ec 04 03 80 d0 (10x7 = 70
+  // bits). The declared box would end at x=83; the last LIT column is 82 for both.
+  ["icons", "TOP_LEFT", 74, 0, "󰖩", 9, 1, 74, 0, 75, 82, 2, 7],
+  ["icons", "TOP_LEFT", 74, 0, "󰖪", 10, 0, 74, 0, 74, 82, 2, 8]
+];
+
+function selfTest(F) {
+  var buf = new Buf(128, 32), pass = 0, fails = [];
+  for (var i = 0; i < FIXTURES.length; i++) {
+    var f = FIXTURES[i];
+    var font = F["font_" + f[0]], align = TA[f[1]];
+    var m = measure(font, f[4]);
+    var tb = getTextBounds(f[2], f[3], f[4], font, align);
+    buf.clear();
+    buf.font_print(tb.x1, tb.y1, font, f[4], true);
+    var minx = 999, maxx = -1, miny = 999, maxy = -1;
+    for (var y = 0; y < 32; y++) for (var x = 0; x < 128; x++) {
+      if (buf.px[y * 128 + x]) {
+        if (x < minx) minx = x; if (x > maxx) maxx = x;
+        if (y < miny) miny = y; if (y > maxy) maxy = y;
+      }
+    }
+    var got = [m.width, m.x_offset, tb.x1, tb.y1, minx, maxx, miny, maxy];
+    var want = f.slice(5);
+    var ok = true;
+    for (var k = 0; k < want.length; k++) if (got[k] !== want[k]) ok = false;
+    if (ok) pass++;
+    else fails.push(JSON.stringify(f[4]) + " want[w,xoff,x1,y1,x0,x1i,y0,y1i]=" +
+      JSON.stringify(want) + " got=" + JSON.stringify(got));
+  }
+  return { pass: pass, total: FIXTURES.length, fails: fails };
+}
+
+/* =====================================================================
+   9. UI
+   ===================================================================== */
+function boot() {
+  var F = {
+    font_header: prepFont("font_header"),
+    font_label: prepFont("font_label"),
+    font_value: prepFont("font_value"),
+    font_icons: prepFont("font_icons")
+  };
+  var $ = function (id) { return document.getElementById(id); };
+
+  if (!FONTS_OK) $("fontWarn").hidden = false;
+
+  // ---- device resolution from ?device= ----
+  var qs = new URLSearchParams(location.search);
+  var want = (qs.get("device") || "dbk").trim().replace(/\.yaml$/i, "");
+  var dev = DEVICES[want] || null;
+  // ?dashboard= feeds the page's primary call-to-action href, so it is validated
+  // before use: absolute, and http/https only. Unvalidated, `?dashboard=javascript:…`
+  // re-pointed the "Flash real firmware" button at an arbitrary scheme.
+  var dashBase = "http://127.0.0.1:6052";
+  var dashRaw = qs.get("dashboard");
+  if (dashRaw) {
+    try {
+      var du = new URL(dashRaw);
+      if (du.protocol === "http:" || du.protocol === "https:") dashBase = dashRaw.replace(/\/+$/, "");
+    } catch (e) { /* not an absolute URL -> keep the default */ }
+  }
+
+  var sel = $("devsel");
+  Object.keys(DEVICES).forEach(function (k) {
+    var o = document.createElement("option");
+    o.value = k; o.textContent = k + " — " + DEVICES[k].label;
+    sel.appendChild(o);
+  });
+  if (!dev) {
+    var o2 = document.createElement("option");
+    o2.value = want; o2.textContent = want + " — NOT IMPLEMENTED";
+    sel.appendChild(o2);
+    $("devWarn").hidden = false;
+    $("devWarn").innerHTML = "<b>Unknown device “" + want.replace(/[<&]/g, "") + "”.</b> " +
+      "This preview only implements a hand port of <code>dbk</code>. No draw logic exists for this " +
+      "device, so nothing below is a preview of it. Implemented devices: <code>" +
+      Object.keys(DEVICES).join("</code>, <code>") + "</code>. " +
+      "Add a key to the <code>DEVICES</code> object with its own <code>render()</code> to support it.";
+  }
+  sel.value = want;
+  sel.onchange = function () {
+    var u = new URL(location.href);
+    u.searchParams.set("device", sel.value);
+    location.href = u.toString();
+  };
+  var active = dev || DEVICES["dbk"];
+  $("devnote").innerHTML = dev
+    ? "Rendering <code>" + dev.name + "</code> — " + dev.source + " · panel " +
+      dev.panel.w + "×" + dev.panel.h + " (" + dev.panel.model + ") · board " + dev.board +
+      ". Add more devices as keys of <code>DEVICES</code>."
+    : "Rendering nothing — unknown device.";
+
+  // ---- flash link ----
+  // Route VERIFIED against the dashboard's own SPA bundle, not against an HTTP
+  // status: esphome-device-builder serves the same index.html for every path
+  // (/device/dbk.yaml and /zzz-nonexistent both md5 605184fd…), so a 200 proves
+  // nothing. The bundle's router table declares `("/device/:id")` -> renders
+  // `<esphome-page-device .id=decodeURIComponent(id)>`, and the bundle builds its
+  // own links as `/device/${encodeURIComponent(e.configuration)}` — identical to
+  // the line below. Re-check the bundle, not the status code, after an upgrade.
+  var fl = $("flashlink");
+  if (dev) {
+    fl.href = dashBase + "/device/" + encodeURIComponent(dev.configuration);
+    fl.textContent = "Flash real firmware (" + dev.name + ") →";
+  } else {
+    fl.href = dashBase + "/";
+    fl.textContent = "Open ESPHome Device Builder →";
+  }
+
+  // ---- self test badge ----
+  var st = selfTest(F), badge = $("selftest");
+  if (!FONTS_OK) { badge.textContent = "self-test skipped (approx fonts)"; badge.className = "pill bad"; }
+  else if (st.pass === st.total) { badge.textContent = "geometry self-test " + st.pass + "/" + st.total + " OK"; badge.className = "pill ok"; }
+  else { badge.textContent = "geometry self-test " + st.pass + "/" + st.total + " FAILED"; badge.className = "pill bad"; badge.title = st.fails.join("\n"); }
+
+  // ---- state ----
+  var S = {
+    millis: 1000, playing: false, speed: 1, realrate: true,
+    wifi_connected: true, wifi_disconnected_since_ms: 0,
+    mqtt_connected: true,
+    time_valid: true, clock_h: 12, clock_m: 34,
+    pms_has_state: true, pm1_has_state: true, pm10_has_state: true,
+    pms_mode: "auto", last_pms_manual: 0,
+    pm1: 7, pm25: 42, pm10: 100,
+    // zoom 8 is the largest INTEGER scale that fits the left column at the
+    // .wrap cap (1560 - 380 col - 18 gap - 30 card - 50 bezel = 1082 >= 128*8).
+    // The canvas is max-width:100% so a higher zoom shrinks rather than clips,
+    // but only an integer scale gives every display pixel the same width —
+    // which is the whole point of a pixel-accurate preview. Default = exact 8x.
+    zoom: 8, phos: "ice", grid: true, glow: true
+  };
+  var PHOS = {
+    ice:   [190, 232, 255], amber: [255, 176, 60],
+    green: [126, 231, 135], white: [235, 240, 245]
+  };
+
+  var W = active.panel.w, H = active.panel.h;
+  var buf = new Buf(W, H);
+  // TWO offscreen copies of the same 1x frame:
+  //   off     — opaque: dark ground + lit pixels. The crisp image.
+  //   offGlow — lit pixels only; every unlit pixel has alpha 0. The bloom source.
+  // The transparent ground is what makes the bloom visible at all: blurring the
+  // opaque copy and then drawing the crisp copy over the whole canvas erased it.
+  var off = document.createElement("canvas");
+  off.width = W; off.height = H;
+  var octx = off.getContext("2d");
+  var img = octx.createImageData(W, H);
+  var offGlow = document.createElement("canvas");
+  offGlow.width = W; offGlow.height = H;
+  var gctx = offGlow.getContext("2d");
+  var imgGlow = gctx.createImageData(W, H);
+  var cv = $("screen"), ctx = cv.getContext("2d");
+
+  // The PRESENTED size is snapped down to an integer multiple of the panel
+  // width. Letting CSS scale 128*16 px into an 1082 px column gives an
+  // effective 8.453x, i.e. some display pixels 8 CSS px wide and some 9 — in a
+  // tool whose entire claim is pixel accuracy that is a lie, so we show a
+  // smaller but EXACT panel instead. The backing store stays W*zoom (crisp
+  // source); only the CSS width is clamped, and height:auto holds the 4:1
+  // ratio. canvas{max-width:100%} stays as a belt-and-braces net: if this
+  // measurement is ever wrong, the panel shrinks rather than clipping columns.
+  var bezel = cv.parentNode.parentNode;
+  function fitCanvas() {
+    var cs = getComputedStyle(bezel);
+    var avail = bezel.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var fit = (avail > 0) ? Math.max(1, Math.min(S.zoom, Math.floor(avail / W))) : S.zoom;
+    cv.style.width = (W * fit) + "px";
+    return fit;
+  }
+
+  function effLastPms() { return S.pms_mode === "auto" ? S.millis : S.last_pms_manual; }
+
+  function fmtMs(ms) {
+    var s = ms / 1000;
+    var m = Math.floor(s / 60), r = s - m * 60;
+    return (m ? m + "m " : "") + r.toFixed(1) + "s";
+  }
+
+  function draw() {
+    // ---- run the ported lambda ----
+    buf.clear();                                   // auto_clear_enabled -> true
+    var trace = [];
+    var T = function (k, v) { trace.push([k, v]); };
+    var st8 = {
+      millis: Math.max(0, Math.round(S.millis)),
+      wifi_connected: S.wifi_connected,
+      wifi_disconnected_since_ms: Math.max(0, Math.round(S.wifi_disconnected_since_ms)),
+      mqtt_connected: S.mqtt_connected,
+      time_valid: S.time_valid, clock_h: S.clock_h, clock_m: S.clock_m,
+      pms_has_state: S.pms_has_state,
+      last_pms_update_ms: Math.max(0, Math.round(effLastPms())),
+      // ESPHome initialises Sensor::state to NAN, and the lambda reads pm1/pm10
+      // WITHOUT a has_state() guard (dbk.yaml:806,808) — so a stateless PM1 or
+      // PM10 really does reach printf as NAN and prints "nan". pm25 needs no
+      // NaN path: !has_state() takes the SENSOR ERROR branch before any print.
+      pm1: S.pm1_has_state ? S.pm1 : NaN,
+      pm25: S.pm25,
+      pm10: S.pm10_has_state ? S.pm10 : NaN
+    };
+    if (dev) dev.render(buf, F, st8, T);
+    else T("device", "unknown device — nothing rendered");
+
+    // ---- rasterise 1x ----
+    var c = PHOS[S.phos], d = img.data, dg = imgGlow.data;
+    for (var i = 0; i < W * H; i++) {
+      var on = buf.px[i];
+      d[i * 4] = on ? c[0] : 8;
+      d[i * 4 + 1] = on ? c[1] : 10;
+      d[i * 4 + 2] = on ? c[2] : 13;
+      d[i * 4 + 3] = 255;
+      dg[i * 4] = c[0]; dg[i * 4 + 1] = c[1]; dg[i * 4 + 2] = c[2];
+      dg[i * 4 + 3] = on ? 255 : 0;          // unlit -> nothing to bloom
+    }
+    octx.putImageData(img, 0, 0);
+    gctx.putImageData(imgGlow, 0, 0);
+
+    // ---- scale up, crisp ----
+    var z = S.zoom;
+    cv.width = W * z; cv.height = H * z;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#05070a";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(off, 0, 0, cv.width, cv.height);   // crisp pixels FIRST
+    if (S.glow) {
+      // Additive phosphor bloom, composited ON TOP of the crisp layer.
+      // ORDER IS LOAD-BEARING: this used to be drawn first and then buried
+      // under an opaque full-canvas drawImage, which made the checkbox a
+      // no-op (identical toDataURL either way). 'lighter' is what a bloom
+      // physically is — light adds — and it only brightens, so the crisp
+      // pixel grid underneath stays exactly where it was.
+      ctx.save();
+      ctx.filter = "blur(" + Math.max(1, Math.round(z * 0.5)) + "px)";
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.55;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(offGlow, 0, 0, cv.width, cv.height);
+      ctx.restore();
+    }
+    if (S.grid && z >= 5) {
+      ctx.fillStyle = "rgba(0,0,0,0.30)";
+      for (var x = 0; x < W; x++) ctx.fillRect(x * z + z - 1, 0, 1, cv.height);
+      for (var y = 0; y < H; y++) ctx.fillRect(0, y * z + z - 1, cv.width, 1);
+    }
+
+    // ---- readouts ----
+    var fit = fitCanvas();
+    $("zoomv").textContent = S.zoom + "×" + (fit !== S.zoom ? " (fits " + fit + "×)" : "");
+    $("litcount").textContent = buf.lit() + " px lit";
+    var ul = $("trace");
+    ul.innerHTML = "";
+    trace.unshift(["millis()", st8.millis + " ms (" + fmtMs(st8.millis) + ")" + (S.playing ? " — playing" : "")]);
+    trace.forEach(function (t) {
+      var li = document.createElement("li");
+      var k = document.createElement("span"); k.className = "k"; k.textContent = t[0];
+      var v = document.createElement("span"); v.className = "v"; v.innerHTML = t[1];
+      li.appendChild(k); li.appendChild(v); ul.appendChild(li);
+    });
+
+    var since = st8.wifi_disconnected_since_ms;
+    var dms = since === 0 ? st8.millis : u32sub(st8.millis, since);
+    $("sinceinfo").textContent = S.wifi_connected ? "(ignored while connected)"
+      : "disconnected " + Math.floor(dms / 1000) + "s";
+    var lp = st8.last_pms_update_ms;
+    $("staleinfo").textContent = lp === 0 ? "= 0 -> always stale"
+      : "age " + (u32sub(st8.millis, lp) / 1000).toFixed(1) + "s / 10.0s";
+    $("millisfmt").textContent = fmtMs(st8.millis);
+  }
+
+  // ---- bind controls ----
+  function bindNum(id, key, after) {
+    var el = $(id);
+    el.oninput = function () { S[key] = parseFloat(el.value); if (isNaN(S[key])) S[key] = 0; if (after) after(); draw(); };
+  }
+  function bindChk(id, key, after) {
+    var el = $(id);
+    el.onchange = function () { S[key] = el.checked; if (after) after(); draw(); };
+  }
+
+  var msSlider = $("ms"), msNum = $("msnum"), spanSel = $("span");
+  function syncMillis(fromSlider) {
+    var span = parseInt(spanSel.value, 10);
+    if (S.millis > span) {
+      var opts = [10000, 60000, 300000, 1200000];
+      for (var i = 0; i < opts.length; i++) if (opts[i] >= S.millis) { spanSel.value = String(opts[i]); span = opts[i]; break; }
+      if (S.millis > span) { spanSel.value = "1200000"; span = 1200000; }
+    }
+    msSlider.max = String(span);
+    if (!fromSlider) msSlider.value = String(Math.min(S.millis, span));
+    msNum.value = String(Math.round(S.millis));
+  }
+  msSlider.oninput = function () { S.millis = parseFloat(msSlider.value); syncMillis(true); draw(); };
+  msNum.oninput = function () { S.millis = Math.max(0, parseFloat(msNum.value) || 0); syncMillis(false); draw(); };
+  spanSel.onchange = function () {
+    // An EXPLICIT span choice is authoritative: clamp millis into it. syncMillis
+    // still auto-widens when millis is raised from elsewhere (a jump, the number
+    // box, play), but it used to also overrule the user here — after an AP jump,
+    // picking "10 s" silently snapped back to 20 min and left the slider at
+    // 0.08 %/px, so the 3 s splash could not be scrubbed by hand at all.
+    var span = parseInt(spanSel.value, 10);
+    if (S.millis > span) S.millis = span;
+    syncMillis(false);
+    draw();
+  };
+
+  bindChk("wifi", "wifi_connected");
+  bindNum("since", "wifi_disconnected_since_ms");
+  bindChk("mqtt", "mqtt_connected");
+  bindChk("tvalid", "time_valid");
+  $("clock").oninput = function () {
+    var p = ($("clock").value || "12:34").split(":");
+    S.clock_h = parseInt(p[0], 10) || 0; S.clock_m = parseInt(p[1], 10) || 0; draw();
+  };
+  bindChk("hasstate", "pms_has_state");
+  bindChk("pm1state", "pm1_has_state");
+  bindChk("pm10state", "pm10_has_state");
+  $("pmsmode").onchange = function () {
+    S.pms_mode = $("pmsmode").value;
+    $("lastpms").disabled = (S.pms_mode === "auto");
+    draw();
+  };
+  bindNum("lastpms", "last_pms_manual");
+  bindNum("pm1", "pm1"); bindNum("pm25", "pm25"); bindNum("pm10", "pm10");
+
+  // The grid is suppressed below 5x on purpose (a 1px separator would eat a
+  // quarter of a 4px cell), so make that legible instead of leaving a checked
+  // box that does nothing when you click it.
+  function syncGridEnabled() {
+    var g = $("grid"), inert = S.zoom < 5;
+    g.disabled = inert;
+    g.parentNode.style.opacity = inert ? "0.45" : "";
+    g.parentNode.title = inert
+      ? "grid needs zoom 5× or more — at 2-4× a 1px separator would eat a quarter of each cell"
+      : "";
+  }
+  $("zoom").oninput = function () {
+    S.zoom = parseInt($("zoom").value, 10);
+    syncGridEnabled();
+    draw();                                  // draw() sets the zoomv readout
+  };
+  // The fitted scale depends on the column width, so it has to be recomputed
+  // when the window changes. draw() re-runs the lambda too, but that is a
+  // 128x32 buffer — cheaper than tracking the two paths separately.
+  window.addEventListener("resize", draw);
+  $("phos").onchange = function () { S.phos = $("phos").value; draw(); };
+  bindChk("grid", "grid"); bindChk("glow", "glow");
+  bindChk("realrate", "realrate");
+
+  // ---- quick jumps ----
+  function setWifi(on) { S.wifi_connected = on; $("wifi").checked = on; }
+  function setMillis(ms) { S.millis = ms; syncMillis(false); }
+  function setSince(ms) { S.wifi_disconnected_since_ms = ms; $("since").value = String(Math.round(ms)); }
+  function setPmsMode(m, val) {
+    S.pms_mode = m; $("pmsmode").value = m; $("lastpms").disabled = (m === "auto");
+    if (val !== undefined) { S.last_pms_manual = val; $("lastpms").value = String(Math.round(val)); }
+  }
+  function setPmState(pm1on, pm25on, pm10on) {
+    S.pm1_has_state = pm1on; $("pm1state").checked = pm1on;
+    S.pms_has_state = pm25on; $("hasstate").checked = pm25on;
+    S.pm10_has_state = pm10on; $("pm10state").checked = pm10on;
+  }
+  var JUMPS = {
+    splash: function () { setMillis(1000); },
+    checking: function () { setMillis(10000); },
+    live: function () { setMillis(60000); setWifi(true); setPmsMode("auto"); setPmState(true, true, true); },
+    w90: function () { setWifi(false); if (S.millis < 5000) setMillis(5000); setSince(S.millis); },
+    ap15: function () { setWifi(false); if (S.millis < 100000) setMillis(100000); setSince(S.millis - 90000); },
+    // elapsed 950s: past the 90s timeout, inside the 900s AP window, and with
+    // 40s left — the only way into the "(AP %lus)" branch (elapsed 931..989).
+    aps: function () { setWifi(false); setMillis(950000); setSince(0); },
+    ap0: function () { setWifi(false); if (S.millis < 1000000) setMillis(1000000); setSince(S.millis - 990000); },
+    stale: function () { if (S.millis < 40000) setMillis(60000); setPmsMode("manual", Math.max(1, S.millis - 11000)); },
+    never: function () { if (S.millis < 40000) setMillis(60000); setPmsMode("manual", 0); },
+    fresh: function () { setPmsMode("auto"); },
+    reset: function () {
+      setMillis(1000); setWifi(true); setSince(0); S.mqtt_connected = true; $("mqtt").checked = true;
+      S.time_valid = true; $("tvalid").checked = true; $("clock").value = "12:34"; S.clock_h = 12; S.clock_m = 34;
+      setPmState(true, true, true); setPmsMode("auto", 0);
+      S.pm1 = 7; S.pm25 = 42; S.pm10 = 100;
+      $("pm1").value = "7"; $("pm25").value = "42"; $("pm10").value = "100";
+    }
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-jump]"), function (b) {
+    b.onclick = function () { JUMPS[b.getAttribute("data-jump")](); draw(); };
+  });
+
+  // ---- play / pause ----
+  var playBtn = $("play"), lastT = 0, acc = 0;
+  $("speed").onchange = function () { S.speed = parseFloat($("speed").value); };
+  playBtn.onclick = function () {
+    S.playing = !S.playing;
+    playBtn.textContent = S.playing ? "⏸ pause" : "▶ play";
+    playBtn.className = S.playing ? "on" : "";
+    if (S.playing) { lastT = performance.now(); acc = 0; requestAnimationFrame(tick); }
+  };
+  function tick(t) {
+    if (!S.playing) return;
+    var dt = t - lastT; lastT = t;
+    if (S.realrate) {
+      // The panel's writer runs on update_interval: 1s (dbk.yaml:730) and there
+      // is no other update trigger, so millis advances in whole 1000 ms steps —
+      // real elapsed time is banked in `acc` and spent a second at a time. This
+      // is why the splash bar only ever shows 32 and 64 px on hardware.
+      acc += dt * S.speed;
+      if (acc >= 1000) {
+        var steps = Math.floor(acc / 1000);
+        acc -= steps * 1000;
+        S.millis += steps * 1000;
+        syncMillis(false);
+        draw();
+      }
+    } else {
+      S.millis += dt * S.speed;
+      syncMillis(false);
+      draw();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  syncMillis(false);
+  syncGridEnabled();
+  draw();
+}
+
+/* =====================================================================
+   10. exports / boot
+   ===================================================================== */
+var API = {
+  FONTS: FONTS, FONTS_OK: FONTS_OK, prepFont: prepFont, Buf: Buf, TA: TA,
+  measure: measure, getTextBounds: getTextBounds, cfmt: cfmt, cstrftime: cstrftime,
+  fmtFixed: fmtFixed, selfTest: selfTest, DEVICES: DEVICES, FIXTURES: FIXTURES
+};
+if (typeof module !== "undefined" && module.exports) module.exports = API;
+global.LabPreview = API;
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+}
+
+})(typeof globalThis !== "undefined" ? globalThis : this);
+</script>
+</body>
+</html>
