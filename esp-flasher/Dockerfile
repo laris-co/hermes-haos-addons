@@ -9,9 +9,10 @@ LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}"
 
-# nginx only — the gallery upstream is proxied; the two local assets below are
-# small enough to copy (a panel shim and one self-contained preview page).
-RUN apk add --no-cache nginx \
+# nginx for serving; python3 only to render one small JSON file at boot from
+# this add-on's own Supervisor-managed options (see render_creds.py) — never
+# a build-time value, so no credential ever lands in an image layer.
+RUN apk add --no-cache nginx python3 \
     && mkdir -p /run/nginx
 
 COPY ingress.conf /etc/nginx/http.d/default.conf
@@ -24,5 +25,8 @@ COPY preview.html /usr/share/esp-flasher/preview.html
 # The wall displays: twenty-plus designs plus the band photography they swap between.
 # Copied, not proxied — they are ours, self-contained, and carry no absolute paths.
 COPY wall/ /usr/share/esp-flasher/wall/
+COPY render_creds.py /usr/share/esp-flasher/render_creds.py
+COPY run.sh /run.sh
+RUN chmod 0755 /run.sh
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/run.sh"]

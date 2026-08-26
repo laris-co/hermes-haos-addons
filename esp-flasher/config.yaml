@@ -1,5 +1,5 @@
 name: "ESP Web Flasher"
-version: "2.10.0"
+version: "2.11.0"
 slug: "esp_flasher"
 description: >-
   The Many Bodies, One Soul workshop gallery and web flasher, served inside the
@@ -24,3 +24,15 @@ panel_icon: mdi:usb-flash-drive
 panel_title: ESP32 Workshop
 panel_admin: false
 stage: experimental
+options:
+  # Set once per install, in this add-on's own Configuration tab — never in
+  # git, never in the image. If set, every wall under /wall/ fills its
+  # connection form and connects on its own, in ANY browser on ANY device,
+  # because the value is rendered server-side at container start rather than
+  # relying on one browser's localStorage. Leave blank to require the normal
+  # ?u=/?p= or the "s" settings panel, same as before this option existed.
+  mqtt_user: ""
+  mqtt_password: ""
+schema:
+  mqtt_user: str
+  mqtt_password: password
