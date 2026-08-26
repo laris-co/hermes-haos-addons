@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP Web Flasher</title>
+<title>ESP Flasher</title>
 <style>
   :root{
     --bg:#0f171e; --panel:#16212b; --ink:#dde6ed; --soft:#a2b2bf; --faint:#75889a;
@@ -11,83 +11,104 @@
   }
   *,*::before,*::after{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
-    font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;padding:28px 22px 60px}
-  .wrap{max-width:660px;margin:0 auto}
+    font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;padding:26px 20px 70px}
+  .wrap{max-width:820px;margin:0 auto}
   h1{font-size:1.5rem;margin:0 0 4px;letter-spacing:-.01em}
-  .sub{color:var(--soft);margin:0 0 26px;font-size:.95rem}
+  .sub{color:var(--soft);margin:0 0 24px;font-size:.95rem}
   .card{background:var(--panel);border:1px solid var(--rule);border-radius:8px;
-    padding:18px 20px;margin:0 0 18px}
-  .card h2{font-size:1.02rem;margin:0 0 10px}
+    padding:17px 19px;margin:0 0 16px}
+  .card h2{font-size:1.02rem;margin:0 0 4px}
+  .card .hint{color:var(--faint);font-size:.86rem;margin:0 0 12px}
   code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.86em;
     background:#1b2732;color:#cfe;padding:.12em .38em;border-radius:3px}
-  ol{margin:0;padding-left:1.2em} li{margin-bottom:.5em}
-  a{color:var(--teal)}
+  a{color:var(--teal)} .muted{color:var(--faint);font-size:.88rem}
+  ol{margin:0;padding-left:1.15em} li{margin-bottom:.45em}
+
   #gate{border-left:3px solid var(--warn)}
   #gate.ok{border-left-color:var(--good)}
   #gate.bad{border-left-color:var(--bad)}
-  .badge{display:inline-block;font-size:.72rem;letter-spacing:.08em;
-    text-transform:uppercase;padding:.18em .5em;border-radius:3px;margin-left:.4em}
+  .badge{display:inline-block;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;
+    padding:.18em .5em;border-radius:3px;margin-left:.4em;vertical-align:2px}
   .badge.ok{background:#12341f;color:var(--good)}
   .badge.bad{background:#3a1b1a;color:var(--bad)}
-  .muted{color:var(--faint);font-size:.88rem}
+
+  .chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px}
+  .chip{display:flex;flex-direction:column;gap:2px;text-align:left;cursor:pointer;
+    background:#111a22;border:1px solid var(--rule);border-radius:6px;padding:9px 11px;
+    color:var(--ink);font:inherit;font-size:.88rem;transition:border-color .12s}
+  .chip:hover{border-color:var(--teal)}
+  .chip.on{border-color:var(--teal);background:#12262c}
+  .chip-name{font-weight:600;line-height:1.3}
+  .chip-chip{color:var(--faint);font-size:.74rem;letter-spacing:.04em}
+  .chip:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+  .lessons{display:flex;flex-wrap:wrap;gap:6px}
+  .lesson{background:#111a22;border:1px solid var(--rule);border-radius:5px;
+    padding:5px 9px;font-size:.82rem;text-decoration:none;color:var(--soft)}
+  .lesson:hover{border-color:var(--teal);color:var(--ink)}
+
   esp-web-install-button{display:block;margin-top:12px}
-  .why{margin-top:10px;font-size:.9rem;color:var(--soft)}
+  #chosen{margin:10px 0 0;font-size:.9rem;color:var(--soft)}
 </style>
 </head>
-<body>
+<body data-gallery="{{GALLERY_URL}}">
 <div class="wrap">
 
-  <h1>ESP Web Flasher</h1>
+  <h1>ESP Flasher</h1>
   <p class="sub">Flash a board and set its Wi-Fi over USB — from this sidebar.</p>
 
-  <!-- Filled in by check.js. Rendered pessimistic so a blocked script never
-       leaves a page that looks like it should work. -->
+  <!-- Rendered pessimistic on purpose: if app.js is blocked, the page must not
+       look like it is ready. -->
   <div class="card" id="gate">
     <h2>Browser check <span class="badge bad" id="gate-badge">checking…</span></h2>
     <div id="gate-body" class="muted">
-      If this text does not change, JavaScript was blocked and the flasher
-      cannot run on this page.
+      If this never changes, JavaScript was blocked and the flasher cannot run.
     </div>
   </div>
 
   <div class="card">
     <h2>Before you connect</h2>
     <ol>
-      <li>Unplug the board from anything else reading its serial port. A running
-        logger or bridge <strong>holds the port</strong> and the browser will not
-        see it.<br>
-        <span class="muted">On the machine with the board:
-        <code>pkill -f serial-to-mqtt</code></span></li>
+      <li>Stop anything reading the board's serial port — a logger or bridge
+        <strong>holds it</strong> and the browser will not see the device.<br>
+        <span class="muted">e.g. <code>pkill -f serial-to-mqtt</code></span></li>
       <li>Plug the board into <strong>this computer</strong> — the one running the
         browser, not the Home Assistant host.</li>
-      <li>Press <em>Connect</em>, choose the serial port, then
-        <em>Configure Wi-Fi</em>.</li>
+      <li>Pick a firmware, press <em>Connect</em>. Already-flashed board? Choose
+        <em>Configure Wi-Fi</em> instead of installing.</li>
     </ol>
   </div>
 
   <div class="card">
-    <h2>Flash / configure</h2>
-    <esp-web-install-button id="btn" manifest="{{MANIFEST_URL}}">
+    <h2>Workshop firmwares</h2>
+    <p class="hint" id="chars-note">loading…</p>
+    <div class="chips" id="chars"></div>
+    <p id="chosen" class="muted">Nothing selected yet.</p>
+    <esp-web-install-button id="btn">
       <button slot="activate">Connect to a board</button>
       <span slot="unsupported">This browser cannot do Web Serial — see the check above.</span>
-      <span slot="not-allowed">This page is not a secure context — see the check above.</span>
+      <span slot="not-allowed">Not a secure context — see the check above.</span>
     </esp-web-install-button>
-    <p class="why">Already-flashed boards do not need reflashing: connect, then
-      pick <strong>Configure Wi-Fi</strong> to send credentials over Improv.</p>
   </div>
 
   <div class="card">
-    <h2>Workshop gallery</h2>
+    <h2>kru32 — ESP32 display lessons</h2>
+    <p class="hint">LVGL and display work, lesson by lesson. These are the configs the
+      <code>ancs-display</code> firmware copies its known-good pin values from.</p>
+    <div class="lessons" id="lessons"></div>
+  </div>
+
+  <div class="card">
+    <h2>Sources</h2>
     <p class="muted" style="margin:0">
-      <a href="{{GALLERY_URL}}" target="_blank" rel="noopener">{{GALLERY_URL}}</a>
+      <a href="{{GALLERY_URL}}" target="_blank" rel="noopener">workshop-04-esp32-wasm gallery</a><br>
+      <a href="https://github.com/the-oracle-keeps-the-human-human/kru32-oracle" target="_blank" rel="noopener">kru32-oracle</a><br>
+      <a href="https://github.com/dustboy-kit/esp32c3-pm25-monitor" target="_blank" rel="noopener">dustboy-kit/esp32c3-pm25-monitor</a> — DBK PM2.5 firmware
     </p>
   </div>
 
 </div>
-
-<!-- Same-origin file, never inline: the CSP names script-src 'self', and an
-     inline script would be blocked with nothing shown in the page. -->
-<script src="check.js"></script>
+<script src="app.js"></script>
 <script type="module" src="https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"></script>
 </body>
 </html>

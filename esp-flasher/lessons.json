@@ -1,0 +1,74 @@
+[
+{
+"slug": "00-placeholder",
+"title": "placeholder"
+},
+{
+"slug": "00-why-hard.md",
+"title": "why hard.md"
+},
+{
+"slug": "01-basic",
+"title": "basic"
+},
+{
+"slug": "02-standard",
+"title": "standard"
+},
+{
+"slug": "03-intermediate",
+"title": "intermediate"
+},
+{
+"slug": "04-advanced",
+"title": "advanced"
+},
+{
+"slug": "05-time",
+"title": "time"
+},
+{
+"slug": "06-http",
+"title": "http"
+},
+{
+"slug": "07-animation",
+"title": "animation"
+},
+{
+"slug": "08-gestures",
+"title": "gestures"
+},
+{
+"slug": "09-themes",
+"title": "themes"
+},
+{
+"slug": "10-sensors",
+"title": "sensors"
+},
+{
+"slug": "11-persistent",
+"title": "persistent"
+},
+{
+"slug": "12-dropdown",
+"title": "dropdown"
+},
+{
+"slug": "13-automation",
+"title": "automation"
+},
+{
+"slug": "14-dashboard",
+"title": "dashboard"
+},
+{
+"slug": "15-production",
+"title": "production"
+},
+{
+"slug": "16-gif-animation",
+"title": "gif animation"
+}
+]

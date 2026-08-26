@@ -16,7 +16,9 @@ RUN apk add --no-cache nginx python3 \
 
 COPY ingress.conf /etc/nginx/http.d/default.conf
 COPY index.tmpl /usr/share/esp-flasher/index.tmpl
-COPY check.js  /usr/share/esp-flasher/check.js
+COPY app.js         /usr/share/esp-flasher/app.js
+COPY characters.json /usr/share/esp-flasher/characters.json
+COPY lessons.json    /usr/share/esp-flasher/lessons.json
 COPY run.sh /run.sh
 RUN chmod 0755 /run.sh
 

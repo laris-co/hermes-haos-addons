@@ -1,0 +1,218 @@
+[
+{
+"file": "manifest-atom-oracle-pet.json",
+"name": "Atom Oracle desk-pet",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-atom-oracle.json",
+"name": "Atom Oracle Atomic Pulse",
+"version": "2026.06.17",
+"chips": [
+"ESP32"
+]
+},
+{
+"file": "manifest-bongbaeng-pet.json",
+"name": "bongbaeng-pet",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-bongbaeng.json",
+"name": "bongbaeng Oracle 🐆 — Cheetah identity card",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-bufo.json",
+"name": "ESP32 Oracle desk-pet — bufo",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-cat-orange.json",
+"name": "ESP32 Oracle desk-pet — cat-orange",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-cat-pet.json",
+"name": "ESP32 Oracle desk-pet — cat-pet",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-cat.json",
+"name": "ESP32 Oracle desk-pet — cat",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-chaiklang.json",
+"name": "ESP32 Oracle desk-pet — chaiklang 🦁",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-clawd.json",
+"name": "ESP32 Oracle desk-pet — clawd",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-gon.json",
+"name": "Gon DustBoy — PM2.5 AQI (wasm3)",
+"version": "1.0.0",
+"chips": [
+"ESP32"
+]
+},
+{
+"file": "manifest-itthi.json",
+"name": "ESP32 Oracle desk-pet — itthi",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-jizo.json",
+"name": "ESP32 Oracle desk-pet — jizo 🗿",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-leica.json",
+"name": "Leica Oracle — Fleet Pulse",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-lord-knight.json",
+"name": "Lord Knight — gif-wamr (WASM decoder on-chip)",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-no10.json",
+"name": "No.10 X — Agumon Digimon on ESP32-S3",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-nova.json",
+"name": "Nova",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-singhasingha.json",
+"name": "Singhasingha desk-pet — lion 🦁",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-sombo.json",
+"name": "sombo",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-somtor-pet.json",
+"name": "ESP32 Oracle desk-pet — สมต่อ 🐝",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-tinky.json",
+"name": "tinky-pet",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-tonk.json",
+"name": "Tonk desk-pet — herb sprout",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-vessel-pet.json",
+"name": "vessel-pet",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-vessel.json",
+"name": "Vessel — Courier WASM on ESP32-S3",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-vialumen-pet.json",
+"name": "vialumen-pet",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-vialumen.json",
+"name": "ViaLumen — LVGL stars UI",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+},
+{
+"file": "manifest-weizen.json",
+"name": "ESP32 desk-pet — weizen 🍺",
+"version": "1.0.0",
+"chips": [
+"ESP32-S3"
+]
+}
+]
