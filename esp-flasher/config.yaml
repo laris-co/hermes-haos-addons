@@ -1,0 +1,33 @@
+name: "ESP Web Flasher"
+version: "1.0.0"
+slug: "esp_flasher"
+description: >-
+  Flash an ESP32 and set its Wi-Fi from the Home Assistant sidebar, over USB,
+  using Web Serial. No CLI, no serial contention with a running logger.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/esp-flasher"
+arch:
+  - amd64
+  - aarch64
+startup: application
+# boot: auto — a host reboot leaves `boot: manual` add-ons stopped, and a stopped
+# add-on reads as a failed install when it is nothing of the kind.
+boot: auto
+# The HA base image ships s6-overlay and owns PID 1 via ENTRYPOINT ["/init"].
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:usb-flash-drive
+panel_title: ESP Flasher
+panel_admin: false
+stage: experimental
+options:
+  gallery_url: "https://the-oracle-keeps-the-human-human.github.io/workshop-04-esp32-wasm/"
+  # Empty = "connect to an already-flashed board and set its Wi-Fi over Improv",
+  # which is the usual case. Point it at a firmware manifest.json to also install.
+  manifest_url: ""
+schema:
+  gallery_url: str
+  manifest_url: str?

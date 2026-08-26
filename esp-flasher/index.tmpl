@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP Web Flasher</title>
+<style>
+  :root{
+    --bg:#0f171e; --panel:#16212b; --ink:#dde6ed; --soft:#a2b2bf; --faint:#75889a;
+    --rule:#283742; --teal:#48bacc; --good:#5fbf85; --warn:#d6a43c; --bad:#e4736d;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;padding:28px 22px 60px}
+  .wrap{max-width:660px;margin:0 auto}
+  h1{font-size:1.5rem;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--soft);margin:0 0 26px;font-size:.95rem}
+  .card{background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+    padding:18px 20px;margin:0 0 18px}
+  .card h2{font-size:1.02rem;margin:0 0 10px}
+  code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.86em;
+    background:#1b2732;color:#cfe;padding:.12em .38em;border-radius:3px}
+  ol{margin:0;padding-left:1.2em} li{margin-bottom:.5em}
+  a{color:var(--teal)}
+  #gate{border-left:3px solid var(--warn)}
+  #gate.ok{border-left-color:var(--good)}
+  #gate.bad{border-left-color:var(--bad)}
+  .badge{display:inline-block;font-size:.72rem;letter-spacing:.08em;
+    text-transform:uppercase;padding:.18em .5em;border-radius:3px;margin-left:.4em}
+  .badge.ok{background:#12341f;color:var(--good)}
+  .badge.bad{background:#3a1b1a;color:var(--bad)}
+  .muted{color:var(--faint);font-size:.88rem}
+  esp-web-install-button{display:block;margin-top:12px}
+  .why{margin-top:10px;font-size:.9rem;color:var(--soft)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>ESP Web Flasher</h1>
+  <p class="sub">Flash a board and set its Wi-Fi over USB — from this sidebar.</p>
+
+  <!-- Filled in by check.js. Rendered pessimistic so a blocked script never
+       leaves a page that looks like it should work. -->
+  <div class="card" id="gate">
+    <h2>Browser check <span class="badge bad" id="gate-badge">checking…</span></h2>
+    <div id="gate-body" class="muted">
+      If this text does not change, JavaScript was blocked and the flasher
+      cannot run on this page.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Before you connect</h2>
+    <ol>
+      <li>Unplug the board from anything else reading its serial port. A running
+        logger or bridge <strong>holds the port</strong> and the browser will not
+        see it.<br>
+        <span class="muted">On the machine with the board:
+        <code>pkill -f serial-to-mqtt</code></span></li>
+      <li>Plug the board into <strong>this computer</strong> — the one running the
+        browser, not the Home Assistant host.</li>
+      <li>Press <em>Connect</em>, choose the serial port, then
+        <em>Configure Wi-Fi</em>.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Flash / configure</h2>
+    <esp-web-install-button id="btn" manifest="{{MANIFEST_URL}}">
+      <button slot="activate">Connect to a board</button>
+      <span slot="unsupported">This browser cannot do Web Serial — see the check above.</span>
+      <span slot="not-allowed">This page is not a secure context — see the check above.</span>
+    </esp-web-install-button>
+    <p class="why">Already-flashed boards do not need reflashing: connect, then
+      pick <strong>Configure Wi-Fi</strong> to send credentials over Improv.</p>
+  </div>
+
+  <div class="card">
+    <h2>Workshop gallery</h2>
+    <p class="muted" style="margin:0">
+      <a href="{{GALLERY_URL}}" target="_blank" rel="noopener">{{GALLERY_URL}}</a>
+    </p>
+  </div>
+
+</div>
+
+<!-- Same-origin file, never inline: the CSP names script-src 'self', and an
+     inline script would be blocked with nothing shown in the page. -->
+<script src="check.js"></script>
+<script type="module" src="https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"></script>
+</body>
+</html>
