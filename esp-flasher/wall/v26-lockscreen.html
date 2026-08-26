@@ -1,0 +1,1194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Air lock screen — live PM2.5</title>
+<style>
+/* ============================================================================
+   v26 — LOCKSCREEN
+   The wall pretends to be a phone lock screen: wallpaper, a big light clock,
+   one widget carrying the air, small complications for the rest of the fleet.
+
+   The wallpaper is not decoration. It IS the reading: the photograph shows what
+   the air outside looks like at the live worst band. A clear dawn is only ever
+   shown when a board actually measured clean air.
+
+   LEGIBILITY CONTRACT (the hard part, four independent layers):
+     1. A per-band scrim. Every band declares its own three scrim alphas, tuned
+        to that photograph's brightness. The near-whiteout (verybad) frame gets
+        the heaviest; the dark hazardous frame the lightest. The scrim is black,
+        so text is white on ALL SIX grounds — one polarity, never a flip.
+     2. A radial darkening centred behind the clock, the only bare text on the
+        page, on top of the linear scrim.
+     3. Every glass surface carries its own DARK fill (rgba(9,12,17,.5)) under
+        the blur. backdrop-filter blurs but does not darken; the fill is what
+        guarantees the panel is always darker than whatever is behind it.
+     4. A text-shadow halo on the bare type.
+     Worst case arithmetic: a pure-white photograph under the lightest scrim in
+     the table (.60 at the top edge) leaves #666 — white on that is 5.7:1.
+     Under a panel (.50 dark fill on top of that) it is #383838 → 11:1.
+
+   BUG GUARDS carried over from the source engine (tools/mqtt-dashboard.html):
+     A. This file contains no CSS uppercasing rule of any kind. Uppercasing in
+        CSS maps "µ" to "M" and silently turns µg/m³ into mg/m³ — a 1000x unit
+        error introduced by a styling rule. Every label that looks capitalised
+        here is authored capitalised, in text this file wrote itself.
+     B. The reading sizes off its CONTAINER (cqi) with white-space:nowrap, never
+        off the viewport. Viewport-sized digits in a column-sized box split
+        "163.3" into "163." + "3".
+     C. Board identity is parsed from state_topic. The discovery "name" is
+        "PM2.5" on every board and cannot identify anything.
+     D. sub() refuses any topic off the wire containing '#' or '+'. The only
+        wildcards this page ever sends are the three authored below.
+   ========================================================================= */
+
+/* Registered so the scrim can cross-fade WITH the photograph instead of
+   snapping a stop early. Ignored harmlessly where @property is unsupported. */
+@property --s-top { syntax: '<number>'; inherits: true; initial-value: 0.8; }
+@property --s-mid { syntax: '<number>'; inherits: true; initial-value: 0.6; }
+@property --s-bot { syntax: '<number>'; inherits: true; initial-value: 0.85; }
+
+:root{
+  --ink:#fff;
+  --ink-2:rgba(255,255,255,.82);
+  --ink-3:rgba(255,255,255,.66);
+  --ink-4:rgba(255,255,255,.48);
+  --accent:#cfd9e6;
+  --fade:1400ms;
+  /* the "no data" ground: never the clear dawn */
+  --s-top:.84; --s-mid:.66; --s-bot:.88;
+  --glass:rgba(9,12,17,.50);
+  --hair:rgba(255,255,255,.30);
+  --edge:rgba(255,255,255,.13);
+  transition:--s-top var(--fade) linear,--s-mid var(--fade) linear,--s-bot var(--fade) linear;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0;overflow:hidden;background:#06080b}
+body{
+  color:var(--ink);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* ---------- wallpaper: two layers that cross-fade ---------- */
+.sky{
+  position:fixed;inset:0;z-index:0;opacity:0;
+  background-size:cover;background-position:center center;background-repeat:no-repeat;
+  transform:scale(1.045);
+  transition:opacity var(--fade) cubic-bezier(.4,0,.2,1);
+  will-change:opacity;
+}
+.scrim{
+  position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:
+    radial-gradient(120% 44% at 50% 13%, rgba(0,0,0,.36), rgba(0,0,0,0) 74%),
+    linear-gradient(180deg,
+      rgba(3,5,8,var(--s-top)) 0%,
+      rgba(3,5,8,calc(var(--s-top) * .60)) 27%,
+      rgba(3,5,8,var(--s-mid)) 58%,
+      rgba(3,5,8,calc(var(--s-bot) * .88)) 84%,
+      rgba(3,5,8,var(--s-bot)) 100%);
+}
+
+/* ---------- glass ---------- */
+.glass{
+  position:relative;
+  background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.035)),var(--glass);
+  -webkit-backdrop-filter:blur(30px) saturate(165%);
+  backdrop-filter:blur(30px) saturate(165%);
+  border:1px solid var(--edge);
+  box-shadow:0 24px 60px rgba(0,0,0,.42),0 2px 10px rgba(0,0,0,.28);
+  overflow:hidden;
+}
+/* the 1px top-edge highlight — a real inset line, not a border */
+.glass::before{
+  content:"";position:absolute;left:9%;right:9%;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--hair),transparent);
+  pointer-events:none;
+}
+/* Firefox and anything else without backdrop-filter must not get an
+   unreadable transparent sheet: it gets an opaque smoked panel instead. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .glass{background:linear-gradient(180deg,rgba(17,21,28,.90),rgba(8,10,15,.94))}
+  :root{--edge:rgba(255,255,255,.16)}
+}
+
+/* ---------- the lock screen ---------- */
+.lock{
+  position:relative;z-index:2;
+  height:100vh;height:100dvh;
+  display:flex;flex-direction:column;align-items:center;
+  gap:clamp(.7rem,2.1vh,1.6rem);
+  padding:clamp(1rem,3.6vh,2.6rem) clamp(.9rem,4vw,2.4rem) clamp(.7rem,2vh,1.4rem);
+}
+.lock[hidden]{display:none}
+
+/* ---------- clock ---------- */
+.head{flex:none;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,.55),0 0 44px rgba(0,0,0,.40)}
+.date{
+  font-size:clamp(.82rem,1.5vh,1.1rem);font-weight:600;color:var(--ink-2);
+  letter-spacing:.005em;margin-bottom:clamp(.1rem,.5vh,.35rem);
+}
+.clock{
+  font-size:clamp(3.6rem,13.5vh,8.6rem);font-weight:250;line-height:.95;
+  letter-spacing:-.038em;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+
+/* ---------- the air widget ---------- */
+/* The widget carries the only COLOURED type on the page (the band name, in the
+   band's own hue), and colour has less contrast headroom than white. Measured
+   against the brightest pixel of every one of the six photographs, a .50 fill
+   left "Unhealthy" at 3.93:1 over the unhealthy frame — large-text pass, AA
+   fail. A heavier fill under this one panel takes the worst case to 4.89:1
+   without touching the band hues, which have to stay semantically distinct. */
+.widget{
+  flex:none;width:min(700px,100%);
+  background:linear-gradient(180deg,rgba(255,255,255,.085),rgba(255,255,255,.025)),rgba(7,10,15,.60);
+  container-type:inline-size;             /* bug B: the reading sizes off THIS box */
+  border-radius:clamp(22px,2.6vw,34px);
+  padding:clamp(.95rem,2.4vh,1.6rem) clamp(1.05rem,3vw,1.9rem);
+  display:flex;flex-direction:column;gap:clamp(.4rem,1.2vh,.85rem);
+}
+.w-top{display:flex;align-items:baseline;gap:.6rem;min-width:0}
+.w-who{
+  font-size:clamp(1rem,1.9vh,1.35rem);font-weight:650;letter-spacing:-.01em;
+  color:var(--ink);min-width:0;overflow-wrap:anywhere;
+}
+.w-kind{
+  margin-left:auto;flex:none;font-size:clamp(.66rem,1.15vh,.82rem);font-weight:600;
+  color:var(--ink-3);letter-spacing:.02em;white-space:nowrap;
+}
+.w-read{display:flex;align-items:baseline;gap:.5rem;min-width:0}
+.num{
+  font-size:clamp(2.6rem,21cqi,6.6rem);line-height:.9;font-weight:600;
+  letter-spacing:-.045em;font-variant-numeric:tabular-nums;
+  white-space:nowrap;                     /* bug B: digits never break */
+  color:var(--accent);
+  text-shadow:0 3px 18px rgba(0,0,0,.35);
+}
+.num[data-kind="word"]{font-size:clamp(1.5rem,11cqi,3.1rem);letter-spacing:-.015em;font-weight:500;color:var(--ink-2)}
+/* escape hatch: a payload too long to be a plausible reading steps down to a
+   scale that is allowed to wrap, so nowrap can never become an overflow */
+.num[data-long="1"]{font-size:clamp(1.3rem,8cqi,2.4rem);white-space:normal;overflow-wrap:anywhere}
+.unit{font-size:clamp(.85rem,1.7vh,1.15rem);font-weight:500;color:var(--ink-3);white-space:nowrap}
+.w-band{display:flex;align-items:center;gap:.5rem;min-width:0}
+.w-band i{width:.62rem;height:.62rem;border-radius:50%;flex:none;background:var(--accent);box-shadow:0 0 14px var(--accent)}
+.w-band b{font-size:clamp(1rem,2vh,1.4rem);font-weight:600;color:var(--accent);letter-spacing:-.01em;overflow-wrap:anywhere}
+
+.scale{display:flex;gap:4px;height:5px;margin:clamp(.1rem,.5vh,.35rem) 0}
+.scale i{flex:1;border-radius:99px;background:rgba(255,255,255,.15)}
+.scale i.past{background:rgba(255,255,255,.34)}
+.scale i.on{background:var(--accent);box-shadow:0 0 14px var(--accent)}
+
+.rule{height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.20),transparent)}
+
+.advice{font-size:clamp(1.35rem,3.4vh,2.3rem);font-weight:600;line-height:1.12;letter-spacing:-.02em}
+.advice-sub{font-size:clamp(.86rem,1.7vh,1.1rem);color:var(--ink-2);line-height:1.35}
+.w-meta{
+  display:flex;flex-wrap:wrap;gap:.15rem .6rem;
+  font-size:clamp(.68rem,1.2vh,.8rem);color:var(--ink-4);
+}
+.w-meta .tpc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+/* hazardous earns a warm edge — the one time the widget itself signals */
+.widget[data-haz="1"]{box-shadow:0 24px 60px rgba(0,0,0,.46),0 0 0 1px rgba(255,143,163,.42),0 0 44px rgba(255,60,100,.20)}
+
+/* ---------- complications ---------- */
+.comps{
+  flex:none;width:min(700px,100%);
+  display:flex;gap:clamp(.45rem,1.3vw,.85rem);justify-content:center;
+}
+.comps[hidden]{display:none}
+.comp{
+  flex:1 1 0;min-width:0;container-type:inline-size;
+  border-radius:clamp(16px,1.9vw,24px);
+  padding:clamp(.55rem,1.4vh,.9rem) clamp(.5rem,1.3vw,.9rem);
+  display:flex;flex-direction:column;gap:.12rem;align-items:center;text-align:center;
+}
+.comp .c-who{
+  font-size:clamp(.68rem,1.2vh,.84rem);font-weight:650;color:var(--ink-2);
+  letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+}
+.comp .c-val{
+  font-size:clamp(1.15rem,15cqi,2rem);font-weight:600;line-height:1.05;
+  font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--accent);
+}
+.comp .c-val[data-kind="word"]{font-size:clamp(.9rem,9.5cqi,1.3rem);font-weight:500;color:var(--ink-2);letter-spacing:.01em}
+.comp .c-sub{font-size:clamp(.62rem,1.1vh,.76rem);color:var(--ink-4);line-height:1.25;overflow-wrap:anywhere}
+/* Two of three boards are normally offline. That is the resting state of this
+   fleet, so it is drawn on purpose — a dashed edge and a struck-through slot,
+   never a blank card and never a zero the board did not measure. */
+.comp[data-state="offline"]{border-style:dashed;border-color:rgba(255,255,255,.20);background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015)),rgba(6,8,12,.44)}
+.comp[data-state="offline"] .c-val{color:var(--ink-3)}
+.comp[data-state="offline"] .c-who{color:var(--ink-3)}
+.comp[data-state="waiting"] .c-val,.comp[data-state="unknown"] .c-val{color:var(--ink-3)}
+
+/* ---------- footer ---------- */
+.foot{
+  margin-top:auto;flex:none;display:flex;align-items:center;justify-content:center;
+  gap:.5rem clamp(.5rem,1.4vw,.95rem);flex-wrap:wrap;
+  border-radius:999px;padding:clamp(.35rem,.9vh,.55rem) clamp(.7rem,2vw,1.1rem);
+  font-size:clamp(.66rem,1.15vh,.8rem);color:var(--ink-2);
+  max-width:min(700px,100%);
+}
+.foot span{white-space:nowrap;display:inline-flex;align-items:center;gap:.4rem}
+.foot .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink-3)}
+.foot .sep{color:var(--ink-4)}
+.dot{width:.46rem;height:.46rem;border-radius:50%;background:rgba(255,255,255,.45);flex:none}
+.foot[data-s="connected"] .dot{background:#6ee7a0;box-shadow:0 0 10px rgba(110,231,160,.75)}
+.foot[data-s="connecting"] .dot,.foot[data-s="reconnecting"] .dot{background:#ffd166;animation:blink 1.2s ease-in-out infinite}
+.foot[data-s="error"] .dot,.foot[data-s="fatal"] .dot{background:#ff8fa3;box-shadow:0 0 10px rgba(255,143,163,.7)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.bar{flex:none;width:min(134px,32vw);height:5px;border-radius:99px;background:rgba(255,255,255,.42);margin:clamp(.35rem,1vh,.6rem) 0 0}
+
+/* ---------- the calm failure screen ---------- */
+.calm{
+  position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  padding:clamp(1.5rem,7vw,4rem);
+}
+.calm[hidden]{display:none}
+.calm p{
+  margin:0;max-width:20ch;
+  font-size:clamp(1.5rem,4.4vw,3.1rem);font-weight:300;line-height:1.32;letter-spacing:-.02em;
+  color:var(--ink);text-shadow:0 2px 14px rgba(0,0,0,.6);
+}
+.calm small{margin-top:clamp(1.2rem,4vh,2.4rem);font-size:clamp(.68rem,1.2vh,.8rem);color:var(--ink-4)}
+
+/* ---------- settings, behind the "s" key only ---------- */
+.sheet{
+  position:fixed;z-index:9;left:50%;bottom:clamp(.7rem,2.4vh,1.8rem);transform:translateX(-50%);
+  width:min(560px,94vw);border-radius:26px;padding:clamp(.9rem,2.4vh,1.3rem);
+  display:grid;gap:.6rem;
+}
+.sheet[hidden]{display:none}
+.sheet h2{margin:0 0 .1rem;font-size:.95rem;font-weight:650;color:var(--ink)}
+.sheet .row{display:grid;gap:.6rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,9rem),1fr))}
+.f{display:flex;flex-direction:column;gap:.25rem;min-width:0}
+.f label{font-size:.66rem;letter-spacing:.06em;color:var(--ink-4)}
+.f input[type=text],.f input[type=password]{
+  width:100%;min-width:0;font:inherit;font-size:.9rem;color:var(--ink);
+  background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.18);border-radius:11px;padding:.5rem .6rem;
+}
+.f input:focus{outline:2px solid #7fb6e8;outline-offset:1px}
+.chk{display:flex;align-items:center;gap:.45rem;font-size:.8rem;color:var(--ink-2)}
+.acts{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding-top:.15rem}
+button{
+  font:inherit;font-size:.88rem;font-weight:600;cursor:pointer;border-radius:11px;padding:.5rem 1rem;
+  background:rgba(255,255,255,.92);color:#0b1017;border:0;
+}
+button.ghost{background:rgba(255,255,255,.08);color:var(--ink-2);border:1px solid rgba(255,255,255,.20)}
+.sheet .note{font-size:.7rem;color:var(--ink-4);line-height:1.45;margin:0}
+
+/* The widget sets its own fill above, so it needs its own opaque fallback too —
+   otherwise a browser with no backdrop-filter would keep the .60 translucent
+   sheet while every other panel went solid. Declared here, after .widget, so it
+   actually wins on source order. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .widget{background:linear-gradient(180deg,rgba(15,19,26,.93),rgba(6,9,13,.96))}
+  .comp[data-state="offline"]{background:linear-gradient(180deg,rgba(20,24,32,.90),rgba(9,12,18,.93))}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  .sky{transition:none!important}
+}
+@media (max-width:430px){
+  .comps{flex-wrap:wrap}
+  .comp{flex:1 1 44%}
+}
+</style>
+</head>
+<body>
+
+<div class="sky" id="sky-a"></div>
+<div class="sky" id="sky-b"></div>
+<div class="scrim"></div>
+
+<main class="lock" id="lock">
+
+  <div class="head">
+    <div class="date" id="date">&nbsp;</div>
+    <div class="clock" id="clock">--:--</div>
+  </div>
+
+  <section class="widget glass" id="widget" data-haz="0" aria-live="polite">
+    <div class="w-top">
+      <div class="w-who" id="w-who">Air outside</div>
+      <div class="w-kind" id="w-kind"></div>
+    </div>
+    <div class="w-read">
+      <span class="num" id="w-num" data-kind="word" data-long="0">&mdash;</span>
+      <span class="unit" id="w-unit"></span>
+    </div>
+    <div class="w-band"><i id="w-dot"></i><b id="w-label">no reading</b></div>
+    <div class="scale" id="w-scale"></div>
+    <div class="rule"></div>
+    <div class="advice" id="w-advice">We can&rsquo;t tell right now.</div>
+    <div class="advice-sub" id="w-advice-sub">No board is reporting, so this is not an all-clear.</div>
+    <div class="w-meta"><span id="w-when"></span><span class="tpc" id="w-topic"></span></div>
+  </section>
+
+  <section class="comps" id="comps" hidden></section>
+
+  <footer class="foot glass" id="foot" data-s="idle">
+    <span><span class="dot"></span><span id="f-state">starting</span></span>
+    <span class="sep">&middot;</span>
+    <span class="mono" id="f-host">&mdash;</span>
+    <span class="sep">&middot;</span>
+    <span id="f-fleet">no boards yet</span>
+    <span class="sep">&middot;</span>
+    <span>press <b>S</b> for settings</span>
+  </footer>
+
+  <div class="bar"></div>
+</main>
+
+<div class="calm" id="calm" hidden>
+  <p id="calm-line">This wall cannot reach the air monitors right now.</p>
+  <small>press S for settings</small>
+</div>
+
+<section class="sheet glass" id="sheet" hidden aria-label="Broker settings">
+  <h2>Broker</h2>
+  <form id="form" autocomplete="off">
+    <div class="row">
+      <div class="f"><label for="f-h">Host</label><input id="f-h" type="text" spellcheck="false"></div>
+      <div class="f"><label for="f-p">WebSocket port</label><input id="f-p" type="text" inputmode="numeric"></div>
+    </div>
+    <div class="row" style="margin-top:.6rem">
+      <div class="f"><label for="f-u">Username</label><input id="f-u" type="text" spellcheck="false"></div>
+      <div class="f"><label for="f-w">Passphrase</label><input id="f-w" type="password" autocomplete="off"></div>
+    </div>
+    <div class="row" style="margin-top:.6rem">
+      <div class="f"><label for="f-f">Topic starts with</label><input id="f-f" type="text" spellcheck="false"></div>
+      <div class="f" style="justify-content:flex-end;gap:.5rem">
+        <label class="chk"><input id="f-t" type="checkbox"> TLS (wss)</label>
+        <label class="chk"><input id="f-r" type="checkbox"> Remember passphrase</label>
+      </div>
+    </div>
+    <div class="acts">
+      <button type="submit">Connect</button>
+      <button type="button" class="ghost" id="btn-forget">Forget</button>
+      <button type="button" class="ghost" id="btn-close">Close</button>
+    </div>
+  </form>
+  <p class="note" id="note"></p>
+</section>
+
+<!-- Pinned AND hash-locked, exactly as the source page does it: this file can be
+     given a broker passphrase, so a hijacked CDN response must not execute here. -->
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"
+        integrity="sha384-haZiwxTLortiFcYMBEEE1+8ayC+o18YtuwHZv+4WQHoPaLzRjwOV6h7Vva5iLSCZ"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ================================================================= config
+  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */
+  var DEFAULT_PORT = '1884';           // the broker's MQTT-over-WebSocket listener.
+                                       // A browser cannot open a raw MQTT socket at all,
+                                       // so this is the only port this page can ever use.
+  var STORE_KEY = 'air-wall.conn.v1';  // shared with the source dashboard on purpose
+  var MAX_SUBS = 64;
+  var DEFAULT_EXPIRE = 900;
+  var DEFAULT_FILTER = 'dbk/';
+  var CALM_AFTER = 14000;              // ms of never-connected before the calm screen
+
+  // The unknown ground. A fleet with nothing to say gets fog at night, NEVER the
+  // clear dawn — an unknown sky rendered as good air is a false all-clear, and
+  // this display is read by children during a burning season.
+  var NO_DATA_GROUND =
+    'radial-gradient(135% 95% at 50% 0%, #2b323b 0%, #171c23 42%, #0a0d11 100%)';
+
+  // US EPA PM2.5 breakpoints. One table drives the band, the photograph, the
+  // scrim alphas, the accent colour and the plain-language answer.
+  //   s: [top, mid, bottom] scrim alpha, hand-tuned per photograph so that white
+  //      type clears 4.5:1 on every one of the six grounds.
+  var BANDS = [
+    { max: 12.0,  label: 'Good',                           short: 'Good',
+      img: 'img/good.jpg',      s: [.62, .36, .72], c: '#7ee8a2',
+      go: 'Yes — go outside.',        sub: 'The air is clean today.' },
+    { max: 35.4,  label: 'Moderate',                       short: 'Moderate',
+      img: 'img/moderate.jpg',  s: [.60, .36, .72], c: '#ffd166',
+      go: 'Yes — go outside.',        sub: 'The air is okay for almost everyone.' },
+    { max: 55.4,  label: 'Unhealthy for sensitive groups', short: 'Sensitive',
+      img: 'img/sensitive.jpg', s: [.66, .42, .74], c: '#ffab5e',
+      go: 'Go out, but take it easy.',     sub: 'If you cough or wheeze, keep it short and calm.' },
+    { max: 150.4, label: 'Unhealthy',                      short: 'Unhealthy',
+      img: 'img/unhealthy.jpg', s: [.60, .36, .72], c: '#ff9b8b',
+      go: 'Keep it short outside.',        sub: 'No running games. Wear a mask if you go out.' },
+    { max: 250.4, label: 'Very unhealthy',                 short: 'Very bad',
+      img: 'img/verybad.jpg',   s: [.74, .52, .80], c: '#d9b4ff',
+      go: 'Stay inside today.',            sub: 'Play indoors and keep the windows closed.' },
+    { max: Infinity, label: 'Hazardous',                   short: 'Hazardous',
+      img: 'img/hazardous.jpg', s: [.60, .38, .74], c: '#ff8fa3',
+      go: 'Stay inside.',                  sub: 'Do not go out. Windows closed, mask if you must.' }
+  ];
+  var UNKNOWN = {
+    s: [.84, .66, .88], c: '#cfd9e6',
+    go: 'We can’t tell right now.',
+    sub: 'No board is reporting, so this is not an all-clear.'
+  };
+
+  var ALIASES = {
+    stat_t: 'state_topic', avty_t: 'availability_topic', uniq_id: 'unique_id',
+    unit_of_meas: 'unit_of_measurement', dev_cla: 'device_class', stat_cla: 'state_class',
+    exp_aft: 'expire_after', pl_avail: 'payload_available', pl_not_avail: 'payload_not_available',
+    dev: 'device', val_tpl: 'value_template', avty: 'availability', ic: 'icon'
+  };
+
+  // ================================================================= state
+  var client = null;
+  var entities = new Map();     // discovery topic -> entity
+  var byState = new Map();
+  var byAvail = new Map();
+  var byUid = new Map();
+  var boardStatus = new Map();
+  var subs = new Set();
+  var filteredOut = new Set();
+  var activeFilter = '';
+  var connState = 'idle';
+  var manualStop = false;
+  var everConnected = false;
+  var calmReason = '';
+  var calmTimer = null;
+  var lastCfg = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ================================================================= helpers
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  // The EPA scale starts at 0. Without the lower bound a faulty sensor reporting
+  // -999 fell into the first band and rendered as a reassuring green "Good".
+  function bandFor(n) {
+    if (!Number.isFinite(n) || n < 0) return null;
+    for (var i = 0; i < BANDS.length; i++) if (n <= BANDS[i].max) return BANDS[i];
+    return BANDS[BANDS.length - 1];
+  }
+
+  function isPm(ent) {
+    return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
+  }
+
+  function ago(ts) {
+    if (!ts) return 'never';
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 2) return 'just now';
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never NaN.
+  function parseValue(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (s === '') return { kind: 'empty', text: 'no value' };
+    if (/^(unknown|unavailable|none|null|nan|n\/a)$/i.test(s)) {
+      return { kind: 'unknown', text: s.toLowerCase() };
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return { kind: 'text', text: s };
+    // The EPA method truncates to one decimal BEFORE applying breakpoints.
+    // Truncate once, here, and classify on the same value that is printed —
+    // otherwise the widget prints 35.4 while calling it "Unhealthy for sensitive
+    // groups". Truncate, never round: rounding 35.44 up would invent a severity.
+    var n1 = Math.trunc(n * 10) / 10;
+    var text;
+    if (/^[+-]?\d+(\.\d)?$/.test(s)) text = s.replace(/^\+/, '');  // keep the device's precision
+    else text = n1.toFixed(1);
+    return { kind: 'number', n: n, n1: n1, text: text };
+  }
+
+  // Bug C: the discovery "name" is "PM2.5" on every board and identifies nothing.
+  // The board id lives in the state topic and nowhere else that is reliable.
+  function boardFromTopic(topic) {
+    var m = /^dbk\/([^/]+)\//i.exec(topic || '');
+    return m ? m[1] : null;
+  }
+
+  var storeWorks = true;
+  function loadStore() {
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); }
+    catch (e) { storeWorks = false; return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (e) { try { localStorage.removeItem(STORE_KEY); } catch (e2) {} return null; }
+  }
+  function saveStore(v) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; }
+    catch (e) { storeWorks = false; return false; }
+  }
+  function clearStore() { try { localStorage.removeItem(STORE_KEY); return true; } catch (e) { return false; } }
+
+  // ================================================================= wallpaper
+  var skyA = $('sky-a'), skyB = $('sky-b'), skyFlip = false, curGround = null;
+  var preloaded = {};
+
+  function preload(src) {
+    if (!src || preloaded[src]) return;
+    preloaded[src] = true;
+    var im = new Image();
+    im.decoding = 'async';
+    im.src = src;
+  }
+
+  // Cross-fade. The outgoing layer keeps its picture until the incoming one is
+  // fully opaque, so a band change is a dissolve and never a white flash.
+  function setGround(css) {
+    if (css === curGround) return;
+    curGround = css;
+    var incoming = skyFlip ? skyA : skyB;
+    var outgoing = skyFlip ? skyB : skyA;
+    incoming.style.backgroundImage = css;
+    void incoming.offsetWidth;               // commit before flipping opacity
+    incoming.style.opacity = '1';
+    outgoing.style.opacity = '0';
+    skyFlip = !skyFlip;
+  }
+
+  function applyBand(idx) {
+    var b = idx >= 0 ? BANDS[idx] : null;
+    var sc = b ? b.s : UNKNOWN.s;
+    var r = document.documentElement.style;
+    r.setProperty('--s-top', String(sc[0]));
+    r.setProperty('--s-mid', String(sc[1]));
+    r.setProperty('--s-bot', String(sc[2]));
+    r.setProperty('--accent', b ? b.c : UNKNOWN.c);
+    setGround(b ? 'url("' + b.img + '")' : NO_DATA_GROUND);
+    if (b) {
+      preload(b.img);
+      if (idx > 0) preload(BANDS[idx - 1].img);
+      if (idx < BANDS.length - 1) preload(BANDS[idx + 1].img);
+    }
+  }
+
+  // Everything else, once the page has settled: a jump of three bands must not
+  // flash either, and 1.9 MB of stills is cheap next to a wall display's uptime.
+  setTimeout(function () { BANDS.forEach(function (b) { preload(b.img); }); }, 4000);
+
+  // ================================================================= subscribe
+  // subRaw is the ONLY place that talks to the broker and is private to the three
+  // wildcards this file authors. Everything off the wire goes through sub().
+  function subRaw(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    if (subs.has(topic)) return true;
+    if (subs.size >= MAX_SUBS) return false;   // a browser must never firehose a broker
+    subs.add(topic);
+    client.subscribe(topic, { qos: 0 }, function (err) { if (err) subs.delete(topic); });
+    return true;
+  }
+  function sub(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    // Bug D, absolute: a wildcard on this fleet broker costs ~109 GB/day. '+' is
+    // as dangerous as the multi-level wildcard — a retained config declaring
+    // "+/+/+" pulled ten unrelated fleet topics in testing. Wire topics must be
+    // concrete or they are not subscribed at all.
+    if (/[#+]/.test(topic)) return false;
+    return subRaw(topic);
+  }
+  function unsub(topic) {
+    if (!topic || !subs.has(topic)) return;
+    if (byState.has(topic) || byAvail.has(topic)) return;
+    subs.delete(topic);
+    if (client) { try { client.unsubscribe(topic); } catch (e) {} }
+  }
+
+  // ================================================================= discovery
+  function expand(cfg) {
+    var out = {};
+    Object.keys(cfg).forEach(function (k) { out[ALIASES[k] || k] = cfg[k]; });
+    var base = out['~'];
+    if (typeof base === 'string' && base) {
+      ['state_topic', 'availability_topic'].forEach(function (k) {
+        var v = out[k];
+        if (typeof v !== 'string') return;
+        if (v.charAt(0) === '~') out[k] = base + v.slice(1);
+        else if (v.charAt(v.length - 1) === '~') out[k] = v.slice(0, -1) + base;
+      });
+    }
+    if (!out.availability_topic && Array.isArray(out.availability) && out.availability.length) {
+      var a = out.availability[0];
+      if (a && typeof a.topic === 'string') {
+        out.availability_topic = a.topic;
+        if (a.payload_available) out.payload_available = a.payload_available;
+        if (a.payload_not_available) out.payload_not_available = a.payload_not_available;
+      }
+    }
+    return out;
+  }
+
+  function index(map, key, dtopic) {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(dtopic);
+  }
+  // Without this a re-published config left the entity indexed under its OLD
+  // state topic, so one board's number appeared under another board's name.
+  function unindex(map, key, dtopic) {
+    if (!key || !map.has(key)) return;
+    var set = map.get(key);
+    set.delete(dtopic);
+    if (set.size === 0) { map.delete(key); unsub(key); }
+  }
+
+  function removeEntity(dtopic) {
+    var gone = entities.get(dtopic);
+    if (!gone) return false;
+    if (gone.node) { gone.node.root.remove(); gone.node = null; }
+    entities.delete(dtopic);
+    if (gone.uid && byUid.get(gone.uid) === dtopic) byUid.delete(gone.uid);
+    unindex(byState, gone.stateTopic, dtopic);
+    unindex(byAvail, gone.availTopic, dtopic);
+    return true;
+  }
+
+  function matchesFilter(topic) {
+    return !activeFilter || String(topic).indexOf(activeFilter) === 0;
+  }
+
+  function onDiscovery(dtopic, text) {
+    if (text.trim() === '') {                 // empty retained payload = delete
+      filteredOut.delete(dtopic);
+      if (removeEntity(dtopic)) paint();
+      return;
+    }
+    var cfg;
+    try { cfg = JSON.parse(text); } catch (e) { return; }   // one bad retained message
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return;
+
+    cfg = expand(cfg);
+    if (typeof cfg.state_topic !== 'string' || !cfg.state_topic) return;
+
+    if (!matchesFilter(cfg.state_topic)) {
+      filteredOut.add(dtopic);
+      if (removeEntity(dtopic)) paint();
+      return;
+    }
+    filteredOut.delete(dtopic);
+
+    var parts = dtopic.split('/');
+    var dev = cfg.device && typeof cfg.device === 'object' ? cfg.device : null;
+    var devName = dev && typeof dev.name === 'string' ? dev.name : '';
+    var measure = typeof cfg.name === 'string' && cfg.name ? cfg.name : (parts[2] || 'sensor');
+    var expire = Number(cfg.expire_after);
+    var uid = typeof cfg.unique_id === 'string' && cfg.unique_id ? cfg.unique_id : '';
+    var board = boardFromTopic(cfg.state_topic);
+    var newAvail = typeof cfg.availability_topic === 'string' ? cfg.availability_topic : '';
+
+    if (uid && byUid.has(uid) && byUid.get(uid) !== dtopic) removeEntity(byUid.get(uid));
+
+    var ent = entities.get(dtopic) ||
+      { key: dtopic, value: null, at: 0, availRaw: null, availAt: 0, node: null };
+
+    // Drop stale index entries AND the value read through them: a number that
+    // arrived on DBK-001 must not survive under a widget now titled DBK-010.
+    if (ent.stateTopic && ent.stateTopic !== cfg.state_topic) {
+      unindex(byState, ent.stateTopic, dtopic);
+      ent.value = null; ent.at = 0; ent.raw = undefined;
+    }
+    if (ent.availTopic && ent.availTopic !== newAvail) {
+      unindex(byAvail, ent.availTopic, dtopic);
+      ent.availRaw = null; ent.availAt = 0;
+    }
+    if (ent.uid && ent.uid !== uid && byUid.get(ent.uid) === dtopic) byUid.delete(ent.uid);
+
+    // Bug C: board id FIRST. The discovery name is "PM2.5" on all three boards,
+    // and device.name is no more distinctive; the state topic is the only place
+    // the identity actually lives.
+    var who = board || devName || uid;
+    ent.title = who || measure;
+    ent.measure = who ? measure : '';
+    ent.uid = uid;
+    ent.stateTopic = cfg.state_topic;
+    ent.availTopic = newAvail;
+    ent.unit = typeof cfg.unit_of_measurement === 'string' ? cfg.unit_of_measurement : '';
+    ent.deviceClass = typeof cfg.device_class === 'string' ? cfg.device_class : '';
+    ent.expire = Number.isFinite(expire) && expire > 0 ? expire : DEFAULT_EXPIRE;
+    ent.pAvail = typeof cfg.payload_available === 'string' ? cfg.payload_available : 'online';
+    ent.pNot = typeof cfg.payload_not_available === 'string' ? cfg.payload_not_available : 'offline';
+    ent.templated = !!cfg.value_template;
+    ent.board = board;
+
+    // A sensor this page cannot listen to must never take a slot on the wall:
+    // it would sit in WAITING forever for data that can never arrive.
+    if (!sub(ent.stateTopic)) { if (removeEntity(dtopic)) paint(); return; }
+
+    entities.set(dtopic, ent);
+    if (uid) byUid.set(uid, dtopic);
+    index(byState, ent.stateTopic, dtopic);
+    if (ent.availTopic) { index(byAvail, ent.availTopic, dtopic); sub(ent.availTopic); }
+    paint();
+  }
+
+  // ================================================================= messages
+  function onMessage(topic, payload) {
+    var text;
+    try { text = new TextDecoder('utf-8').decode(payload); } catch (e) { text = String(payload); }
+
+    if (/^homeassistant\/.+\/config$/.test(topic)) {
+      try { onDiscovery(topic, text); } catch (e) {}
+      return;
+    }
+    var now = Date.now();
+    var b = /^dbk\/([^/]+)\/status$/i.exec(topic);
+    if (b) boardStatus.set(b[1], { raw: text.trim(), at: now });
+
+    if (byState.has(topic)) {
+      byState.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.raw = text; e.value = parseValue(text); e.at = now;
+      });
+    }
+    if (byAvail.has(topic)) {
+      byAvail.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.availRaw = text.trim(); e.availAt = now;
+      });
+    }
+    paint();
+  }
+
+  // ================================================================= state
+  function availabilityOf(ent) {
+    if (ent.availTopic && ent.availRaw !== null) {
+      if (ent.availRaw === ent.pNot) return 'offline';
+      if (ent.availRaw === ent.pAvail) return 'online';
+      return 'unknown';
+    }
+    if (ent.board && boardStatus.has(ent.board)) {
+      var raw = boardStatus.get(ent.board).raw;
+      if (raw === ent.pNot || raw === 'offline') return 'offline';
+      if (raw === ent.pAvail || raw === 'online') return 'online';
+    }
+    return 'unknown';
+  }
+
+  function stateOf(ent) {
+    if (availabilityOf(ent) === 'offline') return 'offline';
+    if (!ent.at || !ent.value) return 'waiting';
+    if (ent.value.kind === 'unknown' || ent.value.kind === 'empty') return 'unknown';
+    // A concentration cannot be negative. Checked before stale and before live so
+    // a broken sensor is never dressed up as a reading, least of all a green one.
+    if (ent.value.kind === 'number' && ent.value.n1 < 0 && isPm(ent)) return 'fault';
+    if ((Date.now() - ent.at) / 1000 > ent.expire) return 'stale';
+    return 'live';
+  }
+
+  // ================================================================= clock
+  var dtDate = null, dtTime = null;
+  try {
+    dtDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+    dtTime = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch (e) {}
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function tickClock() {
+    var d = new Date();
+    $('clock').textContent = dtTime ? dtTime.format(d) : pad(d.getHours()) + ':' + pad(d.getMinutes());
+    $('date').textContent = dtDate ? dtDate.format(d) : d.toDateString();
+  }
+
+  // ================================================================= paint
+  var scaleCells = (function () {
+    var host = $('w-scale'), out = [];
+    for (var i = 0; i < BANDS.length; i++) {
+      var el = document.createElement('i');
+      host.appendChild(el);
+      out.push(el);
+    }
+    return out;
+  })();
+
+  function buildComp(ent) {
+    var root = document.createElement('div');
+    root.className = 'comp glass';
+    root.innerHTML =
+      '<div class="c-who"></div>' +
+      '<div class="c-val" data-kind="word"></div>' +
+      '<div class="c-sub"></div>';
+    ent.node = {
+      root: root,
+      who: root.querySelector('.c-who'),
+      val: root.querySelector('.c-val'),
+      sub: root.querySelector('.c-sub')
+    };
+    return ent.node;
+  }
+
+  function paintComp(ent) {
+    var n = ent.node || buildComp(ent);
+    var st = stateOf(ent);
+    n.root.setAttribute('data-state', st);
+    n.who.textContent = ent.title;                 // board id, from the state topic
+
+    var band = null;
+    if (st === 'live' && ent.value && ent.value.kind === 'number' && isPm(ent)) {
+      band = bandFor(ent.value.n1);
+    }
+    n.root.style.setProperty('--accent', band ? band.c : 'rgba(255,255,255,.86)');
+
+    if (st === 'offline') {
+      // Deliberate, not blank, and never a zero: a dead board says so in words
+      // and says when it last spoke.
+      var seen = ent.availAt || (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0);
+      n.val.textContent = 'offline';
+      n.val.setAttribute('data-kind', 'word');
+      n.sub.textContent = seen ? 'since ' + ago(seen) : 'not reporting';
+    } else if (st === 'waiting') {
+      n.val.textContent = '—';
+      n.val.setAttribute('data-kind', 'word');
+      n.sub.textContent = 'waiting for a reading';
+    } else if (st === 'unknown') {
+      n.val.textContent = ent.value ? ent.value.text : 'unknown';
+      n.val.setAttribute('data-kind', 'word');
+      n.sub.textContent = 'no reading';
+    } else if (st === 'fault') {
+      n.val.textContent = ent.value.text;
+      n.val.setAttribute('data-kind', 'word');
+      n.sub.textContent = 'sensor fault';
+    } else if (st === 'stale') {
+      n.val.textContent = ent.value.text;
+      n.val.setAttribute('data-kind', ent.value.kind === 'number' ? 'num' : 'word');
+      n.sub.textContent = 'expired ' + ago(ent.at);
+    } else {
+      n.val.textContent = ent.value.text;
+      n.val.setAttribute('data-kind', ent.value.kind === 'number' ? 'num' : 'word');
+      // ent.unit came off the wire — printed verbatim, never uppercased (bug A).
+      n.sub.textContent = (band ? band.short : (ent.measure || 'live')) +
+        (ent.unit ? ' · ' + ent.unit : '');
+    }
+    return n;
+  }
+
+  function paintWidget(hero, band) {
+    var num = $('w-num'), unit = $('w-unit');
+    $('widget').setAttribute('data-haz', band && band.label === 'Hazardous' ? '1' : '0');
+
+    if (!hero) {
+      $('w-who').textContent = 'Air outside';
+      $('w-kind').textContent = entities.size ? 'no live board' : '';
+      num.textContent = '—';
+      num.setAttribute('data-kind', 'word');
+      num.setAttribute('data-long', '0');
+      unit.textContent = '';
+      $('w-label').textContent = 'no reading';
+      $('w-advice').textContent = UNKNOWN.go;
+      $('w-advice-sub').textContent = UNKNOWN.sub;
+      $('w-when').textContent = entities.size
+        ? 'every board is offline, stale or silent'
+        : 'listening for the boards to announce themselves';
+      $('w-topic').textContent = '';
+      scaleCells.forEach(function (c) { c.className = ''; });
+      return;
+    }
+
+    var st = stateOf(hero);
+    $('w-who').textContent = hero.title;                 // board id (bug C)
+    $('w-kind').textContent = hero.measure || '';        // "PM2.5" — the measure, not the name
+    num.textContent = hero.value.text;
+    num.setAttribute('data-kind', hero.value.kind === 'number' ? 'num' : 'word');
+    // Digits never break, so an implausibly long payload steps down to a scale
+    // that may wrap — otherwise nowrap would trade a mid-digit break for overflow.
+    num.setAttribute('data-long', num.textContent.length > 7 ? '1' : '0');
+    unit.textContent = hero.unit;                        // wire text, verbatim (bug A)
+    $('w-label').textContent = band ? band.label : (st === 'live' ? 'live' : st);
+    $('w-advice').textContent = band ? band.go : UNKNOWN.go;
+    $('w-advice-sub').textContent = band ? band.sub : UNKNOWN.sub;
+    $('w-when').textContent = 'updated ' + ago(hero.at);
+    $('w-topic').textContent = hero.stateTopic;
+
+    var idx = band ? BANDS.indexOf(band) : -1;
+    scaleCells.forEach(function (c, i) {
+      c.className = idx < 0 ? '' : (i === idx ? 'on' : (i < idx ? 'past' : ''));
+    });
+  }
+
+  var compsHost = $('comps'), lastSig = '';
+
+  function paint() {
+    var list = Array.from(entities.values()).sort(function (a, b) {
+      return (isPm(b) ? 1 : 0) - (isPm(a) ? 1 : 0) ||
+        a.title.localeCompare(b.title) || a.stateTopic.localeCompare(b.stateTopic);
+    });
+
+    // The wallpaper follows the WORST live reading — the honest answer to "what
+    // does the air look like out there right now".
+    var hero = null, heroBand = null, heroIdx = -1, live = 0;
+    list.forEach(function (e) {
+      var st = stateOf(e);
+      if (st === 'live') live++;
+      if (st !== 'live' || !isPm(e) || !e.value || e.value.kind !== 'number') return;
+      var b = bandFor(e.value.n1);
+      if (!b) return;
+      var i = BANDS.indexOf(b);
+      if (i > heroIdx) { heroIdx = i; heroBand = b; hero = e; }
+    });
+
+    applyBand(heroIdx);
+    paintWidget(hero, heroBand);
+
+    var others = list.filter(function (e) { return e !== hero; });
+    var sig = others.map(function (e) { return e.key; }).join('|');
+    if (sig !== lastSig) {
+      lastSig = sig;
+      compsHost.textContent = '';
+      others.forEach(function (e) { compsHost.appendChild(paintComp(e).root); });
+    } else {
+      others.forEach(paintComp);
+    }
+    compsHost.hidden = others.length === 0;
+
+    $('f-fleet').textContent = list.length
+      ? live + ' of ' + list.length + ' board' + (list.length === 1 ? '' : 's') + ' live'
+      : 'no boards yet';
+  }
+
+  // ================================================================= calm screen
+  var CONN_TEXT = {
+    idle: 'starting', connecting: 'connecting', connected: 'connected',
+    reconnecting: 'reconnecting', error: 'no broker', fatal: 'refused'
+  };
+  function setConn(state, detail) {
+    connState = state;
+    $('foot').setAttribute('data-s', state);
+    $('f-state').textContent = detail || CONN_TEXT[state] || state;
+  }
+  function showCalm(sentence) {
+    calmReason = sentence;
+    $('calm-line').textContent = sentence;
+    $('calm').hidden = false;
+    $('lock').hidden = true;
+  }
+  function hideCalm() {
+    calmReason = '';
+    $('calm').hidden = true;
+    $('lock').hidden = false;
+  }
+  function armCalm() {
+    if (calmTimer) clearTimeout(calmTimer);
+    calmTimer = setTimeout(function () {
+      if (!everConnected && !manualStop) {
+        showCalm('This wall cannot reach the air monitors right now.');
+      }
+    }, CALM_AFTER);
+  }
+
+  // ================================================================= connect
+  function describe(err) {
+    var code = err && (err.code !== undefined ? err.code : err.reasonCode);
+    var map = {
+      1: 'The broker refused this connection.',
+      2: 'The broker refused this connection.',
+      3: 'The air monitors’ broker is not answering.',
+      4: 'The wall is not signed in to the air monitors.',
+      5: 'The wall is not allowed to read the air monitors.'
+    };
+    if (map[code]) return { text: map[code], fatal: code === 2 || code === 4 || code === 5 };
+    var m = String((err && err.message) || err || '');
+    if (/not authoriz|bad user/i.test(m)) return { text: 'The wall is not signed in to the air monitors.', fatal: true };
+    return { text: 'This wall cannot reach the air monitors right now.', fatal: false };
+  }
+
+  function disconnect() {
+    manualStop = true;
+    if (client) { try { client.end(true); } catch (e) {} client = null; }
+    subs.clear();
+  }
+
+  function connect(cfg) {
+    lastCfg = cfg;
+    if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
+      setConn('fatal', 'library missing');
+      showCalm('The MQTT library did not load, so this wall cannot read the air.');
+      return;
+    }
+    disconnect();
+    manualStop = false;
+    everConnected = false;
+    activeFilter = typeof cfg.filter === 'string' ? cfg.filter.trim() : '';
+    filteredOut.clear();
+
+    var url = (cfg.tls ? 'wss' : 'ws') + '://' + cfg.host + ':' + cfg.port;
+    $('f-host').textContent = cfg.host + ':' + cfg.port;
+    setConn('connecting');
+
+    // A page served over HTTPS cannot open a plaintext WebSocket, and no amount
+    // of retrying will change that — say so instead of blinking forever.
+    if (!cfg.tls && location.protocol === 'https:') {
+      showCalm('This page is served over HTTPS, which blocks the plain connection the wall needs.');
+      return;
+    }
+
+    try {
+      client = mqtt.connect(url, {
+        username: cfg.user || undefined,
+        password: cfg.pass || undefined,
+        clientId: 'air-lock-' + Math.random().toString(16).slice(2, 10),
+        clean: true, reconnectPeriod: 4000, connectTimeout: 8000,
+        keepalive: 45, resubscribe: true
+      });
+    } catch (e) {
+      setConn('fatal');
+      showCalm('This wall cannot reach the air monitors right now.');
+      return;
+    }
+    armCalm();
+
+    client.on('connect', function () {
+      everConnected = true;
+      if (calmTimer) clearTimeout(calmTimer);
+      hideCalm();
+      setConn('connected');
+      // The ONLY wildcards this page ever sends, and they are authored here, not
+      // read off the wire. subRaw, deliberately, so sub()'s refusal still stands
+      // for everything that arrives in a payload.
+      subRaw('homeassistant/+/+/config');
+      subRaw('homeassistant/+/+/+/config');
+      subRaw('dbk/+/status');
+      paint();
+    });
+
+    client.on('message', function (topic, payload) {
+      try { onMessage(topic, payload); } catch (e) {}   // one bad message never stops the stream
+    });
+
+    client.on('reconnect', function () { if (!manualStop && connState !== 'fatal') setConn('reconnecting'); });
+    client.on('offline', function () { if (!manualStop && connState !== 'fatal') setConn('reconnecting'); });
+
+    // A browser never reveals WHY a WebSocket handshake failed, and for a refused
+    // port mqtt.js may close without ever emitting a useful 'error'.
+    client.on('close', function () {
+      if (manualStop || connState === 'fatal') return;
+      setConn(everConnected ? 'reconnecting' : 'error');
+    });
+
+    client.on('error', function (err) {
+      var d = describe(err);
+      if (d.fatal) {
+        setConn('fatal');
+        manualStop = true;
+        try { client.end(true); } catch (e) {}
+        client = null;
+        showCalm(d.text);
+      } else {
+        setConn('error');
+      }
+    });
+  }
+
+  // ================================================================= settings
+  var sheet = $('sheet');
+  function fillForm(v) {
+    $('f-h').value = (v && v.host) || DEFAULT_HOST;
+    $('f-p').value = (v && v.port) || DEFAULT_PORT;
+    $('f-u').value = (v && v.user) || '';
+    $('f-w').value = (v && v.pass) || '';
+    $('f-t').checked = !!(v && v.tls);
+    $('f-f').value = v && typeof v.filter === 'string' ? v.filter : DEFAULT_FILTER;
+    $('f-r').checked = !!(v && (v.remember || v.pass));
+  }
+  function readForm() {
+    return {
+      host: $('f-h').value.trim(), port: $('f-p').value.trim(),
+      user: $('f-u').value, pass: $('f-w').value,
+      tls: $('f-t').checked, filter: $('f-f').value.trim(), remember: $('f-r').checked
+    };
+  }
+  // What goes to disk is not what is in the form: the passphrase is opt-in.
+  function storable(cfg) {
+    var out = { host: cfg.host, port: cfg.port, user: cfg.user, tls: cfg.tls,
+                filter: cfg.filter, remember: !!cfg.remember };
+    if (cfg.remember) out.pass = cfg.pass;
+    return out;
+  }
+  function openSheet() {
+    fillForm(lastCfg);
+    sheet.hidden = false;
+    $('note').textContent = storeWorks
+      ? 'Stored in this browser only, on this device. The passphrase is kept only if you tick Remember.'
+      : 'This browser blocks local storage, so nothing can be remembered here.';
+    setTimeout(function () { try { $('f-h').focus(); } catch (e) {} }, 0);
+  }
+  function closeSheet() { sheet.hidden = true; }
+
+  $('form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var cfg = readForm();
+    if (!cfg.host || !cfg.port) return;
+    entities.forEach(function (e) { if (e.node) e.node.root.remove(); });
+    entities.clear(); byState.clear(); byAvail.clear(); byUid.clear(); boardStatus.clear();
+    filteredOut.clear(); lastSig = '';
+    saveStore(storable(cfg));
+    closeSheet();
+    hideCalm();
+    paint();
+    connect(cfg);
+  });
+  $('btn-close').addEventListener('click', closeSheet);
+  $('btn-forget').addEventListener('click', function () {
+    clearStore();
+    fillForm(null);
+    $('f-w').value = '';
+    $('note').textContent = 'Saved settings cleared from this browser.';
+  });
+
+  // Nothing on this screen is interactive. The single key is the way in.
+  document.addEventListener('keydown', function (ev) {
+    var tag = ev.target && ev.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      if (ev.key === 'Escape') closeSheet();
+      return;
+    }
+    if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); sheet.hidden ? openSheet() : closeSheet(); }
+    else if (ev.key === 'Escape') closeSheet();
+  });
+
+  // ================================================================= boot
+  tickClock();
+  applyBand(-1);            // unknown ground first: never open on a clear dawn
+  paint();
+
+  var saved = loadStore();
+  var qs = null;
+  try { qs = new URLSearchParams(location.search); } catch (e) {}
+  function q(k) { return qs ? qs.get(k) : null; }
+
+  var cfg;
+  if (saved && saved.host && saved.port) {
+    cfg = saved;
+    // A saved config that deliberately withheld the passphrase can still be
+    // completed by the URL, which is the kiosk case this display is built for.
+    if (!cfg.pass && q('p')) cfg.pass = q('p');
+    if (!cfg.user && q('u')) cfg.user = q('u');
+  } else {
+    cfg = {
+      host: q('h') || DEFAULT_HOST,
+      port: q('port') || DEFAULT_PORT,
+      user: q('u') || '',
+      pass: q('p') || '',
+      tls: q('tls') === '1',
+      filter: q('f') !== null && q('f') !== undefined ? q('f') : DEFAULT_FILTER,
+      remember: false
+    };
+  }
+  fillForm(cfg);
+  connect(cfg);             // immediately, with no configuration screen in the way
+
+  setInterval(function () { tickClock(); paint(); }, 1000);
+})();
+</script>
+</body>
+</html>

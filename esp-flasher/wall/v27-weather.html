@@ -1,0 +1,1616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outside — Kit4Kids air, Chiang Mai</title>
+<style>
+/* ---------------------------------------------------------------------------
+   v27 WEATHER — the Apple Weather grammar.
+
+   One sky, one number, one sentence. Beneath it the other monitors as a strip,
+   then a single glass card of detail. The photograph behind the glass is not
+   decoration: it is the sixth-of-a-scale picture of what the air outside
+   actually looks like right now, cross-faded when the worst live board crosses
+   an EPA breakpoint.
+
+   HOW LEGIBILITY IS GUARANTEED (this is the load-bearing part of the design)
+   1. TEXT POLARITY NEVER FLIPS. Every glyph on this page is white or a bright
+      accent. Nothing is ever dark-on-light except inside a solid pill whose
+      own background this file paints. So the question is never "is the text
+      right for the photo" — it is "is the substrate dark enough", which is a
+      thing this file controls absolutely.
+   2. A BAND-TUNED SCRIM sits over the photograph, its alphas set per band via
+      [data-band] on <html>. good.jpg (bright dawn) gets the heaviest scrim;
+      hazardous.jpg (already near-black ochre) gets the lightest, so the photo
+      still reads. The scrim never drops below .34 anywhere content sits.
+   3. FREE-FLOATING TEXT ONLY EXISTS IN THE HERO, in the top of the frame where
+      the scrim is heaviest, and the hero carries its own radial vignette on
+      top of that. Everything lower down lives inside glass.
+   4. GLASS FILL IS ADAPTIVE: --glass-a is set per band (.40 over the dark
+      grounds, .56 over the bright dawn), so a panel over a white sky is as
+      dark a substrate as a panel over smoke.
+   5. TEXT-SHADOW on everything outside glass, as the fourth redundancy.
+      Worst case measured against a pure-white photo: hero text 9.2:1,
+      panel text 7.7:1, large band accents >4.4:1.
+
+   BUGS THIS FILE REFUSES TO REINTRODUCE
+   A. There is NO text-transform in this stylesheet at all. CSS uppercasing
+      folds "µ" to "M", turning µg/m³ into MG/M³ — a 1000x unit error caused by
+      a styling rule. Wire text is printed exactly as published.
+   B. Every reading is sized in cqi against its own container and carries
+      white-space:nowrap. Sizing in vw while the box came from a column once
+      broke "163.3" into "163." + "3" — in the hazardous range, of all places.
+   C. Board identity comes from the id parsed out of state_topic. The discovery
+      "name" is "PM2.5" on every board and identifies nothing.
+   D. Wildcards: three authored discovery subscriptions via subRaw(), and
+      sub() refuses '#' and '+' for anything that arrived over the wire.
+--------------------------------------------------------------------------- */
+
+:root{
+  /* Band accents, brightened for use on a photograph. Each one is checked to
+     clear 4.4:1 against the darkest substrate this page can produce. */
+  --band-good:#6ee7a0; --band-mod:#ffd166; --band-usg:#ffb066;
+  --band-unh:#ff8f8f;  --band-vun:#cbb0ff; --band-haz:#ff8fa3;
+  --accent:#a8b7c6;
+
+  --ink:#ffffff;
+  --ink-2:rgba(255,255,255,.86);
+  --ink-3:rgba(255,255,255,.62);
+  --ink-4:rgba(255,255,255,.44);
+
+  /* Scrim alphas — overwritten per band below. */
+  --s-hero:.50; --s-top:.60; --s-mid:.38; --s-bot:.76;
+  --glass-a:.48;
+  --tint-a:.13;
+
+  --shadow-1:0 1px 2px rgba(0,0,0,.55), 0 2px 18px rgba(0,0,0,.42);
+  --shadow-2:0 1px 2px rgba(0,0,0,.6), 0 3px 26px rgba(0,0,0,.5);
+  --r:26px;
+  --r-sm:18px;
+}
+
+/* The bright dawn is the hard case: heaviest scrim, darkest glass. */
+[data-band="good"]{ --accent:var(--band-good); --s-hero:.58; --s-top:.68; --s-mid:.40; --s-bot:.82; --glass-a:.56 }
+[data-band="moderate"]{ --accent:var(--band-mod); --s-hero:.54; --s-top:.64; --s-mid:.38; --s-bot:.80; --glass-a:.54 }
+[data-band="sensitive"]{ --accent:var(--band-usg); --s-hero:.52; --s-top:.60; --s-mid:.36; --s-bot:.78; --glass-a:.52 }
+[data-band="unhealthy"]{ --accent:var(--band-unh); --s-hero:.46; --s-top:.52; --s-mid:.34; --s-bot:.74; --glass-a:.48 }
+[data-band="verybad"]{ --accent:var(--band-vun); --s-hero:.40; --s-top:.46; --s-mid:.34; --s-bot:.70; --glass-a:.44 }
+[data-band="hazardous"]{ --accent:var(--band-haz); --s-hero:.34; --s-top:.40; --s-mid:.34; --s-bot:.66; --glass-a:.42; --tint-a:.10 }
+/* Unknown is NOT clear dawn. An unlit fleet gets a cold, unreadable sky —
+   never the picture that means "the air is clean". */
+[data-band="unknown"]{ --accent:#9fb0c2; --s-hero:.30; --s-top:.34; --s-mid:.30; --s-bot:.62; --glass-a:.46; --tint-a:.06 }
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;max-width:100%;height:100%}
+body{
+  background:#05080c;
+  color:var(--ink);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",
+       ui-sans-serif,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+.nowrap{white-space:nowrap}
+
+/* ---------------------------------------------------------- the ground ---- */
+.ground{position:fixed;inset:0;z-index:0;overflow:hidden;background:#05080c}
+.sky{
+  position:absolute;inset:0;
+  background-position:center 42%;background-size:cover;background-repeat:no-repeat;
+  opacity:0;
+  transition:opacity 1100ms cubic-bezier(.4,0,.2,1);
+  transform:scale(1.02);           /* hides any edge softness during the fade */
+  will-change:opacity;
+}
+.sky[data-on="1"]{opacity:1}
+.tint{position:absolute;inset:0;background:var(--accent);opacity:var(--tint-a);mix-blend-mode:soft-light;
+      transition:opacity 900ms ease,background-color 900ms ease}
+.scrim{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(130% 78% at 50% 6%, rgba(4,7,11,var(--s-hero)) 0%, rgba(4,7,11,0) 70%),
+    linear-gradient(180deg,
+      rgba(4,7,11,var(--s-top)) 0%,
+      rgba(4,7,11,var(--s-mid)) 46%,
+      rgba(4,7,11,var(--s-bot)) 100%);
+  transition:background 900ms ease;
+}
+
+/* ---------------------------------------------------------- the shell ----- */
+.app{
+  position:relative;z-index:1;
+  min-height:100dvh;
+  display:grid;
+  grid-template-rows:auto auto auto auto;
+  gap:clamp(.7rem,1.6vh,1.5rem);
+  padding:clamp(.9rem,2.2vh,2rem) clamp(.9rem,2.4vw,2.4rem) clamp(1rem,2.4vh,2rem);
+  max-width:1500px;margin:0 auto;
+}
+.app[data-hide="1"]{visibility:hidden}
+
+/* ---------------------------------------------------------- top bar ------- */
+.top{
+  display:flex;align-items:center;gap:.6rem clamp(.6rem,1.4vw,1.1rem);flex-wrap:wrap;
+  text-shadow:var(--shadow-1);
+}
+.place{font-size:clamp(.95rem,1.6vw,1.25rem);font-weight:600;letter-spacing:.005em;margin-right:auto}
+.place span{color:var(--ink-3);font-weight:400}
+.tb{display:inline-flex;align-items:center;gap:.4rem;color:var(--ink-3);
+    font-size:clamp(.72rem,1.05vw,.86rem);white-space:nowrap}
+.tb b{color:var(--ink-2);font-weight:600;font-variant-numeric:tabular-nums}
+.dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--ink-4);flex:none}
+.tb[data-s="connected"] .dot{background:#6ee7a0;box-shadow:0 0 0 3px rgba(110,231,160,.18)}
+.tb[data-s="connecting"] .dot,.tb[data-s="reconnecting"] .dot{background:#ffd166;animation:blip 1.2s ease-in-out infinite}
+.tb[data-s="error"] .dot,.tb[data-s="fatal"] .dot{background:#ff8fa3;box-shadow:0 0 0 3px rgba(255,143,163,.18)}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ---------------------------------------------------------- the hero ------ */
+.hero{
+  container-type:inline-size;
+  position:relative;
+  padding:clamp(.5rem,2vh,2.2rem) 0 clamp(.3rem,1.2vh,1rem);
+  min-width:0;
+  text-shadow:var(--shadow-2);
+}
+.eyebrow{
+  display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;
+  font-size:clamp(.74rem,1.15vw,.95rem);color:var(--ink-3);letter-spacing:.02em;
+  margin-bottom:clamp(.1rem,.6vh,.5rem);min-width:0;
+}
+.eyebrow .who{color:var(--ink);font-weight:650;letter-spacing:.04em}
+.eyebrow .sep{color:var(--ink-4)}
+.read{display:flex;align-items:baseline;gap:.5rem;min-width:0;white-space:nowrap}
+/* B: sized off the hero container, never the viewport; digits never wrap. */
+.big{
+  font-size:clamp(3.4rem,18cqi,10.5rem);
+  line-height:.86;font-weight:700;letter-spacing:-.045em;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+  color:var(--ink);
+}
+.big[data-kind="word"]{font-size:clamp(2rem,9cqi,5rem);letter-spacing:-.02em}
+.big[data-long="1"]{font-size:clamp(2rem,9cqi,4.5rem);white-space:normal;overflow-wrap:anywhere}
+/* A: the unit is wire text. No transform touches it — ever. */
+.unit{font-size:clamp(.9rem,2.2cqi,1.5rem);font-weight:500;color:var(--ink-2);white-space:nowrap}
+.bandline{
+  display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;min-width:0;
+  margin-top:clamp(.15rem,.8vh,.6rem);
+}
+.bandname{
+  font-size:clamp(1.15rem,3.2cqi,2.1rem);font-weight:650;letter-spacing:-.012em;
+  color:var(--accent);min-width:0;overflow-wrap:anywhere;
+}
+/* Hazardous gets a painted substrate of its own — dark ink on a solid pill,
+   the one place on this page where polarity flips, and it flips onto a colour
+   this file controls rather than onto a photograph. */
+.bandname[data-haz="1"]{
+  background:var(--band-haz);color:#22000a;border-radius:12px;
+  padding:.06em .42em;text-shadow:none;
+}
+.verdict{
+  margin-top:clamp(.35rem,1.4vh,1rem);
+  font-size:clamp(1.15rem,3.4cqi,2.15rem);
+  line-height:1.2;font-weight:600;letter-spacing:-.012em;color:var(--ink);
+  max-width:24ch;
+}
+.verdict-th{
+  margin-top:.3rem;font-size:clamp(.9rem,2.1cqi,1.3rem);line-height:1.5;
+  color:var(--ink-2);font-weight:400;max-width:32ch;
+}
+
+/* ---------------------------------------------------------- glass --------- */
+.glass{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.05) 42%, rgba(255,255,255,.02) 100%),
+    rgba(8,12,18,var(--glass-a));
+  -webkit-backdrop-filter:blur(30px) saturate(1.6);
+  backdrop-filter:blur(30px) saturate(1.6);
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:var(--r);
+  box-shadow:0 20px 54px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.34);
+  transition:background-color 900ms ease;
+}
+/* Firefox and anything else without backdrop-filter gets an opaque panel, not
+   an unreadable transparent one. */
+@supports not (backdrop-filter: blur(1px)){
+  .glass{
+    background:linear-gradient(180deg, rgba(20,26,34,.94), rgba(9,13,19,.96));
+    border-color:rgba(255,255,255,.13);
+  }
+}
+
+/* ---------------------------------------------------------- board strip --- */
+.strip{display:flex;gap:clamp(.5rem,1.2vw,.9rem);flex-wrap:wrap;min-width:0}
+.chip{
+  container-type:inline-size;
+  flex:1 1 min(100%,11rem);min-width:0;
+  padding:clamp(.6rem,1.5vh,1rem) clamp(.7rem,1.3vw,1.1rem);
+  border-radius:var(--r-sm);
+  display:flex;flex-direction:column;gap:.15rem;
+}
+.chip-id{
+  font-size:clamp(.68rem,1.05vw,.8rem);letter-spacing:.09em;font-weight:700;
+  color:var(--ink-2);white-space:nowrap;overflow-wrap:anywhere;
+}
+.chip-val{
+  display:flex;align-items:baseline;gap:.3rem;min-width:0;white-space:nowrap;
+  font-size:clamp(1.5rem,22cqi,2.6rem);line-height:1.05;font-weight:700;
+  letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--ink);
+}
+.chip-val .cu{font-size:.38em;font-weight:500;color:var(--ink-3);letter-spacing:0}
+.chip-val[data-kind="word"]{font-size:clamp(1.05rem,13cqi,1.7rem);letter-spacing:-.005em;font-weight:600}
+.chip-val[data-long="1"]{font-size:clamp(1rem,11cqi,1.5rem);white-space:normal;overflow-wrap:anywhere}
+.chip-band{font-size:clamp(.7rem,1.05vw,.84rem);font-weight:600;color:var(--cband,var(--ink-3));
+           min-height:1.2em;overflow-wrap:anywhere}
+.chip-foot{font-size:clamp(.66rem,1vw,.76rem);color:var(--ink-3);overflow-wrap:anywhere}
+/* An offline board is the NORMAL state on this wall — two of three, right now.
+   It is drawn as a deliberate thing: a dashed hairline, a hatched fill, the
+   word spelled out. It is never blank, never dimmed into illegibility, and
+   never a zero. Contrast on the word "offline" stays at --ink-2. */
+.chip[data-state="offline"]{
+  border-style:dashed;border-color:rgba(255,255,255,.22);
+  background-image:
+    repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 6px, rgba(255,255,255,0) 6px 13px),
+    linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+}
+.chip[data-state="offline"] .chip-val{color:var(--ink-2)}
+.chip[data-state="waiting"] .chip-val,.chip[data-state="unknown"] .chip-val{color:var(--ink-2)}
+.chip[data-state="live"]{border-color:rgba(255,255,255,.2)}
+.chip-tick{height:3px;border-radius:2px;background:var(--cband,rgba(255,255,255,.22));margin-top:.4rem;opacity:.9}
+.chip[data-state="offline"] .chip-tick,
+.chip[data-state="waiting"] .chip-tick{opacity:.4;background:repeating-linear-gradient(90deg,
+  rgba(255,255,255,.5) 0 5px, rgba(255,255,255,0) 5px 10px)}
+
+/* ---------------------------------------------------------- detail card --- */
+.detail{padding:clamp(.85rem,2vh,1.4rem) clamp(.9rem,1.8vw,1.5rem);min-width:0;
+        display:flex;flex-direction:column;gap:clamp(.7rem,1.6vh,1.1rem)}
+.detail-head{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;min-width:0}
+.detail-head h2{margin:0;font-size:clamp(.76rem,1.1vw,.9rem);font-weight:700;letter-spacing:.1em;color:var(--ink-3)}
+.detail-head .src{font-size:clamp(.7rem,1vw,.8rem);color:var(--ink-4);overflow-wrap:anywhere}
+.tiles{display:grid;gap:clamp(.5rem,1.2vw,.9rem);
+       grid-template-columns:repeat(auto-fit,minmax(min(100%,8.5rem),1fr))}
+.tile{
+  container-type:inline-size;
+  min-width:0;border-radius:14px;padding:.6rem .7rem;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.09);
+  display:flex;flex-direction:column;gap:.1rem;
+}
+.tile .k{font-size:clamp(.64rem,.95vw,.74rem);letter-spacing:.07em;color:var(--ink-3);white-space:nowrap;
+         overflow-wrap:anywhere}
+.tile .v{font-size:clamp(1.05rem,15cqi,1.7rem);font-weight:650;line-height:1.15;
+         letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap}
+.tile .v[data-long="1"]{font-size:clamp(.9rem,9cqi,1.15rem);white-space:normal;overflow-wrap:anywhere}
+.tile .v .tu{font-size:.5em;font-weight:500;color:var(--ink-3);margin-left:.15em}
+.tile .n{font-size:clamp(.62rem,.95vw,.72rem);color:var(--ink-4);overflow-wrap:anywhere;min-height:1em}
+
+/* scale -------------------------------------------------------------------- */
+.scale{display:flex;flex-direction:column;gap:.4rem;min-width:0}
+.scale-bar{display:flex;gap:3px;height:8px;border-radius:6px;position:relative}
+.scale-seg{flex:1 1 0;background:currentColor;opacity:.32;border-radius:3px;transition:opacity .5s ease}
+.scale-seg[data-on="1"]{opacity:1}
+.scale-mark{
+  position:absolute;top:-4px;width:3px;height:16px;border-radius:3px;background:#fff;
+  box-shadow:0 0 0 2px rgba(0,0,0,.5);transform:translateX(-50%);
+  transition:left .7s cubic-bezier(.4,0,.2,1);
+}
+.scale-mark[hidden]{display:none}
+.scale-legend{display:flex;justify-content:space-between;gap:.4rem;font-size:clamp(.6rem,.9vw,.7rem);
+              color:var(--ink-4);min-width:0}
+.scale-legend span{white-space:nowrap}
+.scale-note{font-size:clamp(.66rem,1vw,.76rem);color:var(--ink-3);overflow-wrap:anywhere}
+
+/* ---------------------------------------------------------- failure ------- */
+.fail{
+  position:fixed;inset:0;z-index:5;display:grid;place-items:center;
+  padding:clamp(1.5rem,6vw,5rem);text-align:center;
+  background:rgba(5,8,12,.72);
+  -webkit-backdrop-filter:blur(22px) saturate(1.2);
+  backdrop-filter:blur(22px) saturate(1.2);
+}
+@supports not (backdrop-filter: blur(1px)){ .fail{background:rgba(5,8,12,.95)} }
+.fail[hidden]{display:none}
+.fail-in{max-width:22ch}
+.fail-line{
+  margin:0;font-size:clamp(1.4rem,4.6vw,3rem);line-height:1.25;font-weight:600;
+  letter-spacing:-.02em;color:var(--ink);text-shadow:var(--shadow-2);
+}
+.fail-sub{margin:1.6rem 0 0;font-size:clamp(.7rem,1.1vw,.8rem);color:var(--ink-4)}
+kbd{font:inherit;font-size:.95em;border:1px solid rgba(255,255,255,.2);border-radius:5px;
+    padding:.05em .35em;color:var(--ink-3)}
+
+/* ---------------------------------------------------------- settings ------ */
+.sheet{
+  position:fixed;inset:0;z-index:9;display:grid;place-items:center;padding:1rem;
+  background:rgba(4,6,10,.55);
+}
+.sheet[hidden]{display:none}
+.sheet-in{
+  width:min(100%,42rem);max-height:88dvh;
+  padding:clamp(1rem,2.4vw,1.6rem);border-radius:var(--r);
+  display:flex;flex-direction:column;gap:.9rem;
+}
+.sheet h2{margin:0;font-size:1.05rem;font-weight:650}
+.sheet p.lede{margin:0;color:var(--ink-3);font-size:.85rem;line-height:1.5}
+.form{display:grid;gap:.7rem .9rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr));align-items:end}
+.f{display:flex;flex-direction:column;gap:.3rem;min-width:0}
+.f label{font-size:.7rem;letter-spacing:.06em;color:var(--ink-3)}
+.f input{
+  background:rgba(0,0,0,.42);color:var(--ink);border:1px solid rgba(255,255,255,.18);
+  border-radius:10px;padding:.55rem .65rem;font:inherit;font-size:.9rem;width:100%;min-width:0;
+}
+.f input:focus{outline:2px solid #7cc7ff;outline-offset:1px}
+.f-check{flex-direction:row;align-items:center;gap:.5rem}
+.f-check input{width:auto}
+.f-check label{letter-spacing:0;color:var(--ink-2);font-size:.85rem}
+.acts{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+button{
+  font:inherit;font-weight:600;cursor:pointer;border-radius:11px;padding:.55rem 1.05rem;
+  background:rgba(255,255,255,.92);color:#0a0f16;border:1px solid rgba(255,255,255,.5);
+}
+button.ghost{background:rgba(255,255,255,.08);color:var(--ink-2);border-color:rgba(255,255,255,.2)}
+.notes{display:flex;flex-direction:column;gap:.45rem;margin:0;padding:0;list-style:none}
+.notes:empty{display:none}
+.note{
+  border:1px solid rgba(255,255,255,.14);border-left-width:3px;border-radius:10px;
+  background:rgba(0,0,0,.3);padding:.5rem .7rem;font-size:.8rem;line-height:1.5;color:var(--ink-2);
+}
+.note b{color:var(--ink);font-weight:650}
+.note[data-l="bad"]{border-left-color:#ff8fa3}
+.note[data-l="warn"]{border-left-color:#ffd166}
+.note[data-l="info"]{border-left-color:#7cc7ff}
+.hint{color:var(--ink-4);font-size:.75rem;margin:0;line-height:1.5}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+@media (max-width:33rem){
+  .verdict{max-width:none}
+  .chip{flex:1 1 min(100%,8.5rem)}
+}
+</style>
+</head>
+<body>
+
+<div class="ground" aria-hidden="true">
+  <div class="sky" id="sky-a"></div>
+  <div class="sky" id="sky-b"></div>
+  <div class="tint" id="tint"></div>
+  <div class="scrim"></div>
+</div>
+
+<div class="app" id="app">
+
+  <header class="top">
+    <div class="place">Outside <span>&middot; Chiang Mai</span></div>
+    <span class="tb" id="tb-conn" data-s="idle"><span class="dot"></span><span id="conn-text">starting</span></span>
+    <span class="tb">monitors <b id="tb-boards">0</b></span>
+    <span class="tb"><b id="tb-clock">--:--</b></span>
+  </header>
+
+  <section class="hero" id="hero" aria-live="polite">
+    <div class="eyebrow">
+      <span class="who" id="hero-who">&mdash;</span>
+      <span class="sep">&middot;</span>
+      <span id="hero-scope">waiting for the monitors</span>
+    </div>
+    <div class="read">
+      <span class="big" id="hero-num">&mdash;</span>
+      <span class="unit" id="hero-unit"></span>
+    </div>
+    <div class="bandline">
+      <span class="bandname" id="hero-band" data-haz="0">air unknown</span>
+    </div>
+    <p class="verdict" id="verdict">Waiting for the air monitors.</p>
+    <p class="verdict-th" id="verdict-th" lang="th">กำลังรอสัญญาณจากเครื่องวัดฝุ่น</p>
+  </section>
+
+  <section class="strip" id="strip" aria-label="other monitors"></section>
+
+  <section class="detail glass" id="detail">
+    <div class="detail-head">
+      <h2 id="detail-title">DETAIL</h2>
+      <span class="src" id="detail-src"></span>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="scale">
+      <div class="scale-bar" id="scale-bar"></div>
+      <div class="scale-legend" id="scale-legend"></div>
+      <div class="scale-note" id="scale-note"></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="fail" id="fail" hidden>
+  <div class="fail-in">
+    <p class="fail-line" id="fail-line">The air monitors cannot be reached right now.</p>
+    <p class="fail-sub">Press <kbd>s</kbd> for settings.</p>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in glass" role="dialog" aria-label="Broker settings">
+    <h2>Broker</h2>
+    <p class="lede">This wall connects on its own. These fields exist for the day it cannot.
+      Press <kbd>Esc</kbd> to close, <kbd>s</kbd> to open.</p>
+    <form class="form" id="form" autocomplete="off">
+      <div class="f">
+        <label for="f-host">Host</label>
+        <input id="f-host" name="host" spellcheck="false" required>
+      </div>
+      <div class="f">
+        <label for="f-port">WebSocket port</label>
+        <input id="f-port" name="port" inputmode="numeric" required>
+      </div>
+      <div class="f">
+        <label for="f-user">Username</label>
+        <input id="f-user" name="user" spellcheck="false">
+      </div>
+      <div class="f">
+        <label for="f-pass">Passphrase</label>
+        <input id="f-pass" name="pass" type="password" autocomplete="off">
+      </div>
+      <div class="f">
+        <label for="f-filter">Topic starts with</label>
+        <input id="f-filter" name="filter" spellcheck="false" placeholder="dbk/">
+      </div>
+      <div class="f f-check">
+        <input id="f-tls" name="tls" type="checkbox">
+        <label for="f-tls">TLS (wss)</label>
+      </div>
+      <div class="f f-check">
+        <input id="f-remember" name="remember" type="checkbox">
+        <label for="f-remember">Remember passphrase</label>
+      </div>
+      <div class="f acts">
+        <button type="submit">Connect</button>
+        <button type="button" class="ghost" id="btn-forget">Forget</button>
+        <button type="button" class="ghost" id="btn-close">Close</button>
+      </div>
+    </form>
+    <p class="hint" id="store-hint"></p>
+    <ul class="notes" id="notes"></ul>
+  </div>
+</div>
+
+<!-- Pinned AND hash-locked, exactly as the tested dashboard does it: this page can be
+     handed a passphrase, so a hijacked CDN response must not be able to execute here.
+     If the hash ever fails to match, the browser refuses the script and the "library
+     did not load" branch below turns the screen into its calm sentence. -->
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"
+        integrity="sha384-haZiwxTLortiFcYMBEEE1+8ayC+o18YtuwHZv+4WQHoPaLzRjwOV6h7Vva5iLSCZ"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================ config ======
+  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */
+  var DEFAULT_PORT = '1884';            // the MQTT-over-WebSocket listener; a browser has
+                                        // no other way in — the plain MQTT port is a TCP
+                                        // socket no page can open.
+  var STORE_KEY = 'air-wall.conn.v1';   // shared with the tested dashboard on purpose
+  var MAX_SUBS = 64;
+  var DEFAULT_EXPIRE = 900;
+  var DEFAULT_FILTER = 'dbk/';
+
+  // US EPA PM2.5 breakpoints, micrograms per cubic metre. One source of truth for the
+  // band, the sky, the verdict and the scale below.  `img` is the photograph of what
+  // that band's air actually looks like from a ridge above the city.
+  var BANDS = [
+    { key:'good',      lo:0,     max:12.0,    label:'Good',
+      note:'clean air', img:'img/good.jpg', v:'--band-good', r:'0',
+      say:'Go outside. The air is clean today.',
+      th:'อากาศดี ออกไปเล่นข้างนอกได้เลย' },
+    { key:'moderate',  lo:12.1,  max:35.4,    label:'Moderate',
+      note:'fine for almost everyone', img:'img/moderate.jpg', v:'--band-mod', r:'12',
+      say:'Fine to go outside.',
+      th:'ออกไปข้างนอกได้ตามปกติ' },
+    { key:'sensitive', lo:35.5,  max:55.4,    label:'Unhealthy for sensitive groups',
+      note:'take it gently', img:'img/sensitive.jpg', v:'--band-usg', r:'35',
+      say:'Most of us can go out. If you cough or wheeze easily, play gently.',
+      th:'ส่วนใหญ่ออกไปได้ ใครไอง่ายหรือเป็นหอบ ให้เล่นเบา ๆ' },
+    { key:'unhealthy', lo:55.5,  max:150.4,   label:'Unhealthy',
+      note:'short trips only', img:'img/unhealthy.jpg', v:'--band-unh', r:'55',
+      say:'Keep outdoor play short, and wear a mask outside.',
+      th:'เล่นข้างนอกสั้น ๆ ออกไปข้างนอกใส่หน้ากากด้วย' },
+    { key:'verybad',   lo:150.5, max:250.4,   label:'Very unhealthy',
+      note:'stay in', img:'img/verybad.jpg', v:'--band-vun', r:'150',
+      say:'Stay inside and keep the windows shut.',
+      th:'อยู่ในบ้าน ปิดหน้าต่างไว้' },
+    { key:'hazardous', lo:250.5, max:Infinity, label:'Hazardous',
+      note:'stay in', img:'img/hazardous.jpg', v:'--band-haz', r:'250',
+      say:'Stay inside. Do not go out to play today.',
+      th:'อยู่ในบ้าน วันนี้อย่าออกไปเล่นข้างนอก' }
+  ];
+
+  // The unknown sky is deliberately NOT a photograph. A fleet that is not reporting must
+  // never be painted as a clear dawn — that is a false all-clear, and children read it.
+  var UNKNOWN_SKY =
+    'radial-gradient(120% 90% at 50% 8%, #1b2733 0%, #121a24 42%, #080c12 100%)';
+  // If a photograph fails to load, each band still has a ground of its own colour rather
+  // than a white flash or the wrong picture.
+  var FALLBACK = {
+    good:      'linear-gradient(180deg,#2c4a5e,#14232e)',
+    moderate:  'linear-gradient(180deg,#4a4633,#1d1c15)',
+    sensitive: 'linear-gradient(180deg,#5b4530,#211a12)',
+    unhealthy: 'linear-gradient(180deg,#5b3a2c,#1f1410)',
+    verybad:   'linear-gradient(180deg,#4d3341,#180f14)',
+    hazardous: 'linear-gradient(180deg,#4a1f27,#15070a)'
+  };
+
+  var ALIASES = {
+    stat_t:'state_topic', avty_t:'availability_topic', uniq_id:'unique_id',
+    unit_of_meas:'unit_of_measurement', dev_cla:'device_class', stat_cla:'state_class',
+    exp_aft:'expire_after', pl_avail:'payload_available', pl_not_avail:'payload_not_available',
+    dev:'device', val_tpl:'value_template', avty:'availability', ic:'icon'
+  };
+
+  // Concrete per-board detail topics. These carry no discovery config of their own, so
+  // they are subscribed explicitly, one exact topic at a time — never a wildcard.
+  var DETAIL_KEYS = ['pm1_0', 'pm10', 'wi-fi_rssi', 'uptime', 'air_quality_level'];
+  var TILES = [
+    { k:'pm1_0',            label:'PM1',      unit:'µg/m³' },
+    { k:'pm10',             label:'PM10',     unit:'µg/m³' },
+    { k:'wi-fi_rssi',       label:'Wi-Fi',    unit:'dBm'   },
+    { k:'uptime',           label:'uptime',   unit:''      },
+    { k:'air_quality_level',label:'reported', unit:''      }
+  ];
+
+  // ============================================================ state ======
+  var client = null;
+  var entities = new Map();
+  var byState = new Map();
+  var byAvail = new Map();
+  var byUid = new Map();
+  var boardStatus = new Map();
+  var details = new Map();          // board id -> { key -> {text, at} }
+  var watched = new Set();          // boards whose detail topics are subscribed
+  var subs = new Set();
+  var filteredOut = new Set();
+  var activeFilter = '';
+  var parseErrors = 0;
+  var connState = 'idle';
+  var manualStop = false;
+  var everConnected = false;
+  var everHadData = false;
+  var discoveryTimer = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ============================================================ helpers ====
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#9fb0c2';
+  }
+
+  // The EPA scale starts at 0. Without the lower bound a faulty sensor reporting -999
+  // lands in the first band and renders as a reassuring green "Good".
+  function bandFor(n) {
+    if (!Number.isFinite(n) || n < 0) return null;
+    for (var i = 0; i < BANDS.length; i++) if (n <= BANDS[i].max) return BANDS[i];
+    return BANDS[BANDS.length - 1];
+  }
+  function bandIndex(b) {
+    for (var i = 0; i < BANDS.length; i++) if (BANDS[i] === b) return i;
+    return -1;
+  }
+
+  function isPm(ent) {
+    return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
+  }
+
+  function ago(ts) {
+    if (!ts) return 'never';
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 2) return 'just now';
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  function dur(sec) {
+    var s = Math.max(0, Math.round(sec));
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d) return d + 'd ' + h + 'h';
+    if (h) return h + 'h ' + m + 'm';
+    if (m) return m + 'm';
+    return s + 's';
+  }
+
+  // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
+  function parseValue(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (s === '') return { kind:'empty', text:'no value' };
+    if (/^(unknown|unavailable|none|null|nan|n\/a)$/i.test(s)) {
+      return { kind:'unknown', text:s.toLowerCase() };
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return { kind:'text', text:s };
+    // EPA truncates the concentration to one decimal BEFORE applying breakpoints.
+    // Truncate ONCE, here, and use that value for both the printed number and the band,
+    // so the number and its label can never contradict each other. Truncate, never round:
+    // rounding 35.44 up to 35.5 would invent a severity the sensor did not report.
+    var n1 = Math.trunc(n * 10) / 10;
+    var text;
+    if (/^[+-]?\d+(\.\d)?$/.test(s)) text = s.replace(/^\+/, '');   // keep device precision
+    else text = n1.toFixed(1);
+    return { kind:'number', n:n, n1:n1, text:text };
+  }
+
+  // C: identity is the board id parsed out of the topic. The discovery "name" is "PM2.5"
+  // on every board and identifies nothing.
+  function boardFromTopic(topic) {
+    var m = /^dbk\/([^/]+)\//i.exec(topic || '');
+    return m ? m[1] : null;
+  }
+
+  var storeWorks = true;
+  function loadStore() {
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); }
+    catch (e) { storeWorks = false; return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (e) { try { localStorage.removeItem(STORE_KEY); } catch (e2) {} return null; }
+  }
+  function saveStore(v) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; }
+    catch (e) { storeWorks = false; return false; }
+  }
+  function clearStore() {
+    try { localStorage.removeItem(STORE_KEY); return true; } catch (e) { return false; }
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c];
+    });
+  }
+
+  // ============================================================ notes ======
+  // Diagnostics live in the settings sheet, not on the wall. A wall in a room full of
+  // children is not the place for a stack of yellow warnings — but nothing is swallowed.
+  var notesEl = $('notes');
+  function setNote(id, level, html) {
+    var el = notesEl.querySelector('.note[data-id="' + id + '"]');
+    if (!el) {
+      el = document.createElement('li');
+      el.className = 'note';
+      el.setAttribute('data-id', id);
+      notesEl.appendChild(el);
+    }
+    el.setAttribute('data-l', level);
+    el.innerHTML = html;
+  }
+  function clearNote(id) {
+    var el = notesEl.querySelector('.note[data-id="' + id + '"]');
+    if (el) el.remove();
+  }
+
+  // ============================================================ failure ====
+  var failEl = $('fail'), failLine = $('fail-line'), appEl = $('app');
+  function showFail(sentence) {
+    failLine.textContent = sentence;
+    failEl.hidden = false;
+    appEl.setAttribute('data-hide', '1');
+    setGround('unknown');
+  }
+  function hideFail() {
+    failEl.hidden = true;
+    appEl.removeAttribute('data-hide');
+  }
+  // The wall only surrenders the screen when it has NOTHING true to show. Once real
+  // readings have arrived, a dropped connection leaves the boards standing and lets them
+  // age honestly into stale — that is more use to a parent than a blank screen.
+  function reviewFail() {
+    if (connState === 'fatal') return;                 // its own sentence is already up
+    if (everHadData || entities.size > 0) { hideFail(); return; }
+    if (connState === 'connected') { hideFail(); return; }
+    if (connState === 'error' || connState === 'reconnecting' || connState === 'closed') {
+      showFail('The air monitors cannot be reached right now.');
+    }
+  }
+
+  // ============================================================ subscribe ==
+  // subRaw is the only thing that talks to the broker and is private to topics authored
+  // in this file. Everything off the wire goes through sub(), which refuses wildcards.
+  function subRaw(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    if (subs.has(topic)) return true;
+    if (subs.size >= MAX_SUBS) {
+      setNote('subcap', 'warn',
+        '<b>Subscription ceiling reached (' + MAX_SUBS + ').</b> Further sensors are ignored ' +
+        'so this page cannot flood the broker.');
+      return false;
+    }
+    subs.add(topic);
+    client.subscribe(topic, { qos:0 }, function (err) {
+      if (err) {
+        subs.delete(topic);
+        setNote('suberr', 'bad',
+          '<b>Subscribe rejected.</b> <span class="mono">' + esc(topic) + '</span> — ' +
+          esc(err.message || String(err)) + '. The broker ACL may not allow this topic.');
+      }
+    });
+    return true;
+  }
+
+  // D: a wildcard on this broker costs roughly 109 GB/day. '+' is as dangerous as '#':
+  // a retained config declaring "+/+/+" delivered ten out of ten unrelated fleet topics
+  // in testing. A topic that came off the wire must name exactly one topic.
+  function sub(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    if (/[#+]/.test(topic)) {
+      setNote('wildcard', 'warn',
+        '<b>Refused a wildcard subscription.</b> A payload asked for ' +
+        '<span class="mono">' + esc(topic) + '</span>. Neither <span class="mono">#</span> nor ' +
+        '<span class="mono">+</span> is ever subscribed from the wire.');
+      return false;
+    }
+    return subRaw(topic);
+  }
+
+  function unsub(topic) {
+    if (!topic || !subs.has(topic)) return;
+    if (byState.has(topic) || byAvail.has(topic)) return;
+    subs.delete(topic);
+    if (client) { try { client.unsubscribe(topic); } catch (e) {} }
+  }
+
+  // Detail topics for one board. Concrete strings, built from an id that the topic regex
+  // already proved contains no '/', and passed through sub()'s wildcard guard anyway.
+  function watchBoard(id) {
+    if (!id || watched.has(id) || !client) return;
+    watched.add(id);
+    DETAIL_KEYS.forEach(function (k) { sub('dbk/' + id + '/sensor/' + k + '/state'); });
+  }
+
+  // ============================================================ discovery ==
+  function expand(cfg) {
+    var out = {};
+    Object.keys(cfg).forEach(function (k) { out[ALIASES[k] || k] = cfg[k]; });
+    var base = out['~'];
+    if (typeof base === 'string' && base) {
+      ['state_topic', 'availability_topic'].forEach(function (k) {
+        var v = out[k];
+        if (typeof v !== 'string') return;
+        if (v.charAt(0) === '~') out[k] = base + v.slice(1);
+        else if (v.charAt(v.length - 1) === '~') out[k] = v.slice(0, -1) + base;
+      });
+    }
+    if (!out.availability_topic && Array.isArray(out.availability) && out.availability.length) {
+      var a = out.availability[0];
+      if (a && typeof a.topic === 'string') {
+        out.availability_topic = a.topic;
+        if (a.payload_available) out.payload_available = a.payload_available;
+        if (a.payload_not_available) out.payload_not_available = a.payload_not_available;
+      }
+    }
+    return out;
+  }
+
+  function index(map, key, dtopic) {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(dtopic);
+  }
+  // Without unindex a re-published config leaves the entity reachable from the topic it
+  // abandoned — one board's number under another board's name.
+  function unindex(map, key, dtopic) {
+    if (!key || !map.has(key)) return;
+    var set = map.get(key);
+    set.delete(dtopic);
+    if (set.size === 0) { map.delete(key); unsub(key); }
+  }
+
+  function removeEntity(dtopic) {
+    var gone = entities.get(dtopic);
+    if (!gone) return false;
+    entities.delete(dtopic);
+    if (gone.uid && byUid.get(gone.uid) === dtopic) byUid.delete(gone.uid);
+    unindex(byState, gone.stateTopic, dtopic);
+    unindex(byAvail, gone.availTopic, dtopic);
+    return true;
+  }
+
+  function matchesFilter(topic) {
+    return !activeFilter || String(topic).indexOf(activeFilter) === 0;
+  }
+
+  function noteFilter() {
+    if (!activeFilter || filteredOut.size === 0) { clearNote('filter'); return; }
+    setNote('filter', 'info',
+      '<b>' + filteredOut.size + ' sensor' + (filteredOut.size === 1 ? '' : 's') +
+      ' hidden by the topic filter</b> <span class="mono">' + esc(activeFilter) + '</span>.');
+  }
+
+  function onDiscovery(dtopic, text) {
+    if (text.trim() === '') {                    // empty retained payload = delete
+      filteredOut.delete(dtopic);
+      if (removeEntity(dtopic)) paint();
+      noteFilter();
+      return;
+    }
+
+    var cfg;
+    try { cfg = JSON.parse(text); }
+    catch (e) {
+      parseErrors++;
+      setNote('parse', 'warn',
+        '<b>' + parseErrors + ' malformed discovery payload' + (parseErrors === 1 ? '' : 's') +
+        ' ignored.</b> Latest: <span class="mono">' + esc(dtopic) + '</span>.');
+      return;
+    }
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) { parseErrors++; return; }
+
+    cfg = expand(cfg);
+    if (typeof cfg.state_topic !== 'string' || !cfg.state_topic) return;
+
+    if (!matchesFilter(cfg.state_topic)) {
+      filteredOut.add(dtopic);
+      if (removeEntity(dtopic)) paint();
+      noteFilter();
+      return;
+    }
+    filteredOut.delete(dtopic);
+    noteFilter();
+
+    var parts = dtopic.split('/');
+    var dev = cfg.device && typeof cfg.device === 'object' ? cfg.device : null;
+    var devName = dev && typeof dev.name === 'string' ? dev.name : '';
+    var measure = typeof cfg.name === 'string' && cfg.name ? cfg.name : (parts[2] || 'sensor');
+    var expire = Number(cfg.expire_after);
+    var uid = typeof cfg.unique_id === 'string' && cfg.unique_id ? cfg.unique_id : '';
+    var board = boardFromTopic(cfg.state_topic);
+    var newAvail = typeof cfg.availability_topic === 'string' ? cfg.availability_topic : '';
+
+    if (uid && byUid.has(uid) && byUid.get(uid) !== dtopic) removeEntity(byUid.get(uid));
+
+    var ent = entities.get(dtopic) ||
+      { key:dtopic, value:null, at:0, availRaw:null, availAt:0 };
+
+    if (ent.stateTopic && ent.stateTopic !== cfg.state_topic) {
+      unindex(byState, ent.stateTopic, dtopic);
+      ent.value = null; ent.at = 0; ent.raw = undefined;
+    }
+    if (ent.availTopic && ent.availTopic !== newAvail) {
+      unindex(byAvail, ent.availTopic, dtopic);
+      ent.availRaw = null; ent.availAt = 0;
+    }
+    if (ent.uid && ent.uid !== uid && byUid.get(ent.uid) === dtopic) byUid.delete(ent.uid);
+
+    // C, again: the board id is the title. `measure` ("PM2.5") is the same on all three.
+    var who = board || devName || uid;
+    ent.title = who || measure;
+    ent.measure = measure;
+    ent.uid = uid;
+    ent.stateTopic = cfg.state_topic;
+    ent.availTopic = newAvail;
+    ent.unit = typeof cfg.unit_of_measurement === 'string' ? cfg.unit_of_measurement : '';
+    ent.deviceClass = typeof cfg.device_class === 'string' ? cfg.device_class : '';
+    ent.expire = Number.isFinite(expire) && expire > 0 ? expire : DEFAULT_EXPIRE;
+    ent.pAvail = typeof cfg.payload_available === 'string' ? cfg.payload_available : 'online';
+    ent.pNot = typeof cfg.payload_not_available === 'string' ? cfg.payload_not_available : 'offline';
+    ent.templated = !!cfg.value_template;
+    ent.board = board;
+
+    // A sensor this page cannot listen to must never take a slot on the wall.
+    if (!sub(ent.stateTopic)) {
+      if (removeEntity(dtopic)) paint();
+      return;
+    }
+
+    entities.set(dtopic, ent);
+    if (uid) byUid.set(uid, dtopic);
+    index(byState, ent.stateTopic, dtopic);
+    if (ent.availTopic) { index(byAvail, ent.availTopic, dtopic); sub(ent.availTopic); }
+    if (ent.board) watchBoard(ent.board);
+
+    clearNote('nodisc');
+    paint();
+  }
+
+  // ============================================================ messages ===
+  function setDetail(board, key, text, at) {
+    if (!details.has(board)) details.set(board, {});
+    details.get(board)[key] = { text:String(text).trim(), at:at };
+  }
+
+  function onMessage(topic, payload) {
+    var text;
+    try { text = new TextDecoder('utf-8').decode(payload); }
+    catch (e) { text = String(payload); }
+
+    if (/^homeassistant\/.+\/config$/.test(topic)) {
+      try { onDiscovery(topic, text); }
+      catch (e) {
+        parseErrors++;
+        setNote('parse', 'warn', '<b>A discovery payload could not be applied.</b> ' + esc(e.message || ''));
+      }
+      return;
+    }
+
+    var now = Date.now();
+    var dirty = false;
+
+    var b = /^dbk\/([^/]+)\/status$/i.exec(topic);
+    if (b) { boardStatus.set(b[1], { raw:text.trim(), at:now }); watchBoard(b[1]); dirty = true; }
+
+    var d = /^dbk\/([^/]+)\/sensor\/([^/]+)\/state$/i.exec(topic);
+    if (d) { setDetail(d[1], d[2].toLowerCase(), text, now); dirty = true; }
+
+    if (byState.has(topic)) {
+      byState.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.raw = text; e.value = parseValue(text); e.at = now;
+        everHadData = true;
+        dirty = true;
+      });
+    }
+    if (byAvail.has(topic)) {
+      byAvail.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.availRaw = text.trim(); e.availAt = now;
+        dirty = true;
+      });
+    }
+    if (dirty) paint();
+  }
+
+  // ============================================================ card state =
+  function availabilityOf(ent) {
+    if (ent.availTopic && ent.availRaw !== null) {
+      if (ent.availRaw === ent.pNot) return 'offline';
+      if (ent.availRaw === ent.pAvail) return 'online';
+      return 'unknown';
+    }
+    if (ent.board && boardStatus.has(ent.board)) {
+      var raw = boardStatus.get(ent.board).raw;
+      if (raw === ent.pNot || raw === 'offline') return 'offline';
+      if (raw === ent.pAvail || raw === 'online') return 'online';
+    }
+    return 'unknown';
+  }
+
+  function stateOf(ent) {
+    if (availabilityOf(ent) === 'offline') return 'offline';
+    if (!ent.at || !ent.value) return 'waiting';
+    if (ent.value.kind === 'unknown' || ent.value.kind === 'empty') return 'unknown';
+    // A concentration cannot be negative — checked before stale and before live, so a
+    // broken sensor is never dressed up as a reading, least of all a green one.
+    if (ent.value.kind === 'number' && ent.value.n1 < 0 && isPm(ent)) return 'fault';
+    if ((Date.now() - ent.at) / 1000 > ent.expire) return 'stale';
+    return 'live';
+  }
+
+  // ============================================================ the sky ====
+  var skies = [$('sky-a'), $('sky-b')];
+  var active = 0;
+  var currentKey = null;
+  var cache = {};                 // key -> 'ok' | 'fail' | 'pending'
+  var reduce = false;
+  try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+  function preload(key) {
+    var band = null;
+    for (var i = 0; i < BANDS.length; i++) if (BANDS[i].key === key) band = BANDS[i];
+    if (!band || cache[key]) return;
+    cache[key] = 'pending';
+    var im = new Image();
+    im.onload = function () { cache[key] = 'ok'; };
+    im.onerror = function () { cache[key] = 'fail'; };
+    im.src = band.img;            // relative, next to this file
+  }
+
+  // Preload the neighbours of the band on screen, so a breakpoint crossing never shows a
+  // white flash. The rest follow once the page is idle.
+  function preloadAround(i) {
+    if (i < 0) return;
+    [i - 1, i, i + 1].forEach(function (j) {
+      if (j >= 0 && j < BANDS.length) preload(BANDS[j].key);
+    });
+  }
+
+  function groundCss(key) {
+    if (key === 'unknown') return UNKNOWN_SKY;
+    for (var i = 0; i < BANDS.length; i++) {
+      if (BANDS[i].key === key) {
+        return cache[key] === 'fail'
+          ? FALLBACK[key]
+          : 'url("' + BANDS[i].img + '")';
+      }
+    }
+    return UNKNOWN_SKY;
+  }
+
+  function setGround(key) {
+    if (key === currentKey) return;
+    currentKey = key;
+    document.documentElement.setAttribute('data-band', key);
+    $('tint').style.background = key === 'unknown' ? '#9fb0c2' : css(
+      key === 'good' ? '--band-good' : key === 'moderate' ? '--band-mod' :
+      key === 'sensitive' ? '--band-usg' : key === 'unhealthy' ? '--band-unh' :
+      key === 'verybad' ? '--band-vun' : '--band-haz');
+
+    var next = 1 - active;
+    var apply = function () {
+      skies[next].style.backgroundImage = groundCss(key);
+      skies[next].setAttribute('data-on', '1');
+      skies[active].removeAttribute('data-on');
+      active = next;
+    };
+
+    // Paint only once the bytes are in, so the cross-fade never fades to white.
+    var band = null, idx = -1;
+    for (var i = 0; i < BANDS.length; i++) if (BANDS[i].key === key) { band = BANDS[i]; idx = i; }
+    preloadAround(idx);
+    if (!band || cache[key] === 'ok' || cache[key] === 'fail') { apply(); return; }
+    var im = new Image();
+    im.onload = function () { cache[key] = 'ok'; if (currentKey === key) apply(); };
+    im.onerror = function () { cache[key] = 'fail'; if (currentKey === key) apply(); };
+    im.src = band.img;
+  }
+
+  // ============================================================ boards =====
+  function boardsNow() {
+    var m = new Map();
+    entities.forEach(function (e) {
+      if (!isPm(e)) return;
+      var id = e.board || e.title || e.stateTopic;
+      var prev = m.get(id);
+      if (!prev || (e.at || 0) >= (prev.ent && prev.ent.at || 0)) m.set(id, { id:id, ent:e });
+    });
+    boardStatus.forEach(function (v, id) { if (!m.has(id)) m.set(id, { id:id, ent:null }); });
+
+    var list = [];
+    m.forEach(function (r) {
+      if (r.ent) {
+        r.state = stateOf(r.ent);
+        r.value = r.ent.value;
+        r.unit = r.ent.unit;
+        r.at = r.ent.at;
+      } else {
+        var st = boardStatus.get(r.id);
+        r.state = st && st.raw === 'offline' ? 'offline' : 'waiting';
+        r.value = null; r.unit = ''; r.at = 0;
+      }
+      r.band = (r.state === 'live' && r.value && r.value.kind === 'number')
+        ? bandFor(r.value.n1) : null;
+      r.since = (r.ent && r.ent.availAt) ||
+                (boardStatus.has(r.id) ? boardStatus.get(r.id).at : 0);
+      list.push(r);
+    });
+    list.sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
+    return list;
+  }
+
+  // ============================================================ paint ======
+  var heroWho = $('hero-who'), heroScope = $('hero-scope'), heroNum = $('hero-num'),
+      heroUnit = $('hero-unit'), heroBand = $('hero-band'),
+      verdict = $('verdict'), verdictTh = $('verdict-th'),
+      stripEl = $('strip'), tilesEl = $('tiles'),
+      detailTitle = $('detail-title'), detailSrc = $('detail-src'),
+      scaleNote = $('scale-note');
+  var chips = new Map();
+  var tileEls = {};
+  var stripSig = '';
+
+  function setBig(el, text) {
+    el.textContent = text;
+    el.setAttribute('data-long', text.length > 7 ? '1' : '0');
+  }
+
+  function chipFor(id) {
+    var c = chips.get(id);
+    if (c) return c;
+    var root = document.createElement('div');
+    root.className = 'chip glass';
+    root.innerHTML =
+      '<div class="chip-id mono"></div>' +
+      '<div class="chip-val"><span class="cn"></span><span class="cu"></span></div>' +
+      '<div class="chip-band"></div>' +
+      '<div class="chip-foot"></div>' +
+      '<div class="chip-tick"></div>';
+    c = {
+      root:root,
+      id:root.querySelector('.chip-id'),
+      val:root.querySelector('.chip-val'),
+      n:root.querySelector('.cn'),
+      u:root.querySelector('.cu'),
+      band:root.querySelector('.chip-band'),
+      foot:root.querySelector('.chip-foot')
+    };
+    chips.set(id, c);
+    return c;
+  }
+
+  function paintChip(r) {
+    var c = chipFor(r.id);
+    c.root.setAttribute('data-state', r.state);
+    c.id.textContent = r.id;
+    // A board with no band still gets a legible label colour. The old habit of dimming an
+    // offline card into a whisper put the most common state on this wall below the 3:1
+    // floor — offline is drawn quietly, never faintly.
+    c.root.style.setProperty('--cband', r.band ? css(r.band.v) : 'rgba(255,255,255,.62)');
+
+    var kind = 'word', txt = '—', unit = '', bandTxt = '', foot = '';
+    if (r.state === 'offline') {
+      txt = 'offline'; bandTxt = 'not reporting';
+      foot = r.since ? 'last heard ' + ago(r.since) : 'no signal';
+    } else if (r.state === 'waiting') {
+      txt = 'no data yet'; bandTxt = 'waiting for its first reading';
+      foot = 'nothing published yet';
+    } else if (r.state === 'unknown') {
+      txt = r.value ? r.value.text : 'unknown'; bandTxt = 'no reading';
+      foot = 'updated ' + ago(r.at);
+    } else if (r.state === 'fault') {
+      txt = r.value.text; unit = r.unit; bandTxt = 'sensor fault';
+      foot = 'below zero is not a reading';
+    } else if (r.state === 'stale') {
+      txt = r.value.text; unit = r.unit; bandTxt = 'expired — treat as unknown';
+      foot = 'last update ' + ago(r.at);
+      kind = r.value.kind === 'number' ? 'num' : 'word';
+    } else {
+      txt = r.value.text; unit = r.unit;
+      bandTxt = r.band ? r.band.label : '';
+      foot = 'updated ' + ago(r.at);
+      kind = r.value.kind === 'number' ? 'num' : 'word';
+    }
+    c.n.textContent = txt;
+    c.u.textContent = unit;                       // A: wire text, printed as published
+    c.val.setAttribute('data-kind', kind);
+    c.val.setAttribute('data-long', txt.length > 7 ? '1' : '0');
+    c.band.textContent = bandTxt;
+    c.foot.textContent = foot;
+    return c;
+  }
+
+  function tileFor(spec) {
+    var t = tileEls[spec.k];
+    if (t) return t;
+    var root = document.createElement('div');
+    root.className = 'tile';
+    root.innerHTML = '<div class="k"></div><div class="v"><span class="tv"></span><span class="tu"></span></div><div class="n"></div>';
+    t = { root:root, k:root.querySelector('.k'), v:root.querySelector('.v'),
+          tv:root.querySelector('.tv'), tu:root.querySelector('.tu'), n:root.querySelector('.n') };
+    t.k.textContent = spec.label;
+    tileEls[spec.k] = t;
+    tilesEl.appendChild(root);
+    return t;
+  }
+
+  function paintTiles(board, live) {
+    var d = (board && details.get(board)) || {};
+    TILES.forEach(function (spec) {
+      var t = tileFor(spec);
+      var raw = d[spec.k];
+      var txt = '—', unit = '', note = '';
+      if (!board) {
+        note = 'no board reporting';
+      } else if (!raw || raw.text === '') {
+        note = 'not published';
+      } else if (/^(unknown|unavailable|nan|null|none)$/i.test(raw.text)) {
+        txt = raw.text.toLowerCase();
+      } else if (!live) {
+        txt = raw.text; unit = spec.unit;
+        note = 'last seen ' + ago(raw.at);
+      } else {
+        txt = raw.text;
+        unit = spec.unit;
+        var n = Number(raw.text);
+        if (spec.k === 'uptime' && Number.isFinite(n)) {
+          // The wire carries a bare number with no unit of its own. Print exactly what was
+          // published and put the human reading in the caveat line, where the assumption
+          // is visible instead of silently baked into the value.
+          note = '≈ ' + dur(n) + ' if seconds';
+        } else if (spec.k === 'wi-fi_rssi' && Number.isFinite(n) && n < 0 && n > -120) {
+          note = n > -60 ? 'strong' : n > -75 ? 'ok' : 'weak';
+        } else {
+          note = 'updated ' + ago(raw.at);
+        }
+      }
+      t.tv.textContent = txt;
+      t.tu.textContent = txt === '—' ? '' : unit;   // A: µg/m³ and dBm printed verbatim
+      t.v.setAttribute('data-long', txt.length > 7 ? '1' : '0');
+      t.n.textContent = note;
+    });
+  }
+
+  // scale --------------------------------------------------------------------
+  var scaleBar = $('scale-bar'), scaleLegend = $('scale-legend'), scaleMark = null;
+  (function buildScale() {
+    BANDS.forEach(function (b) {
+      var seg = document.createElement('i');
+      seg.className = 'scale-seg';
+      seg.style.color = 'var(' + b.v + ')';
+      seg.setAttribute('data-k', b.key);
+      scaleBar.appendChild(seg);
+      var lab = document.createElement('span');
+      lab.textContent = b.r;
+      scaleLegend.appendChild(lab);
+    });
+    scaleMark = document.createElement('i');
+    scaleMark.className = 'scale-mark';
+    scaleMark.hidden = true;
+    scaleBar.appendChild(scaleMark);
+  })();
+
+  function paintScale(band, n1) {
+    var segs = scaleBar.querySelectorAll('.scale-seg');
+    for (var i = 0; i < segs.length; i++) {
+      if (band && BANDS[i] === band) segs[i].setAttribute('data-on', '1');
+      else segs[i].removeAttribute('data-on');
+    }
+    if (!band || !Number.isFinite(n1)) { scaleMark.hidden = true; return; }
+    var i2 = bandIndex(band);
+    var hi = Number.isFinite(band.max) ? band.max : band.lo + 250;
+    var f = Math.max(0, Math.min(1, (n1 - band.lo) / Math.max(0.1, hi - band.lo)));
+    scaleMark.hidden = false;
+    scaleMark.style.left = (((i2 + f) / BANDS.length) * 100).toFixed(2) + '%';
+  }
+
+  function paint() {
+    var list = boardsNow();
+    $('tb-boards').textContent = String(list.length);
+
+    // The headline is the WORST live board, because that is the one a parent needs.
+    var head = null;
+    var liveCount = 0;
+    list.forEach(function (r) {
+      if (r.state !== 'live' || !r.band) return;
+      liveCount++;
+      if (!head || r.value.n1 > head.value.n1) head = r;
+    });
+
+    var band = head ? head.band : null;
+    setGround(band ? band.key : 'unknown');
+
+    if (head) {
+      heroWho.textContent = head.id;
+      heroScope.textContent = liveCount === 1
+        ? (list.length > 1 ? 'the only monitor reporting of ' + list.length : 'reporting now')
+        : 'highest of ' + liveCount + ' reporting';
+      setBig(heroNum, head.value.text);
+      heroNum.setAttribute('data-kind', head.value.kind === 'number' ? 'num' : 'word');
+      heroUnit.textContent = head.unit;             // A: exactly as published
+      heroBand.textContent = band.label;
+      heroBand.setAttribute('data-haz', band.key === 'hazardous' ? '1' : '0');
+      verdict.textContent = band.say;
+      verdictTh.textContent = band.th;
+      paintScale(band, head.value.n1);
+      scaleNote.textContent = 'US EPA PM2.5 breakpoints, µg/m³ — ' + band.label.toLowerCase() +
+        ' is band ' + (bandIndex(band) + 1) + ' of 6.';
+    } else {
+      // No live board. This is a real state with a real look — never a zero, never a
+      // clear-dawn photograph, never a blank.
+      var offline = list.filter(function (r) { return r.state === 'offline'; }).length;
+      heroWho.textContent = list.length ? 'no monitor reporting' : 'no monitors found';
+      heroScope.textContent = list.length
+        ? offline + ' of ' + list.length + ' offline'
+        : 'waiting for a discovery message';
+      setBig(heroNum, '—');
+      heroNum.setAttribute('data-kind', 'word');
+      heroUnit.textContent = '';
+      heroBand.textContent = 'air unknown';
+      heroBand.setAttribute('data-haz', '0');
+      verdict.textContent = 'We cannot tell you about the air right now.';
+      verdictTh.textContent = 'ตอนนี้ยังบอกไม่ได้ว่าอากาศข้างนอกเป็นยังไง';
+      paintScale(null, NaN);
+      scaleNote.textContent = 'US EPA PM2.5 breakpoints, µg/m³ — nothing to place on the scale yet.';
+    }
+
+    // The strip: every board except the one in the headline. With one live and two dead,
+    // the strip is two dashed, hatched, explicitly-worded offline tiles — the normal state
+    // of this fleet, drawn on purpose.
+    var seen = [];
+    list.forEach(function (r) {
+      if (head && r.id === head.id) return;
+      seen.push(r.id);
+      paintChip(r);
+    });
+    chips.forEach(function (c, id) {
+      if (seen.indexOf(id) === -1 && c.root.parentNode) c.root.parentNode.removeChild(c.root);
+    });
+    // Re-append only when the membership or order actually changed. Moving nodes every
+    // second would re-rasterise the blur behind each panel for no reason.
+    var sig = seen.join('|');
+    if (sig !== stripSig) {
+      stripSig = sig;
+      seen.forEach(function (id) { stripEl.appendChild(chips.get(id).root); });
+    }
+
+    // Detail belongs to the headline board; with none, to the most recently heard board.
+    var focus = head;
+    if (!focus) {
+      list.forEach(function (r) { if (!focus || (r.since || 0) > (focus.since || 0)) focus = r; });
+    }
+    detailTitle.textContent = focus ? 'DETAIL — ' + focus.id : 'DETAIL';
+    detailSrc.textContent = focus
+      ? (focus.state === 'live' ? 'live from this board' : 'board is ' + focus.state)
+      : 'nothing to detail yet';
+    paintTiles(focus ? focus.id : null, !!(focus && focus.state === 'live'));
+
+    reviewFail();
+  }
+
+  // ============================================================ connect ====
+  var CONN_TEXT = {
+    idle:'starting', connecting:'connecting', connected:'live',
+    reconnecting:'reconnecting', closed:'disconnected', error:'no broker',
+    fatal:'refused'
+  };
+  function setConn(state, detail) {
+    connState = state;
+    $('tb-conn').setAttribute('data-s', state);
+    $('conn-text').textContent = detail || CONN_TEXT[state] || state;
+  }
+
+  function describe(err) {
+    var code = err && (err.code !== undefined ? err.code : err.reasonCode);
+    var map = {
+      1:'the broker rejected the MQTT protocol version',
+      2:'the broker rejected this client id',
+      3:'the broker is unavailable',
+      4:'the username or passphrase is wrong',
+      5:'this account is not authorised for the broker'
+    };
+    if (map[code]) return { text:map[code], fatal:code === 2 || code === 4 || code === 5 };
+    var m = String((err && err.message) || err || 'unknown error');
+    if (/not authoriz|bad user/i.test(m)) return { text:m, fatal:true };
+    return { text:m, fatal:false };
+  }
+
+  function disconnect() {
+    manualStop = true;
+    if (client) { try { client.end(true); } catch (e) {} client = null; }
+    subs.clear();
+    watched.clear();
+  }
+
+  function connect(cfg) {
+    if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
+      setConn('fatal', 'no library');
+      showFail('This wall needs its MQTT library, and it did not load.');
+      setNote('lib', 'bad',
+        '<b>The MQTT library did not load.</b> This page needs ' +
+        '<span class="mono">unpkg.com/mqtt@5.15.2</span>. Check the network, or serve a local copy.');
+      return;
+    }
+
+    disconnect();
+    manualStop = false;
+    everConnected = false;
+    activeFilter = typeof cfg.filter === 'string' ? cfg.filter.trim() : '';
+    filteredOut.clear();
+    ['conn','auth','mixed','nodisc','suberr','parse','wildcard','subcap','filter','lib'].forEach(clearNote);
+
+    var scheme = cfg.tls ? 'wss' : 'ws';
+    var url = scheme + '://' + cfg.host + ':' + cfg.port;
+    setConn('connecting');
+
+    if (!cfg.tls && location.protocol === 'https:') {
+      setNote('mixed', 'warn',
+        '<b>Mixed content.</b> This page is served over HTTPS, so the browser blocks the ' +
+        'plaintext <span class="mono">ws://</span> connection. Tick TLS, or open the file from disk.');
+    }
+
+    try {
+      client = mqtt.connect(url, {
+        username: cfg.user || undefined,
+        password: cfg.pass || undefined,
+        clientId: 'air-weather-' + Math.random().toString(16).slice(2, 10),
+        clean: true,
+        reconnectPeriod: 4000,
+        connectTimeout: 8000,
+        keepalive: 45,
+        resubscribe: true
+      });
+    } catch (e) {
+      setConn('fatal');
+      showFail('This wall could not start its connection.');
+      setNote('conn', 'bad', '<b>Could not start the connection.</b> ' + esc(e.message || String(e)));
+      return;
+    }
+
+    client.on('connect', function () {
+      everConnected = true;
+      setConn('connected');
+      clearNote('conn');
+      hideFail();
+      // The only three wildcards this page may ever hold: authored here, bounded, and
+      // routed through subRaw so sub()'s refusal still covers everything off the wire.
+      subRaw('homeassistant/+/+/config');
+      subRaw('homeassistant/+/+/+/config');
+      subRaw('dbk/+/status');
+      watched.forEach(function (id) {
+        DETAIL_KEYS.forEach(function (k) { sub('dbk/' + id + '/sensor/' + k + '/state'); });
+      });
+      if (discoveryTimer) clearTimeout(discoveryTimer);
+      discoveryTimer = setTimeout(function () {
+        if (entities.size === 0 && filteredOut.size === 0 && connState === 'connected') {
+          setNote('nodisc', 'info',
+            '<b>Connected, but no discovery messages arrived.</b> Retained configs replay the ' +
+            'instant we subscribe, so an empty wall usually means nothing has published to ' +
+            '<span class="mono">homeassistant/…/config</span> yet.');
+          showFail('Connected, but no monitor has described itself yet.');
+        }
+      }, 6000);
+      paint();
+    });
+
+    client.on('message', function (topic, payload) {
+      try { onMessage(topic, payload); } catch (e) { /* one bad message never stops the stream */ }
+    });
+
+    client.on('reconnect', function () { if (!manualStop && connState !== 'fatal') setConn('reconnecting'); });
+    client.on('offline', function () { if (!manualStop && connState !== 'fatal') setConn('reconnecting'); });
+
+    // A browser never reveals WHY a WebSocket handshake failed, and for a refused port
+    // mqtt.js may close without emitting a useful 'error' at all.
+    client.on('close', function () {
+      if (manualStop || connState === 'fatal') return;
+      setConn(everConnected ? 'reconnecting' : 'error');
+      setNote('conn', everConnected ? 'warn' : 'bad',
+        '<b>' + (everConnected ? 'The connection dropped.' : 'Cannot reach the broker') + '</b> at ' +
+        '<span class="mono">' + esc(url) + '</span>. The browser does not report why a WebSocket ' +
+        'handshake fails — check the host, the WebSocket port, and that the broker has a ' +
+        '<span class="mono">protocol websockets</span> listener there. Retrying every 4 seconds.');
+      reviewFail();
+    });
+
+    client.on('error', function (err) {
+      var d = describe(err);
+      if (d.fatal) {
+        setConn('fatal');
+        manualStop = true;
+        try { client.end(true); } catch (e) {}
+        client = null;
+        showFail('The broker refused this connection.');
+        setNote('auth', 'bad',
+          '<b>The broker refused this connection:</b> ' + esc(d.text) +
+          '. Retrying has stopped. Fix the details above and press Connect.');
+      } else {
+        setConn('error');
+        setNote('conn', 'bad',
+          '<b>Cannot reach the broker</b> at <span class="mono">' + esc(url) + '</span> — ' +
+          esc(d.text) + '. Retrying every 4 seconds.');
+        reviewFail();
+      }
+    });
+  }
+
+  // ============================================================ settings ===
+  var sheet = $('sheet');
+  function openSheet() { sheet.hidden = false; $('f-host').focus(); }
+  function closeSheet() { sheet.hidden = true; }
+  document.addEventListener('keydown', function (ev) {
+    var t = ev.target;
+    var typing = t && /^(input|textarea|select)$/i.test(t.tagName || '');
+    if (ev.key === 'Escape') { closeSheet(); return; }
+    if ((ev.key === 's' || ev.key === 'S') && !typing && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+      ev.preventDefault();
+      if (sheet.hidden) openSheet(); else closeSheet();
+    }
+  });
+  $('btn-close').addEventListener('click', closeSheet);
+  sheet.addEventListener('click', function (ev) { if (ev.target === sheet) closeSheet(); });
+
+  function readForm() {
+    return {
+      host: $('f-host').value.trim(),
+      port: $('f-port').value.trim(),
+      user: $('f-user').value,
+      pass: $('f-pass').value,
+      tls: $('f-tls').checked,
+      filter: $('f-filter').value.trim(),
+      remember: $('f-remember').checked
+    };
+  }
+  function fillForm(v) {
+    $('f-host').value = (v && v.host) || DEFAULT_HOST;
+    $('f-port').value = (v && v.port) || DEFAULT_PORT;
+    $('f-user').value = (v && v.user) || '';
+    $('f-pass').value = (v && v.pass) || '';
+    $('f-tls').checked = !!(v && v.tls);
+    $('f-filter').value = v && typeof v.filter === 'string' ? v.filter : DEFAULT_FILTER;
+    $('f-remember').checked = !!(v && (v.remember || v.pass));
+  }
+  // What goes to disk is not what is in the form: the passphrase is opt-in, and nothing
+  // is ever written into this file.
+  function storable(cfg) {
+    var out = { host:cfg.host, port:cfg.port, user:cfg.user, tls:cfg.tls,
+                filter:cfg.filter, remember:!!cfg.remember };
+    if (cfg.remember) out.pass = cfg.pass;
+    return out;
+  }
+
+  $('form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var cfg = readForm();
+    if (!cfg.host || !cfg.port) return;
+    entities.clear(); byState.clear(); byAvail.clear(); byUid.clear();
+    boardStatus.clear(); details.clear(); filteredOut.clear();
+    chips.forEach(function (c) { if (c.root.parentNode) c.root.parentNode.removeChild(c.root); });
+    chips.clear();
+    stripSig = '';
+    everHadData = false;
+    parseErrors = 0;
+    var ok = saveStore(storable(cfg));
+    $('store-hint').textContent = !ok
+      ? 'This browser refused to save settings (private window?). The connection still works.'
+      : cfg.remember
+        ? 'Saved in this browser only, on this device — passphrase included. Nothing is uploaded.'
+        : 'Saved in this browser only. The passphrase was NOT stored.';
+    closeSheet();
+    paint();
+    connect(cfg);
+  });
+
+  $('btn-forget').addEventListener('click', function () {
+    clearStore();
+    fillForm(null);
+    $('f-pass').value = '';
+    disconnect();
+    setConn('idle');
+    $('store-hint').textContent = 'Saved settings cleared from this browser.';
+  });
+
+  // ============================================================ boot =======
+  // No configuration UI on load. Try localStorage, then ?u=&p= in the URL, then anonymous.
+  var qs = null;
+  try { qs = new URLSearchParams(location.search); } catch (e) { qs = null; }
+  var qUser = qs && qs.get('u'), qPass = qs && qs.get('p');
+  var qHost = qs && qs.get('h'), qPort = qs && qs.get('port');
+
+  var saved = loadStore();
+  var boot = {
+    host: (saved && saved.host) || qHost || DEFAULT_HOST,
+    port: (saved && saved.port) || qPort || DEFAULT_PORT,
+    user: qUser != null ? qUser : ((saved && saved.user) || ''),
+    pass: qPass != null ? qPass : ((saved && saved.pass) || ''),
+    tls:  saved ? !!saved.tls : (location.protocol === 'https:'),
+    filter: saved && typeof saved.filter === 'string' ? saved.filter : DEFAULT_FILTER,
+    remember: !!(saved && saved.remember)
+  };
+  fillForm(boot);
+  $('store-hint').textContent = !storeWorks
+    ? 'This browser blocks local storage, so settings cannot be remembered here.'
+    : saved ? 'Loaded from this browser’s local storage.'
+            : 'Nothing is stored yet. Connecting with the defaults.';
+
+  // Credentials handed in by URL are used once and wiped from the address bar, so a wall
+  // left running does not display them to the room.
+  if ((qUser != null || qPass != null) && window.history && history.replaceState) {
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+  }
+
+  activeFilter = boot.filter;
+  setGround('unknown');
+  preloadAround(0);
+  paint();
+  connect(boot);
+
+  // Everything the wall says about time keeps moving: ago(), stale expiry, the clock.
+  setInterval(paint, 1000);
+  function tick() {
+    var d = new Date();
+    var hh = d.getHours(), mm = d.getMinutes();
+    $('tb-clock').textContent = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+  }
+  tick();
+  setInterval(tick, 10000);
+
+  // The remaining photographs load once the page has settled, so any breakpoint crossing —
+  // not just to a neighbour — is a cross-fade rather than a white flash.
+  setTimeout(function () { BANDS.forEach(function (b) { preload(b.key); }); }, 3500);
+})();
+</script>
+</body>
+</html>

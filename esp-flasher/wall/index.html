@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Twenty Air Walls &mdash; contact sheet</title>
+<style>
+/* ============================================================================
+   CONTACT SHEET — twenty walls, side by side, all of them running.
+   This page is deliberately the quietest thing in the folder: near-monochrome
+   chrome, generous white space, no colour of its own. The only colour on the
+   sheet comes out of the twenty live previews, which is the entire point.
+
+   Two groups, because the folder now holds two answers to the same question:
+     11–20  THE DESIGNER SET — every ground is drawn, printed or woven in CSS
+            and SVG. Not one raster image in any of them.
+     21–30  THE GLASS SET — a photograph of the air is the ground, chosen by
+            the live worst reading, with iOS-style translucent panels over it.
+
+   RULES INHERITED FROM THE WALLS THEMSELVES
+   A. There is no text-transform declaration anywhere in this stylesheet. CSS
+      uppercasing maps "µ" to "M", turning µg/m³ into mg/m³ — a 1000x unit
+      error caused by a styling rule. Every capital below was typed as one.
+   B. Nothing here is sized in vw against a box that came from the grid. The
+      preview geometry is one fixed frame size scaled by one factor; the card
+      width is derived from that, not the other way round.
+   C. Relative links only, so the sheet works from file:// and from a server.
+   D. No credentials in this file, and no configuration UI for the walls.
+   ========================================================================== */
+:root{
+  /* the preview: ONE fixed frame, ONE scale factor. Everything else follows. */
+  --fw:1280px;              /* the frame the wall thinks it is being shown at */
+  --fh:800px;
+  --k:.30;                  /* contact-sheet reduction */
+  --cw:calc(var(--fw) * var(--k));
+  --ch:calc(var(--fh) * var(--k));
+
+  --paper:#f7f6f3;
+  --card:#fbfaf8;
+  --shot:#eceae4;
+  --ink:#16161a;
+  --dim:#6d6d75;
+  --faint:#9a9aa1;
+  --rule:#dcd9d2;
+  --rule-2:#c3bfb5;
+
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",Times,serif;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+
+  /* Body inset, named so the demo marker can bleed back out through it and sit
+     flush against the top edge of the window. */
+  --pad-y:clamp(1.1rem,3vw,3.6rem);
+  --pad-x:clamp(1rem,3vw,3.6rem);
+  --pad-b:clamp(2.5rem,5vw,5rem);
+
+  /* The only two colours this sheet is allowed of its own, and they are reserved
+     for one thing: saying that what you are looking at is not a measurement. */
+  --warn-ink:#1a1408;
+  --warn-hi:#f0b429;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#0d0d0f;
+    --card:#131316;
+    --shot:#1b1b1f;
+    --ink:#e9e8e4;
+    --dim:#8f8f97;
+    --faint:#66666e;
+    --rule:#26262b;
+    --rule-2:#3a3a41;
+  }
+}
+@media (min-width:1900px){ :root{ --k:.355 } }
+@media (max-width:1000px){ :root{ --k:.26 } }
+@media (max-width:620px) { :root{ --k:.215 } }
+@media (max-width:420px) { :root{ --k:.175 } }
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;max-width:100%}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font:16px/1.6 var(--serif);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  padding:var(--pad-y) var(--pad-x) var(--pad-b);
+}
+a{color:inherit}
+.mono{font-family:var(--mono)}
+
+/* ------------------------------------------------------------------ masthead */
+.masthead{
+  max-width:64rem;margin:0 auto clamp(2.2rem,5vw,4.5rem);
+}
+.eyebrow{
+  margin:0 0 .9rem;font-family:var(--mono);font-size:.7rem;letter-spacing:.22em;
+  color:var(--faint);
+}
+h1{
+  margin:0;font-weight:600;letter-spacing:-.02em;line-height:1.05;
+  font-size:clamp(1.9rem,4.4vw,3.1rem);
+  text-wrap:balance;
+}
+.lede{
+  margin:1.1rem 0 0;max-width:44rem;color:var(--dim);
+  font-size:clamp(1rem,1.35vw,1.12rem);
+}
+.lede b{color:var(--ink);font-weight:600}
+
+.facts{
+  margin:clamp(1.6rem,3vw,2.6rem) 0 0;padding:1.15rem 0 0;
+  border-top:1px solid var(--rule);
+  display:grid;gap:.55rem clamp(1.4rem,3vw,3rem);
+  grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));
+  font-family:var(--sans);font-size:.83rem;line-height:1.5;
+}
+.facts div{min-width:0}
+.facts dt{color:var(--faint);letter-spacing:.06em;margin:0 0 .12rem}
+.facts dd{margin:0;color:var(--dim)}
+.facts dd b{color:var(--ink);font-weight:600}
+
+.scale{
+  margin:1.15rem 0 0;padding:.85rem 0 0;border-top:1px solid var(--rule);
+  font-family:var(--sans);font-size:.79rem;line-height:1.65;color:var(--dim);
+}
+.scale b{color:var(--ink);font-weight:600}
+.scale .sep{color:var(--faint);padding:0 .18em}
+
+/* --------------------------------------------------------------- group heads */
+.group{margin:0 auto}
+.group + .group{margin-top:clamp(3.4rem,7vw,6rem)}
+.grouphead{
+  max-width:64rem;margin:0 auto clamp(1.5rem,3vw,2.4rem);
+  padding-bottom:1rem;border-bottom:1px solid var(--rule);
+}
+.grouphead .range{
+  margin:0 0 .5rem;font-family:var(--mono);font-size:.7rem;letter-spacing:.2em;
+  color:var(--faint);
+}
+.grouphead h2{
+  margin:0;font-weight:600;letter-spacing:-.015em;line-height:1.15;
+  font-size:clamp(1.35rem,2.6vw,1.9rem);
+}
+.grouphead p{
+  margin:.65rem 0 0;max-width:46rem;color:var(--dim);
+  font-family:var(--sans);font-size:.86rem;line-height:1.6;
+}
+.grouphead p b{color:var(--ink);font-weight:600}
+.grouphead p + p{margin-top:.45rem}
+
+/* -------------------------------------------------------------- contact sheet */
+.sheet{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,var(--cw));
+  justify-content:center;
+  gap:clamp(2rem,4vw,3.6rem) clamp(1.4rem,2.8vw,2.8rem);
+  max-width:calc(var(--cw) * 4 + 3 * 2.8rem);
+  margin:0 auto;
+}
+.card{
+  margin:0;width:var(--cw);min-width:0;
+}
+
+/* the preview: a fixed 1280x800 frame, scaled. Never resized — a wall that is
+   handed a 384px viewport stops being the wall it was designed as. */
+.shotwrap{
+  position:relative;
+  width:var(--cw);height:var(--ch);
+  overflow:hidden;                       /* clip, never scroll */
+  background:var(--shot);
+  border:1px solid var(--rule-2);
+  border-radius:2px;
+}
+.shotwrap iframe{
+  position:absolute;top:0;left:0;
+  width:var(--fw);height:var(--fh);
+  border:0;
+  transform-origin:0 0;
+  transform:scale(var(--k));
+  pointer-events:none;                   /* the overlay link owns every click */
+  background:transparent;
+}
+/* the whole thumbnail is the link */
+.hit{
+  position:absolute;inset:0;z-index:2;
+  display:block;text-decoration:none;
+  outline-offset:2px;
+}
+.hit:focus-visible{outline:2px solid var(--ink)}
+.shotwrap:hover{border-color:var(--ink)}
+
+figcaption{padding:.85rem .1rem 0}
+.line{
+  margin:0;display:flex;align-items:baseline;gap:.55rem;
+}
+.no{
+  font-family:var(--mono);font-size:.74rem;color:var(--faint);
+  letter-spacing:.06em;flex:none;
+}
+.nm{
+  font-size:1.06rem;font-weight:600;letter-spacing:-.01em;min-width:0;
+}
+.nm a{text-decoration:none;border-bottom:1px solid var(--rule-2);padding-bottom:1px}
+.nm a:hover{border-bottom-color:var(--ink)}
+.by{
+  margin:.2rem 0 0;font-family:var(--sans);font-size:.76rem;color:var(--faint);
+  letter-spacing:.02em;
+}
+.brief{
+  margin:.5rem 0 0;font-size:.9rem;line-height:1.5;color:var(--dim);
+  text-wrap:pretty;
+}
+.file{
+  margin:.6rem 0 0;font-family:var(--mono);font-size:.68rem;color:var(--faint);
+  white-space:nowrap;text-overflow:ellipsis;overflow:hidden;
+}
+.file a{text-decoration:none;border-bottom:1px solid transparent}
+.file a:hover{border-bottom-color:var(--faint)}
+
+/* ------------------------------------------------------------------- colophon */
+.colophon{
+  max-width:64rem;margin:clamp(3rem,6vw,5.5rem) auto 0;
+  padding-top:1.3rem;border-top:1px solid var(--rule);
+  font-family:var(--sans);font-size:.8rem;line-height:1.65;color:var(--dim);
+}
+.colophon h2{
+  margin:0 0 .7rem;font-family:var(--serif);font-size:1rem;font-weight:600;color:var(--ink);
+  letter-spacing:-.01em;
+}
+.colophon h2 + p{margin-top:0}
+.colophon p{margin:0 0 .7rem;max-width:46rem}
+.colophon ul{margin:0 0 .7rem;padding-left:1.1rem;max-width:46rem}
+.colophon li{margin:0 0 .3rem}
+.colophon b{color:var(--ink);font-weight:600}
+.colophon code{font-family:var(--mono);font-size:.92em;color:var(--ink)}
+.dagger{color:var(--faint)}
+
+/* the band → photograph key, printed once, in the glass group header */
+.key{
+  margin:.9rem 0 0;padding:.75rem 0 0;border-top:1px dotted var(--rule);
+  display:grid;gap:.3rem 1.4rem;
+  grid-template-columns:repeat(auto-fit,minmax(13.5rem,1fr));
+  font-family:var(--sans);font-size:.76rem;line-height:1.5;color:var(--dim);
+  max-width:46rem;
+}
+.key span{min-width:0}
+.key code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
+
+/* ------------------------------------------------------------ preview sign-in */
+.signin{
+  max-width:64rem;margin:0 auto clamp(2.2rem,4vw,3rem);
+  padding:.9rem 1.1rem;border:1px solid var(--rule-2);border-radius:8px;
+  display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;
+  font-family:var(--sans);font-size:.82rem;color:var(--dim);
+}
+.signin strong{color:var(--ink)}
+.signin input{
+  background:var(--card);border:1px solid var(--rule-2);color:var(--ink);
+  border-radius:6px;padding:.4rem .55rem;font:inherit;width:9rem;
+}
+.signin button{
+  background:var(--ink);color:var(--paper);border:0;border-radius:6px;
+  padding:.42rem .9rem;font:inherit;font-weight:600;cursor:pointer;
+}
+.signin .note{color:var(--faint)}
+.signin code{font-family:var(--mono)}
+/* In demo mode no preview opens a socket, so a login has nothing to log into. The
+   block stays usable — it just stops pretending to be the thing that matters. */
+html.demo .signin{opacity:.45}
+.signin .offnote{display:none;flex-basis:100%;color:var(--faint)}
+html.demo .signin .offnote{display:block}
+
+/* =====================================================================  DEMO RIG
+   The band bench. It drives every preview at once so a layout can be judged at
+   Moderate, Unhealthy and Hazardous without waiting for a burning-season episode
+   to supply them.
+
+   It is chrome, so it obeys the sheet's rule and carries no colour of its own —
+   the two warn tokens are spent ONLY on saying "this is not a measurement".
+   ========================================================================== */
+.rig{
+  max-width:64rem;margin:0 auto clamp(1.4rem,3vw,2.1rem);
+  padding:1rem 1.15rem 1.05rem;
+  border:1px solid var(--rule-2);border-radius:8px;background:var(--card);
+  font-family:var(--sans);
+}
+html.demo .rig{border-color:var(--warn-ink);box-shadow:0 0 0 2px var(--warn-hi)}
+.rig h2{
+  margin:0;font-family:var(--serif);font-size:1rem;font-weight:600;color:var(--ink);
+  letter-spacing:-.01em;
+}
+.rig .why{margin:.3rem 0 .9rem;max-width:52rem;font-size:.8rem;line-height:1.6;color:var(--dim)}
+.rig .why b{color:var(--ink);font-weight:600}
+.rig .why code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
+
+.rigrow{display:flex;flex-wrap:wrap;gap:.42rem;align-items:center}
+.rigrow + .rigrow{margin-top:.6rem}
+.riglab{
+  flex:none;font-family:var(--mono);font-size:.66rem;letter-spacing:.18em;
+  color:var(--faint);width:4.6rem;
+}
+.b{
+  font:inherit;font-size:.81rem;line-height:1.15;padding:.44rem .72rem;
+  border:1px solid var(--rule-2);border-radius:999px;
+  background:transparent;color:var(--ink);cursor:pointer;
+}
+.b:hover{border-color:var(--ink)}
+.b:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.b[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.b.warn[aria-pressed="true"]{background:var(--warn-ink);color:var(--warn-hi);border-color:var(--warn-ink)}
+.num{
+  font:inherit;font-family:var(--mono);font-size:.81rem;width:7rem;
+  padding:.4rem .55rem;border:1px solid var(--rule-2);border-radius:6px;
+  background:var(--paper);color:var(--ink);
+}
+.num:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.righint{flex:1 1 16rem;min-width:0;font-size:.74rem;line-height:1.5;color:var(--faint)}
+
+.readout{
+  margin:.85rem 0 0;padding:.72rem .85rem;
+  border:1px dashed var(--rule-2);border-radius:7px;
+  display:flex;flex-wrap:wrap;gap:.4rem .95rem;align-items:baseline;
+  font-size:.84rem;
+}
+html.demo .readout{border-style:solid;border-color:var(--warn-ink)}
+.readout .k{font-family:var(--mono);font-size:.64rem;letter-spacing:.16em;color:var(--faint)}
+.readout .band{font-weight:600;color:var(--ink)}
+.readout .rng{font-family:var(--mono);font-size:.79rem;color:var(--dim)}
+.readout .note{flex:1 1 20rem;min-width:0;font-size:.79rem;line-height:1.55;color:var(--dim)}
+.readout .note b{color:var(--ink);font-weight:600}
+.pill{
+  flex:none;font-family:var(--mono);font-size:.65rem;letter-spacing:.17em;
+  padding:.24rem .62rem;border-radius:999px;
+  border:1px solid var(--rule-2);color:var(--dim);
+}
+html.demo .pill{
+  background:var(--warn-hi);color:var(--warn-ink);border-color:var(--warn-ink);font-weight:700;
+}
+
+/* ------------------------------------------------------------- the DEMO marker
+   This sheet drives twenty HEALTH displays at once, so a simulated number must be
+   impossible to mistake for a reading off a sensor. The marker is therefore:
+   full-bleed, sticky (still on screen at the bottom of a very long page), hazard-
+   taped, and large enough to survive being read in a phone photograph of the
+   screen. It is the only black-and-amber thing on an otherwise monochrome page.
+
+   Nothing unhides it except ?demo= — no stored flag, no default, no timer. */
+.idemo{
+  position:sticky;top:0;z-index:90;
+  margin:calc(-1 * var(--pad-y)) calc(-1 * var(--pad-x)) calc(var(--pad-y) + 12px);
+  padding:.6rem clamp(.8rem,2.4vw,1.5rem);
+  background:var(--warn-ink);color:#fdf6e6;
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .8rem;
+  font-family:var(--sans);font-weight:700;line-height:1.35;
+  font-size:clamp(.85rem,1.5vw,1.05rem);
+}
+.idemo[hidden]{display:none}
+.idemo::after{                          /* hazard tape, travelling with the sticky bar */
+  content:"";position:absolute;left:0;right:0;bottom:-12px;height:12px;
+  background:repeating-linear-gradient(135deg,var(--warn-hi) 0 14px,var(--warn-ink) 14px 28px);
+}
+.idemo .tag{
+  flex:none;background:var(--warn-hi);color:var(--warn-ink);border-radius:999px;
+  padding:.1rem .8rem;letter-spacing:.18em;font-weight:800;white-space:nowrap;
+  font-size:clamp(.95rem,1.9vw,1.3rem);
+}
+.idemo .thai{flex:none;color:var(--warn-hi);white-space:nowrap;font-size:clamp(.9rem,1.7vw,1.15rem)}
+.idemo .say{flex:1 1 24ch;min-width:0}
+.idemo .out{flex:none;color:#c9bda4;font-weight:600;font-size:clamp(.71rem,1.2vw,.84rem)}
+.idemo .out b{color:#fdf6e6;font-family:var(--mono);font-weight:700}
+
+/* Belt and braces: a photograph cropped to a single thumbnail still says DEMO. */
+html.demo .shotwrap{border-color:var(--warn-ink);box-shadow:0 0 0 3px var(--warn-hi)}
+html.demo .shotwrap::after{
+  content:"DEMO";position:absolute;left:0;bottom:0;z-index:3;
+  background:var(--warn-hi);color:var(--warn-ink);
+  font-family:var(--sans);font-weight:800;font-size:.7rem;letter-spacing:.18em;
+  padding:.16rem .5rem .18rem;
+  border-top:2px solid var(--warn-ink);border-right:2px solid var(--warn-ink);
+  pointer-events:none;                  /* the overlay link still owns every click */
+}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<!-- DEMO MARKER — inert on a real sheet. It is hidden here in the markup and the ONLY
+     thing that ever unhides it is ?demo= in the address bar, set by the bench below or
+     typed by hand. No stored flag, no default, and it does not survive a reload without
+     the parameter. First element in the body so it can bleed out through the page inset
+     and sit flush against the top edge, sticky, for the whole scroll. -->
+<div class="idemo" id="idemo" hidden>
+  <span class="tag">DEMO</span>
+  <span class="thai">&#3605;&#3633;&#3623;&#3629;&#3618;&#3656;&#3634;&#3591;</span>
+  <span class="say" id="idemo-say"></span>
+  <span class="out">choose <b>Live</b> below, or reload without <b>?demo=</b></span>
+</div>
+
+<header class="masthead">
+  <p class="eyebrow">Kit4Kids &middot; PM2.5 &middot; Chiang Mai</p>
+  <h1>Twenty walls for one question</h1>
+  <p class="lede">Twenty wall displays built on one tested MQTT engine, each answering
+    <b>&ldquo;should we go outside?&rdquo;</b> in plain words before it shows a number.
+    Ten draw the air; ten photograph it. Every thumbnail below is the real page running
+    &mdash; not a screenshot: live against the lab broker, or, when the bench below is
+    switched on, every one of them simulating the same reading. Click one to open it
+    full size.</p>
+
+  <dl class="facts">
+    <div><dt>Boards</dt><dd><b>DBK-001</b>, <b>DBK-002</b>, <b>DBK-010</b> &mdash; normally one live
+      and two dark. Every version draws that mixed state on purpose; none of them lets a zero
+      stand in for a sensor that has stopped speaking.</dd></div>
+    <div><dt>Source</dt><dd>Home Assistant MQTT discovery over WebSocket, port <b>1884</b>.
+      Board identity is parsed out of <span class="mono">state_topic</span>, never from the
+      discovery name &mdash; that name is <span class="mono">&quot;PM2.5&quot;</span> on all three.</dd></div>
+    <div><dt>Previews</dt><dd>All twenty are <b>live</b>, not screenshots. Each iframe is
+      <span class="mono">loading=&quot;lazy&quot;</span>, so a wall opens its own broker connection
+      only when its thumbnail scrolls into view &mdash; twenty MQTT connections never open at
+      once, and reaching the bottom of this page is what brings the last of them up. In demo
+      mode not one of them opens a connection at all.</dd></div>
+    <div><dt>Settings</dt><dd>None here for the walls, and none on the walls at startup. Each wall
+      connects by itself and hides its settings behind pressing <b>s</b>. If the broker wants a
+      login, open this sheet once with <span class="mono">?u=&amp;p=</span> and every preview
+      inherits it &mdash; the hint is then wiped from the address bar.</dd></div>
+  </dl>
+
+  <p class="scale"><b>US EPA PM2.5 breakpoints</b>, &micro;g/m&sup3; &mdash; the standard every
+    version bands against:
+    0&ndash;12.0 Good<span class="sep">&middot;</span>12.1&ndash;35.4 Moderate<span class="sep">&middot;</span>35.5&ndash;55.4
+    Unhealthy for Sensitive Groups<span class="sep">&middot;</span>55.5&ndash;150.4 Unhealthy<span class="sep">&middot;</span>150.5&ndash;250.4
+    Very Unhealthy<span class="sep">&middot;</span>250.5 and above Hazardous.</p>
+</header>
+
+<!-- Preview sign-in. The walls each accept ?u=&p= so a tablet can be pointed once; the
+     contact sheet reuses that to bring the previews up against a broker that wants a login.
+     Credentials are held in this browser only (localStorage) and are never written into the
+     file — this page is committed. -->
+<div class="signin">
+  <strong>Preview sign-in</strong>
+  <input id="pv-u" placeholder="username" autocomplete="off">
+  <input id="pv-p" type="password" placeholder="password" autocomplete="off">
+  <button id="pv-go">Load previews</button>
+  <span class="note">stays in this browser &middot; the walls also read <code>?u=&amp;p=</code> directly</span>
+</div>
+<script>
+(function () {
+  'use strict';
+  var U = 'wall.preview.u', P = 'wall.preview.p';
+  function ls(k, v) { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v) } catch (e) { return null } }
+  var u = document.getElementById('pv-u'), p = document.getElementById('pv-p');
+  u.value = ls(U) || ''; p.value = ls(P) || '';
+  function apply() {
+    var qs = u.value ? '?u=' + encodeURIComponent(u.value) + '&p=' + encodeURIComponent(p.value) : '';
+    [].forEach.call(document.querySelectorAll('iframe[data-wall]'), function (f) {
+      // Re-point, but stay lazy. Twenty eager iframes would open twenty broker
+      // connections in one breath, which is exactly what loading="lazy" is here
+      // to prevent; a frame already on screen reloads immediately anyway.
+      f.src = f.getAttribute('data-wall') + qs;
+    });
+  }
+  document.getElementById('pv-go').addEventListener('click', function () {
+    ls(U, u.value); ls(P, p.value); apply();
+  });
+  if (u.value) apply();   // remembered from last time: bring them straight up
+}());
+</script>
+
+<main>
+
+<!-- ===================================================================== 11–20 -->
+<section class="group">
+  <div class="grouphead">
+    <p class="range">11 &ndash; 20</p>
+    <h2>The designer set</h2>
+    <p>Ten walls whose ground is <b>drawn, printed or woven</b> &mdash; poster paint, woodblock,
+      Swiss grid, loom, letterpress. There is not one raster image among them; every shape is
+      CSS and SVG geometry, so each file is its own picture as well as its own display.</p>
+    <p>Each names a lineage. Seven name it in a comment at the top of the file; three
+      <span class="dagger">&dagger;</span> describe a method rather than a person, and the
+      attribution below is this sheet&rsquo;s reading of that method.</p>
+  </div>
+
+  <div class="sheet">
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v11-playground.html" src="v11-playground.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 11, Playground"></iframe>
+      <a class="hit" data-wall="v11-playground.html" href="v11-playground.html"
+         aria-label="Open version 11, Playground"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">11</span>
+        <span class="nm"><a data-wall="v11-playground.html" href="v11-playground.html">Playground</a></span></p>
+      <p class="by">after Bruno Munari</p>
+      <p class="brief">Each board is a drawn creature in poster paint and ink; the reading is
+        its caption, and a sleeping creature is unmistakably not a clean one.</p>
+      <p class="file"><a data-wall="v11-playground.html" href="v11-playground.html">v11-playground.html</a> &middot; 67 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v12-shout.html" src="v12-shout.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 12, Shout"></iframe>
+      <a class="hit" data-wall="v12-shout.html" href="v12-shout.html"
+         aria-label="Open version 12, Shout"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">12</span>
+        <span class="nm"><a data-wall="v12-shout.html" href="v12-shout.html">Shout</a></span></p>
+      <p class="by">type as architecture, after Paula Scher <span class="dagger">&dagger;</span></p>
+      <p class="brief">The worst live reading cropped to fill the room, with the whole wall
+        flooded in the colour of its band &mdash; readable across a hall before a digit is.</p>
+      <p class="file"><a data-wall="v12-shout.html" href="v12-shout.html">v12-shout.html</a> &middot; 58 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v13-one-mark.html" src="v13-one-mark.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 13, One Mark"></iframe>
+      <a class="hit" data-wall="v13-one-mark.html" href="v13-one-mark.html"
+         aria-label="Open version 13, One Mark"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">13</span>
+        <span class="nm"><a data-wall="v13-one-mark.html" href="v13-one-mark.html">One Mark</a></span></p>
+      <p class="by">after Saul Bass</p>
+      <p class="brief">One ground, one accent, one circle. No table, no card, no third hue &mdash;
+        and the poster inverts itself for exactly one state, Hazardous.</p>
+      <p class="file"><a data-wall="v13-one-mark.html" href="v13-one-mark.html">v13-one-mark.html</a> &middot; 66 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v14-haze.html" src="v14-haze.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 14, Haze"></iframe>
+      <a class="hit" data-wall="v14-haze.html" href="v14-haze.html"
+         aria-label="Open version 14, Haze"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">14</span>
+        <span class="nm"><a data-wall="v14-haze.html" href="v14-haze.html">Haze</a></span></p>
+      <p class="by">after Hokusai, Thirty-six Views</p>
+      <p class="brief">A four-block woodcut of the air on cream paper. Every other colour is an
+        overprint computed from those blocks; the number is a seal in the corner.</p>
+      <p class="file"><a data-wall="v14-haze.html" href="v14-haze.html">v14-haze.html</a> &middot; 77 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v15-ambient.html" src="v15-ambient.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 15, Ambient"></iframe>
+      <a class="hit" data-wall="v15-ambient.html" href="v15-ambient.html"
+         aria-label="Open version 15, Ambient"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">15</span>
+        <span class="nm"><a data-wall="v15-ambient.html" href="v15-ambient.html">Ambient</a></span></p>
+      <p class="by">after Naoto Fukasawa</p>
+      <p class="brief">No numerals at rest: colour is the air, and only clean air breathes. A dark
+        board is a motionless void, so an offline fleet can never read as clean.</p>
+      <p class="file"><a data-wall="v15-ambient.html" href="v15-ambient.html">v15-ambient.html</a> &middot; 66 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v16-module.html" src="v16-module.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 16, Module"></iframe>
+      <a class="hit" data-wall="v16-module.html" href="v16-module.html"
+         aria-label="Open version 16, Module"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">16</span>
+        <span class="nm"><a data-wall="v16-module.html" href="v16-module.html">Module</a></span></p>
+      <p class="by">Swiss grid, after Josef M&uuml;ller-Brockmann <span class="dagger">&dagger;</span></p>
+      <p class="brief">A twelve-column measurement sheet on one baseline, black on paper. The single
+        red ink appears only from &ldquo;Unhealthy for Sensitive Groups&rdquo; upward.</p>
+      <p class="file"><a data-wall="v16-module.html" href="v16-module.html">v16-module.html</a> &middot; 77 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v17-workbench.html" src="v17-workbench.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 17, Workbench"></iframe>
+      <a class="hit" data-wall="v17-workbench.html" href="v17-workbench.html"
+         aria-label="Open version 17, Workbench"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">17</span>
+        <span class="nm"><a data-wall="v17-workbench.html" href="v17-workbench.html">Workbench</a></span></p>
+      <p class="by">after Charles &amp; Ray Eames</p>
+      <p class="brief">Every value the boards publish, each with its MQTT topic printed underneath,
+        because a joint should be visible. Warmth from rigour, not decoration.</p>
+      <p class="file"><a data-wall="v17-workbench.html" href="v17-workbench.html">v17-workbench.html</a> &middot; 90 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v18-subtract.html" src="v18-subtract.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 18, Subtract"></iframe>
+      <a class="hit" data-wall="v18-subtract.html" href="v18-subtract.html"
+         aria-label="Open version 18, Subtract"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">18</span>
+        <span class="nm"><a data-wall="v18-subtract.html" href="v18-subtract.html">Subtract</a></span></p>
+      <p class="by">after John Maeda, Laws of Simplicity</p>
+      <p class="brief">One sentence, one number, one screen. What was removed is listed in the
+        footer, so a subtraction can never be mistaken for an omission.</p>
+      <p class="file"><a data-wall="v18-subtract.html" href="v18-subtract.html">v18-subtract.html</a> &middot; 56 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v19-weave.html" src="v19-weave.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 19, Weave"></iframe>
+      <a class="hit" data-wall="v19-weave.html" href="v19-weave.html"
+         aria-label="Open version 19, Weave"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">19</span>
+        <span class="nm"><a data-wall="v19-weave.html" href="v19-weave.html">Weave</a></span></p>
+      <p class="by">after Anni Albers</p>
+      <p class="brief">The reading sets the sett of the cloth: clean air is an open plain weave,
+        dirty air packs the threads shut, and an offline board is bare warp on the loom.</p>
+      <p class="file"><a data-wall="v19-weave.html" href="v19-weave.html">v19-weave.html</a> &middot; 71 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v20-journal.html" src="v20-journal.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 20, Journal"></iframe>
+      <a class="hit" data-wall="v20-journal.html" href="v20-journal.html"
+         aria-label="Open version 20, Journal"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">20</span>
+        <span class="nm"><a data-wall="v20-journal.html" href="v20-journal.html">Journal</a></span></p>
+      <p class="by">after Edward Tufte <span class="dagger">&dagger;</span></p>
+      <p class="brief">A published record rather than a dashboard &mdash; numbered figures, real
+        captions, footnotes, a reference line. Nothing averaged, smoothed or filled in.</p>
+      <p class="file"><a data-wall="v20-journal.html" href="v20-journal.html">v20-journal.html</a> &middot; 89 KB</p>
+    </figcaption>
+  </figure>
+
+  </div>
+</section>
+
+<!-- ===================================================================== 21–30 -->
+<section class="group">
+  <div class="grouphead">
+    <p class="range">21 &ndash; 30</p>
+    <h2>The glass set</h2>
+    <p>Ten walls where <b>the photograph is the reading</b>. The whole screen is a picture of what
+      the air outside looks like at the live worst band, cross-faded when a board crosses an EPA
+      breakpoint, with translucent iOS-style panels floating over it. When no board is live, none
+      of them shows the clear dawn &mdash; an unknown sky must never read as good air.</p>
+    <p>Each names an <span class="dagger">&Dagger;</span> interface grammar rather than a person:
+      these are studies in a shared visual language, not homages to a designer. Legibility is the
+      hard requirement here, and every file opens with its own measured contrast argument &mdash;
+      the arithmetic is in the comment at the top of each one.</p>
+    <div class="key">
+      <span><code>img/good.jpg</code> &mdash; clear layered dawn, ridges to the far horizon</span>
+      <span><code>img/moderate.jpg</code> &mdash; a thin veil softening the far layers</span>
+      <span><code>img/sensitive.jpg</code> &mdash; far ridges nearly gone, flat amber light</span>
+      <span><code>img/unhealthy.jpg</code> &mdash; only the nearest ridge, dense ochre-grey air</span>
+      <span><code>img/verybad.jpg</code> &mdash; near whiteout, one faint tree line</span>
+      <span><code>img/hazardous.jpg</code> &mdash; near-total opacity, a small red disc sun</span>
+    </div>
+  </div>
+
+  <div class="sheet">
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v21-frosted.html" src="v21-frosted.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 21, Frosted"></iframe>
+      <a class="hit" data-wall="v21-frosted.html" href="v21-frosted.html"
+         aria-label="Open version 21, Frosted"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">21</span>
+        <span class="nm"><a data-wall="v21-frosted.html" href="v21-frosted.html">Frosted</a></span></p>
+      <p class="by">iOS Control Center <span class="dagger">&Dagger;</span></p>
+      <p class="brief">Modules of dark frosted glass over the sky, each ground&rsquo;s tint alpha
+        measured from the JPEG itself so white type clears 7:1 wherever a tile lands.</p>
+      <p class="file"><a data-wall="v21-frosted.html" href="v21-frosted.html">v21-frosted.html</a> &middot; 66 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v22-spatial.html" src="v22-spatial.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 22, Spatial"></iframe>
+      <a class="hit" data-wall="v22-spatial.html" href="v22-spatial.html"
+         aria-label="Open version 22, Spatial"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">22</span>
+        <span class="nm"><a data-wall="v22-spatial.html" href="v22-spatial.html">Spatial</a></span></p>
+      <p class="by">visionOS depth <span class="dagger">&Dagger;</span></p>
+      <p class="brief">Panels at three depths with parallax over the sky. All type is luminous on a
+        guaranteed dark field, and an unknown fleet gets a void where the photograph would be.</p>
+      <p class="file"><a data-wall="v22-spatial.html" href="v22-spatial.html">v22-spatial.html</a> &middot; 62 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v23-liquid.html" src="v23-liquid.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 23, Liquid"></iframe>
+      <a class="hit" data-wall="v23-liquid.html" href="v23-liquid.html"
+         aria-label="Open version 23, Liquid"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">23</span>
+        <span class="nm"><a data-wall="v23-liquid.html" href="v23-liquid.html">Liquid</a></span></p>
+      <p class="by">liquid glass, fluid morphology <span class="dagger">&Dagger;</span></p>
+      <p class="brief">A slowly morphing blob of fluid glass. One ink polarity only, with a scrim
+        and a veil that grow heavier exactly where the photograph grows brighter.</p>
+      <p class="file"><a data-wall="v23-liquid.html" href="v23-liquid.html">v23-liquid.html</a> &middot; 64 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v24-widgets.html" src="v24-widgets.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 24, Widgets"></iframe>
+      <a class="hit" data-wall="v24-widgets.html" href="v24-widgets.html"
+         aria-label="Open version 24, Widgets"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">24</span>
+        <span class="nm"><a data-wall="v24-widgets.html" href="v24-widgets.html">Widgets</a></span></p>
+      <p class="by">the iOS home screen <span class="dagger">&Dagger;</span></p>
+      <p class="brief">A home screen, not a dashboard: 4&times;4, 2&times;2 and 4&times;2 glass tiles
+        that darken only the pixels behind them, so the exposed wallpaper stays a photograph.</p>
+      <p class="file"><a data-wall="v24-widgets.html" href="v24-widgets.html">v24-widgets.html</a> &middot; 64 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v25-island.html" src="v25-island.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 25, Island"></iframe>
+      <a class="hit" data-wall="v25-island.html" href="v25-island.html"
+         aria-label="Open version 25, Island"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">25</span>
+        <span class="nm"><a data-wall="v25-island.html" href="v25-island.html">Island</a></span></p>
+      <p class="by">the Dynamic Island <span class="dagger">&Dagger;</span></p>
+      <p class="brief">One black pill at the top carries the entire state and swells when the band
+        changes, then contracts. Nothing else on the screen is UI &mdash; the rest is the sky.</p>
+      <p class="file"><a data-wall="v25-island.html" href="v25-island.html">v25-island.html</a> &middot; 57 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v26-lockscreen.html" src="v26-lockscreen.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 26, Lockscreen"></iframe>
+      <a class="hit" data-wall="v26-lockscreen.html" href="v26-lockscreen.html"
+         aria-label="Open version 26, Lockscreen"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">26</span>
+        <span class="nm"><a data-wall="v26-lockscreen.html" href="v26-lockscreen.html">Lockscreen</a></span></p>
+      <p class="by">the iOS Lock Screen <span class="dagger">&Dagger;</span></p>
+      <p class="brief">Wallpaper, a large light clock, one air widget and small complications for
+        the rest of the fleet, held legible by four independent scrim layers.</p>
+      <p class="file"><a data-wall="v26-lockscreen.html" href="v26-lockscreen.html">v26-lockscreen.html</a> &middot; 50 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v27-weather.html" src="v27-weather.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 27, Weather"></iframe>
+      <a class="hit" data-wall="v27-weather.html" href="v27-weather.html"
+         aria-label="Open version 27, Weather"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">27</span>
+        <span class="nm"><a data-wall="v27-weather.html" href="v27-weather.html">Weather</a></span></p>
+      <p class="by">the Apple Weather grammar <span class="dagger">&Dagger;</span></p>
+      <p class="brief">One sky, one number, one sentence; beneath it a strip of the other monitors
+        and a single glass card of detail. Scrim and glass fill both retune per band.</p>
+      <p class="file"><a data-wall="v27-weather.html" href="v27-weather.html">v27-weather.html</a> &middot; 68 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v28-tiles.html" src="v28-tiles.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 28, Tiles"></iframe>
+      <a class="hit" data-wall="v28-tiles.html" href="v28-tiles.html"
+         aria-label="Open version 28, Tiles"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">28</span>
+        <span class="nm"><a data-wall="v28-tiles.html" href="v28-tiles.html">Tiles</a></span></p>
+      <p class="by">a Control Center deck <span class="dagger">&Dagger;</span></p>
+      <p class="brief">A deck of small glass modules over a fixed veil that never thins below .68,
+        so the photograph&rsquo;s colour still reads but its brightness cannot reach the type.</p>
+      <p class="file"><a data-wall="v28-tiles.html" href="v28-tiles.html">v28-tiles.html</a> &middot; 60 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v29-nowplaying.html" src="v29-nowplaying.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 29, Now Playing"></iframe>
+      <a class="hit" data-wall="v29-nowplaying.html" href="v29-nowplaying.html"
+         aria-label="Open version 29, Now Playing"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">29</span>
+        <span class="nm"><a data-wall="v29-nowplaying.html" href="v29-nowplaying.html">Now Playing</a></span></p>
+      <p class="by">the iOS music player <span class="dagger">&Dagger;</span></p>
+      <p class="brief">The band photograph is the album art, and the same frame blurred huge is the
+        room colour behind it. When the air changes band, the record changes.</p>
+      <p class="file"><a data-wall="v29-nowplaying.html" href="v29-nowplaying.html">v29-nowplaying.html</a> &middot; 62 KB</p>
+    </figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="shotwrap">
+      <iframe data-wall="v30-focus.html" src="v30-focus.html" loading="lazy"
+              scrolling="no" tabindex="-1" aria-hidden="true"
+              title="Live preview of version 30, Focus"></iframe>
+      <a class="hit" data-wall="v30-focus.html" href="v30-focus.html"
+         aria-label="Open version 30, Focus"></a>
+    </div>
+    <figcaption>
+      <p class="line"><span class="no">30</span>
+        <span class="nm"><a data-wall="v30-focus.html" href="v30-focus.html">Focus</a></span></p>
+      <p class="by">one pane of glass <span class="dagger">&Dagger;</span></p>
+      <p class="brief">Every character on the wall lives inside a single dark pane, so contrast is
+        solved once, structurally, instead of being re-argued element by element.</p>
+      <p class="file"><a data-wall="v30-focus.html" href="v30-focus.html">v30-focus.html</a> &middot; 48 KB</p>
+    </figcaption>
+  </figure>
+
+  </div>
+</section>
+
+</main>
+
+<section class="colophon">
+  <h2>About this sheet</h2>
+  <p>Twenty presentations, one engine. Each version reuses the MQTT layer, discovery parsing,
+    availability and expiry handling and EPA banding from
+    <code>tools/mqtt-dashboard.html</code>, and replaces only what you see. All twenty are
+    single self-contained files whose one external dependency is
+    <code>unpkg.com/mqtt@5.15.2</code>. The glass set adds six local JPEGs in
+    <code>img/</code> &mdash; the only local assets in the folder.</p>
+  <p><b>The previews load lazily, on purpose.</b> Twenty walls opening twenty MQTT connections
+    the moment this page loads would be twenty sessions on the lab broker for a page nobody has
+    scrolled yet. Every iframe carries <span class="mono">loading=&quot;lazy&quot;</span>, so a
+    wall connects only when its thumbnail comes into view. Scroll to the bottom and all twenty
+    exist; open the page and walk away and only the first row does.</p>
+  <p><span class="dagger">&dagger;</span> Seven of versions 11&ndash;20 name their lineage in the
+    file itself. Three &mdash; <b>Shout</b>, <b>Module</b> and <b>Journal</b> &mdash; describe a
+    method rather than a person; the attribution here is this sheet&rsquo;s reading of that
+    method, not a claim the files make.</p>
+  <p><span class="dagger">&Dagger;</span> Versions 21&ndash;30 name an interface grammar, not a
+    designer: Control Center, the Lock Screen, the Dynamic Island, visionOS depth. They are
+    studies in a shared visual language rather than homages to an individual, and none of them
+    claims any affiliation.</p>
+  <p><b>The six photographs are generated images</b>, not photographs of a specific real place
+    or moment. They illustrate what each EPA band looks like from a valley rim; they are not
+    evidence, and nothing on any wall presents them as a record of a particular day.</p>
+  <p>Four bugs shipped once in the original wall and are designed out of every version here:
+    CSS uppercasing turning &micro;g/m&sup3; into mg/m&sup3;, a reading sized in viewport units
+    splitting <span class="mono">163.3</span> across two lines, all three boards sharing the
+    discovery name <span class="mono">&quot;PM2.5&quot;</span>, and wildcard subscriptions.
+    <code>README.md</code> beside this file has the full account.</p>
+  <p>A thumbnail is never blank when something is wrong. A wall that cannot reach the broker,
+    or that the broker turns away, replaces its whole screen with one calm sentence saying what
+    to do &mdash; so twenty identical sentences on this sheet means the broker wants a login, not
+    that the sheet is broken. Reopen it with <span class="mono">?u=&amp;p=</span>, use the
+    sign-in above, or open one wall and press <b>s</b>.</p>
+</section>
+
+<script>
+(function () {
+  'use strict';
+  // There is no configuration UI for the walls on this page, and none on the twenty walls
+  // at startup. All this does is carry connection hints the sheet was opened with through
+  // to the previews and the links, so opening the contact sheet against a different broker
+  // opens all twenty against it too. Nothing is read from or written to storage here, and
+  // no credential is ever written into this file.
+  var KEYS = ['h', 'port', 'u', 'p', 'tls', 'f'];
+  var q, carry, i;
+
+  try { q = new URLSearchParams(location.search); }
+  catch (e) { return; }                      // ancient browser: markup already works
+
+  carry = new URLSearchParams();
+  for (i = 0; i < KEYS.length; i++) {
+    if (q.has(KEYS[i])) carry.set(KEYS[i], q.get(KEYS[i]));
+  }
+  var qs = carry.toString();
+  if (!qs) return;                           // the common case: nothing to do
+
+  var nodes = document.querySelectorAll('a[data-wall], iframe[data-wall]');
+  for (i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    var file = n.getAttribute('data-wall');
+    if (!file) continue;
+    // Re-pointing a lazy iframe simply re-arms it; it still waits to be scrolled to.
+    if (n.tagName === 'IFRAME') { n.src = file + '?' + qs; }
+    else { n.setAttribute('href', file + '?' + qs); }
+  }
+
+  // Do not leave a passphrase sitting in the address bar of a wall-mounted screen.
+  try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+}());
+</script>
+
+</body>
+</html>

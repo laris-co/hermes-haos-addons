@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SHOUT — worst live PM2.5</title>
+<style>
+/* ============================================================================
+   SHOUT — type as architecture.
+   One number, cropped tight, filling the room. Everything else is a footnote
+   pinned to a margin. The whole screen takes the colour of the EPA band, so the
+   answer is readable before a single digit is.
+
+   TYPOGRAPHIC LAW OF THIS FILE
+   1. The reading is NEVER sized in viewport units. Its size comes from the
+      container it lives in — cqi/cqh before script runs, then an exact px fit
+      measured off .stage. Sizing off the viewport while the box comes from
+      somewhere else is what once split "163.3" into "163." + "3", failing
+      precisely in the hazardous range.
+   2. white-space:nowrap on the reading. Digits do not break. Ever.
+   3. There is no text-transform in this stylesheet. CSS uppercasing maps "µ"
+      to "M", turning µg/m³ into mg/m³ — a 1000x error caused by a style rule.
+      Every capital you see below was typed as a capital, and nothing that came
+      off the wire is ever re-cased.
+   ========================================================================== */
+:root{
+  --face:"Helvetica Neue",Helvetica,Arial,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  /* dead ground: no live reading anywhere */
+  --ground:#101317; --ink:#EDF1F6; --dim:#8C9CAD; --rule:rgba(255,255,255,.22);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;height:100%;max-width:100%}
+body{
+  background:var(--ground);color:var(--ink);
+  font-family:var(--face);-webkit-font-smoothing:antialiased;
+}
+
+/* ---------------------------------------------------------------- screen */
+.screen{
+  height:100vh;height:100dvh;width:100%;
+  display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;
+  background:var(--ground);color:var(--ink);
+  overflow:hidden;                     /* cropped tight — never a scrollbar */
+  container-type:size;container-name:screen;
+  transition:background-color .45s linear,color .45s linear;
+}
+/* Flat, saturated grounds. The band is the wall, not a swatch. */
+.screen[data-band="good"]{--ground:#00CE69;--ink:#04170C;--dim:#0A431F;--rule:rgba(0,0,0,.32)}
+.screen[data-band="mod"] {--ground:#FFD200;--ink:#1A1300;--dim:#4E3B00;--rule:rgba(0,0,0,.30)}
+.screen[data-band="usg"] {--ground:#FF7A1A;--ink:#200A00;--dim:#5E2500;--rule:rgba(0,0,0,.30)}
+.screen[data-band="unh"] {--ground:#F4123A;--ink:#FFF0F2;--dim:#FFC9D1;--rule:rgba(255,255,255,.34)}
+.screen[data-band="vun"] {--ground:#7B2BF5;--ink:#F4ECFF;--dim:#D8C6FF;--rule:rgba(255,255,255,.34)}
+.screen[data-band="haz"] {--ground:#6E0018;--ink:#FFE4E9;--dim:#FFA3B3;--rule:rgba(255,255,255,.32)}
+
+/* ---------------------------------------------------------------- rails */
+.rail{
+  display:flex;align-items:center;flex-wrap:wrap;min-width:0;
+  gap:clamp(.4rem,1.4cqi,1.3rem);
+  padding:clamp(.4rem,1cqi,.95rem) clamp(.55rem,1.5cqi,1.5rem);
+}
+.rail-top{border-bottom:2px solid var(--rule)}
+.mark{font-weight:900;letter-spacing:.07em;font-size:clamp(.6rem,1.1cqi,.98rem);line-height:1.25}
+.mark .lit{letter-spacing:0;font-family:var(--mono);font-weight:700;color:var(--dim)}
+.mark .who{letter-spacing:0;font-family:var(--mono);font-weight:700}
+
+.boards{display:flex;gap:clamp(.3rem,.8cqi,.7rem);flex-wrap:wrap;margin-left:auto;min-width:0}
+.bd{
+  display:flex;flex-direction:column;gap:.05rem;min-width:0;border-radius:3px;
+  border:2px solid var(--rule);padding:.24rem .5rem;
+}
+.bd b{font-weight:900;font-size:clamp(.66rem,1.2cqi,1.02rem);letter-spacing:-.01em;white-space:nowrap}
+.bd span{font-weight:700;font-size:clamp(.56rem,.95cqi,.8rem);color:var(--dim);white-space:nowrap}
+/* The one board that is actually reporting is knocked out solid — you can find
+   it from the back of the room without reading a word. */
+.bd[data-st="live"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.bd[data-st="live"] span{color:var(--ground);opacity:.72}
+/* Offline is the COMMON state on this wall (two of three boards, most days), so
+   it must not be the least legible thing on it. Dashed border carries the
+   difference; the word itself stays at full ink. */
+.bd[data-st="offline"]{border-style:dashed}
+.bd[data-st="offline"] span{color:var(--ink)}
+.bd[data-st="unannounced"]{border-style:dotted}
+
+.link{display:flex;align-items:center;gap:.4rem;font-weight:800;white-space:nowrap;
+  font-size:clamp(.56rem,.95cqi,.8rem);color:var(--dim)}
+.link i{width:.55rem;height:.55rem;border-radius:50%;background:currentColor;flex:none}
+.link[data-s="connected"]{color:var(--ink)}
+
+/* ---------------------------------------------------------------- the shout */
+.stage{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  min-height:0;overflow:hidden;
+  padding:0 clamp(.2rem,.8cqi,.9rem);
+  container-type:size;container-name:stage;   /* the reading sizes off THIS */
+}
+.digits{
+  /* The box must hug the glyphs, or the script measures the CONTAINER and computes a fit
+     from its own box — the circular measurement that produces a number either far too small
+     or one that overflows. flex:none + width:max-content pins the box to the text at any
+     font size, above or below the container's width, so the measurement is always the text. */
+  display:inline-block;flex:none;width:max-content;
+  white-space:nowrap;                  /* a reading NEVER breaks mid-number */
+  font-weight:900;font-stretch:condensed;
+  line-height:.82;letter-spacing:-.045em;
+  font-variant-numeric:tabular-nums;   /* the fit stays put as digits change */
+  /* Pre-script fallback, still container-relative — never a viewport unit. The
+     script replaces this with an exact px fit measured against .stage. */
+  font-size:min(31cqi,86cqh);
+}
+.digits[data-kind="word"]{letter-spacing:-.02em;font-variant-numeric:normal}
+
+/* ---------------------------------------------------------------- verdict */
+.verdict{
+  display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;
+  gap:clamp(.4rem,1.8cqi,1.8rem);border-top:2px solid var(--rule);
+  padding:clamp(.45rem,1.1cqi,1.05rem) clamp(.55rem,1.5cqi,1.5rem);
+}
+.v-left{min-width:0}
+.v-head{font-weight:900;font-size:clamp(1.05rem,4cqi,3.4rem);line-height:.95;letter-spacing:-.025em}
+.v-say{font-weight:600;font-size:clamp(.72rem,1.45cqi,1.2rem);color:var(--dim);
+  margin-top:.22rem;max-width:56ch;line-height:1.3}
+.v-right{margin-left:auto;text-align:right;min-width:0}
+.v-band{font-weight:900;font-size:clamp(.8rem,1.9cqi,1.6rem);line-height:1.1;letter-spacing:-.01em}
+.v-src{font-family:var(--mono);font-weight:700;font-size:clamp(.58rem,1cqi,.82rem);color:var(--dim)}
+
+/* ---------------------------------------------------------------- footnotes */
+.rail-bot{
+  border-top:2px solid var(--rule);align-items:baseline;
+  font-size:clamp(.56rem,.98cqi,.82rem);font-weight:600;color:var(--dim);line-height:1.4;
+}
+.rail-bot b{color:var(--ink);font-weight:900}
+#extras{display:flex;gap:.2rem .85rem;flex-wrap:wrap;min-width:0;font-family:var(--mono);font-weight:600}
+#extras i{font-style:normal;color:var(--ink);font-weight:800}
+.f-right{margin-left:auto;text-align:right;font-family:var(--mono);font-weight:600}
+.f-note{color:var(--ink);font-weight:800}
+
+/* ---------------------------------------------------------------- overlays */
+.sheet{
+  position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+  background:#0B0E12;color:#EDF1F6;padding:clamp(1rem,5cqi,4rem);
+  container-type:inline-size;font-family:var(--face);
+}
+.down{flex-direction:column;gap:1.4rem;text-align:center}
+.down p{
+  margin:0;max-width:24ch;font-weight:900;letter-spacing:-.025em;line-height:1.08;
+  font-size:clamp(1.25rem,5cqi,3.4rem);
+}
+.down small{color:#8C9CAD;font-weight:700;font-size:clamp(.7rem,1.4cqi,1rem)}
+
+.panel{
+  background:#12161C;border:2px solid #2A333F;border-radius:10px;
+  padding:clamp(.9rem,2.2cqi,1.6rem);width:min(46rem,100%);
+}
+.panel h2{margin:0 0 .2rem;font-size:1.05rem;font-weight:900;letter-spacing:-.01em}
+.panel .sub{margin:0 0 .9rem;color:#8C9CAD;font-size:.82rem;font-weight:600;line-height:1.45}
+.form{display:grid;gap:.65rem .8rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr));align-items:end}
+.f{display:flex;flex-direction:column;gap:.28rem;min-width:0}
+.f label{font-size:.68rem;letter-spacing:.08em;color:#8C9CAD;font-weight:800}
+.f input{background:#080B10;color:#EDF1F6;border:1px solid #2A333F;border-radius:7px;
+  padding:.5rem .6rem;font:inherit;font-size:.9rem;width:100%;min-width:0}
+.f input:focus{outline:2px solid #3E86C4;outline-offset:1px}
+.f-check{flex-direction:row;align-items:center;gap:.45rem}
+.f-check label{letter-spacing:0;font-size:.82rem;color:#C3CFDB;font-weight:600}
+.f-check input{width:auto}
+.acts{display:flex;gap:.5rem;flex-wrap:wrap}
+button{font:inherit;font-weight:800;cursor:pointer;border-radius:7px;padding:.52rem 1rem;
+  background:#1C5F8F;color:#fff;border:1px solid #2B7CB8}
+button.ghost{background:transparent;color:#A9B8C6;border-color:#2A333F}
+.hint{color:#8C9CAD;font-size:.75rem;font-weight:600;margin:.75rem 0 0;line-height:1.5}
+
+/* ---------------------------------------------------------------- DEMO marker
+   This is a HEALTH display. Simulated air must be impossible to mistake for a
+   reading: fake "Good" can send a child out into smoke, fake "Hazardous" empties
+   a playground for nothing. So the marker is not a toast and not a corner label —
+   it is two hazard bars that become GRID ROWS of the screen for as long as demo
+   mode is on. They cannot be scrolled past (this screen never scrolls anyway),
+   they never fade, they sit above every overlay, and they photograph as hazard
+   tape from the back of the room.
+   No text-transform here either: every capital below was typed as a capital, and
+   the unit string is built in script as µ, never re-cased into "M". */
+.screen[data-demo="on"]{grid-template-rows:auto auto minmax(0,1fr) auto auto auto}
+.demo-bar{
+  position:relative;z-index:40;          /* above .sheet, which is z-index 30 */
+  display:flex;align-items:center;justify-content:center;flex-wrap:wrap;
+  min-width:0;text-align:center;
+  padding:clamp(.22rem,.6cqi,.55rem) clamp(.4rem,1.2cqi,1.2rem);
+  background:#FFD400;
+  background-image:repeating-linear-gradient(135deg,#111 0 12px,#FFD400 12px 24px);
+  border-top:3px solid #111;border-bottom:3px solid #111;
+}
+.demo-txt{
+  display:inline-block;max-width:100%;min-width:0;
+  background:#FFD400;color:#111;
+  padding:.18rem .6rem;border-radius:2px;
+  font-weight:900;letter-spacing:.01em;line-height:1.3;
+  font-size:clamp(.64rem,1.28cqi,1.08rem);
+}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="screen" id="screen" data-band="dead">
+
+  <!-- Demo marker, top half. Always in the DOM, revealed only when ?demo= put this page
+       into demo mode. Never shown on a live wall. -->
+  <div class="demo-bar" id="demo-top" hidden><span class="demo-txt" id="demo-top-txt"></span></div>
+
+  <header class="rail rail-top">
+    <div class="mark">
+      <span id="mark-line">KIT4KIDS AIR &middot; WORST LIVE PM2.5 RIGHT NOW</span><br>
+      <span class="who" id="hero-who">—</span>
+      <span class="lit" id="hero-unit">&micro;g/m&sup3;</span>
+    </div>
+    <div class="boards" id="boards"></div>
+    <div class="link" id="link" data-s="idle"><i></i><span id="link-text">starting</span></div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="digits" id="digits" data-kind="word">&mdash;</div>
+  </main>
+
+  <section class="verdict">
+    <div class="v-left">
+      <div class="v-head" id="v-head">WAITING FOR THE SENSORS.</div>
+      <div class="v-say" id="v-say">This screen is opening its connection to the boards.</div>
+    </div>
+    <div class="v-right">
+      <div class="v-band" id="v-band">&mdash;</div>
+      <div class="v-src" id="v-src">no reading yet</div>
+    </div>
+  </section>
+
+  <footer class="rail rail-bot">
+    <div id="tally">no boards have announced themselves yet</div>
+    <div id="extras"></div>
+    <div class="f-right">
+      US EPA PM2.5 breakpoints &middot; &micro;g/m&sup3; &middot; <span id="hint-s">press <b>s</b> for settings</span>
+      <div id="notes" class="f-note"></div>
+    </div>
+  </footer>
+
+  <!-- Demo marker, bottom half. The screen is framed top and bottom, so any photograph
+       that catches an edge of the wall carries the word DEMO with it. -->
+  <div class="demo-bar" id="demo-bot" hidden><span class="demo-txt" id="demo-bot-txt"></span></div>
+
+</div>
+
+<!-- Failure is one calm sentence, not a stack of red boxes. -->
+<div class="sheet down" id="down" hidden>
+  <p id="down-msg"></p>
+  <small>Press <b>s</b> to open the connection settings.</small>
+</div>
+
+<div class="sheet" id="settings" hidden>
+  <div class="panel">
+    <h2>Broker connection</h2>
+    <p class="sub">This screen normally needs none of this — it connects on its own. Change
+      something here only if the wall has moved to a different broker.</p>
+    <form class="form" id="form" autocomplete="off">
+      <div class="f"><label for="f-host">HOST</label><input id="f-host" spellcheck="false" required></div>
+      <div class="f"><label for="f-port">WEBSOCKET PORT</label><input id="f-port" inputmode="numeric" required></div>
+      <div class="f"><label for="f-user">USERNAME</label><input id="f-user" spellcheck="false"></div>
+      <div class="f"><label for="f-pass">PASSPHRASE</label><input id="f-pass" type="password" autocomplete="off"></div>
+      <div class="f"><label for="f-filter">SENSOR TOPIC STARTS WITH</label><input id="f-filter" spellcheck="false"></div>
+      <div class="f f-check"><input id="f-tls" type="checkbox"><label for="f-tls">TLS (wss)</label></div>
+      <div class="f f-check"><input id="f-remember" type="checkbox"><label for="f-remember">Remember passphrase</label></div>
+      <div class="f acts">
+        <button type="submit">Connect</button>
+        <button type="button" class="ghost" id="btn-forget">Forget</button>
+        <button type="button" class="ghost" id="btn-close">Close</button>
+      </div>
+    </form>
+    <p class="hint" id="store-hint"></p>
+  </div>
+</div>
+
+<!-- Pinned AND hash-locked, exactly as the source dashboard pins it. A hijacked
+     CDN response must not be able to execute on a screen that can hold a broker
+     passphrase; version pinning alone does not stop unpkg serving other bytes.
+       openssl dgst -sha384 -binary mqtt.min.js | openssl base64 -A
+     If the hash ever fails to match, the browser refuses the script and the
+     "library did not load" branch below says so in plain words. -->
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"
+        integrity="sha384-haZiwxTLortiFcYMBEEE1+8ayC+o18YtuwHZv+4WQHoPaLzRjwOV6h7Vva5iLSCZ"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ================================================================ config
+  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
+                                        // A browser cannot open the raw-TCP listener at all:
+                                        // pointing it there fails in a way that looks exactly
+                                        // like a wrong passphrase.
+  var STORE_KEY = 'air-shout.conn.v1';
+  var MAX_SUBS = 64;                    // a browser must never firehose a broker
+  var DEFAULT_EXPIRE = 900;             // seconds, when discovery declares no expire_after
+  var DEFAULT_FILTER = 'dbk/';          // scope the wall to the Kit4Kids boards
+
+  // US EPA PM2.5 AQI breakpoints, micrograms per cubic metre. One source of truth for the
+  // ground colour, the category name and the plain-language answer.
+  var BANDS = [
+    { key:'good', max:12.0,     label:'Good',
+      head:'GO OUTSIDE.',            say:'The air is clean. Outdoor play is fine.' },
+    { key:'mod',  max:35.4,     label:'Moderate',
+      head:'OUTSIDE IS OK.',         say:'Fine for most people. Anyone who coughs easily should take breaks.' },
+    { key:'usg',  max:55.4,     label:'Unhealthy for sensitive groups',
+      head:'KEEP IT SHORT OUTSIDE.', say:'Children with asthma stay in. Everyone else: short trips, no running around.' },
+    { key:'unh',  max:150.4,    label:'Unhealthy',
+      head:'STAY INSIDE.',           say:'No outdoor play. Keep the windows shut. Wear a mask if you must go out.' },
+    { key:'vun',  max:250.4,    label:'Very unhealthy',
+      head:'EVERYONE STAY INSIDE.',  say:'No outdoor play at all. Windows shut, mask outdoors, purifier on if you have one.' },
+    { key:'haz',  max:Infinity, label:'Hazardous',
+      head:'EVERYONE STAY INSIDE.',  say:'Do not go outside. Windows shut, mask outdoors, purifier on if you have one.' }
+  ];
+
+  // Home Assistant discovery allows abbreviated keys. Expand the ones we read.
+  var ALIASES = {
+    stat_t: 'state_topic', avty_t: 'availability_topic', uniq_id: 'unique_id',
+    unit_of_meas: 'unit_of_measurement', dev_cla: 'device_class', stat_cla: 'state_class',
+    exp_aft: 'expire_after', pl_avail: 'payload_available', pl_not_avail: 'payload_not_available',
+    dev: 'device', val_tpl: 'value_template', avty: 'availability', ic: 'icon'
+  };
+
+  // ================================================================ state
+  var client = null;
+  var entities = new Map();      // discovery topic -> entity
+  var byState = new Map();       // state topic     -> Set(discovery topic)
+  var byAvail = new Map();       // avail topic     -> Set(discovery topic)
+  var byUid = new Map();         // unique_id       -> discovery topic
+  var boardStatus = new Map();   // board id        -> { raw, at }
+  var extrasByBoard = new Map(); // board id        -> Map(sensor name -> { text, at })
+  var subs = new Set();
+  var filteredOut = new Set();
+  var activeFilter = '';
+  var parseErrors = 0;
+  var wildcardRefusals = 0;
+  var connState = 'idle';
+  var manualStop = false;
+  var everConnected = false;
+  var dropTimer = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var screen = $('screen'), stage = $('stage'), digits = $('digits');
+
+  // ================================================================ helpers
+  // The EPA scale starts at 0. Without a lower bound every negative value fell into the first
+  // band, so a faulty sensor reporting -999 rendered as a reassuring green "Good".
+  function bandFor(n) {
+    if (!Number.isFinite(n) || n < 0) return null;
+    for (var i = 0; i < BANDS.length; i++) if (n <= BANDS[i].max) return BANDS[i];
+    return BANDS[BANDS.length - 1];
+  }
+
+  function isPm(ent) {
+    return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || '');
+  }
+
+  function ago(ts) {
+    if (!ts) return 'never';
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 2) return 'just now';
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
+  function parseValue(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (s === '') return { kind: 'empty', text: 'no value' };
+    if (/^(unknown|unavailable|none|null|nan|n\/a)$/i.test(s)) {
+      return { kind: 'unknown', text: s.toLowerCase() };
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return { kind: 'text', text: s };
+    // The EPA method truncates the concentration to one decimal BEFORE applying breakpoints.
+    // Truncate ONCE, here, and use that one value for both the printed number and the band —
+    // otherwise the wall shouts 35.4 while colouring itself "Unhealthy for sensitive groups".
+    // Truncate, never round: rounding 35.44 up to 35.5 would invent a severity nothing measured.
+    var n1 = Math.trunc(n * 10) / 10;
+    var text;
+    if (/^[+-]?\d+(\.\d)?$/.test(s)) {
+      text = s.replace(/^\+/, '');            // keep the device's own precision: "0", "0.0"
+    } else {
+      text = n1.toFixed(1);                   // cap runaway precision AT the classified value
+    }
+    return { kind: 'number', n: n, n1: n1, text: text };
+  }
+
+  function boardFromTopic(topic) {
+    var m = /^dbk\/([^/]+)\//i.exec(topic || '');
+    return m ? m[1] : null;
+  }
+
+  // BUG C GUARD. Every discovery payload on this fleet carries name "PM2.5" — all three
+  // boards, identically. A card titled from cfg.name is three cards with one name. Identity
+  // comes from the board id parsed out of state_topic, and nothing else may stand in for it.
+  function identityOf(ent) {
+    return ent.board || ent.uid || ent.stateTopic;
+  }
+
+  var storeWorks = true;
+  // Two different failures used to land in one catch: a browser that blocks storage, and a
+  // corrupt stored value. The second was misreported as the first, and the bad entry was left
+  // in place to fail again on every load.
+  function loadStore() {
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); }
+    catch (e) { storeWorks = false; return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (e) {
+      try { localStorage.removeItem(STORE_KEY); } catch (e2) {}
+      return null;
+    }
+  }
+  function saveStore(v) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; }
+    catch (e) { storeWorks = false; return false; }
+  }
+  function clearStore() {
+    try { localStorage.removeItem(STORE_KEY); return true; } catch (e) { return false; }
+  }
+
+  function setText(el, s) { if (el && el.textContent !== s) el.textContent = s; }
+
+  // ================================================================ failure sheet
+  function showDown(msg) {
+    setText($('down-msg'), msg);
+    $('down').hidden = false;
+  }
+  function hideDown() {
+    $('down').hidden = true;
+    if (dropTimer) { clearTimeout(dropTimer); dropTimer = null; }
+  }
+
+  var LINK_TEXT = {
+    idle: 'starting', connecting: 'connecting', connected: 'live',
+    reconnecting: 'retrying', error: 'no link', fatal: 'refused'
+  };
+  function setConn(state, detail) {
+    connState = state;
+    $('link').setAttribute('data-s', state);
+    setText($('link-text'), detail || LINK_TEXT[state] || state);
+  }
+
+  function noteProblems() {
+    var bits = [];
+    if (parseErrors) bits.push(parseErrors + ' malformed discovery payload' + (parseErrors === 1 ? '' : 's') + ' ignored');
+    if (wildcardRefusals) bits.push(wildcardRefusals + ' wildcard subscription' + (wildcardRefusals === 1 ? '' : 's') + ' refused');
+    if (activeFilter && filteredOut.size) bits.push(filteredOut.size + ' sensor' + (filteredOut.size === 1 ? '' : 's') + ' outside ' + activeFilter);
+    setText($('notes'), bits.join(' · '));
+  }
+
+  // ================================================================ subscribe
+  // subRaw is the ONLY place that talks to the broker, and it is private to this file's own
+  // authored topics. Everything that came off the wire goes through sub(), which refuses
+  // wildcards. Keeping the two apart is the whole point: the four wildcards below are ours
+  // and bounded; a wildcard in a retained payload is someone else's and unbounded.
+  function subRaw(topic) {
+    if (!topic || typeof topic !== 'string') return false;
+    // Real path, unchanged: no client, no subscription. In demo mode there is no client and
+    // never will be — the topic is booked against the same MAX_SUBS ceiling and nothing is
+    // sent anywhere, so the discovery path below can run exactly as it does on the wire.
+    if (!client && !DEMO) return false;
+    if (subs.has(topic)) return true;
+    if (subs.size >= MAX_SUBS) return false;
+    subs.add(topic);
+    if (!client) return true;
+    client.subscribe(topic, { qos: 0 }, function (err) {
+      if (err) { subs.delete(topic); }
+    });
+    return true;
+  }
+
+  function sub(topic) {
+    if (!topic || typeof topic !== 'string') return false;
+    if (!client && !DEMO) return false;     // real path, unchanged; see subRaw for the demo case
+    // Absolute guard. '#' on this broker is roughly 109 GB/day, and '+' is every bit as
+    // dangerous — a retained config declaring state_topic "+/+/+" delivered ten out of ten
+    // unrelated fleet topics in testing. A topic that arrived over the wire must be concrete.
+    if (/[#+]/.test(topic)) { wildcardRefusals++; noteProblems(); return false; }
+    return subRaw(topic);
+  }
+
+  // Release a topic nothing is listening for any more, so the MAX_SUBS ceiling stays honest.
+  function unsub(topic) {
+    if (!topic || !subs.has(topic)) return;
+    if (byState.has(topic) || byAvail.has(topic)) return;
+    subs.delete(topic);
+    if (client) { try { client.unsubscribe(topic); } catch (e) {} }
+  }
+
+  // ================================================================ discovery
+  function expand(cfg) {
+    var out = {};
+    Object.keys(cfg).forEach(function (k) { out[ALIASES[k] || k] = cfg[k]; });
+    // "~" is a base-topic abbreviation: "~/state" and "prefix/~" expand against it.
+    var base = out['~'];
+    if (typeof base === 'string' && base) {
+      ['state_topic', 'availability_topic'].forEach(function (k) {
+        var v = out[k];
+        if (typeof v !== 'string') return;
+        if (v.charAt(0) === '~') out[k] = base + v.slice(1);
+        else if (v.charAt(v.length - 1) === '~') out[k] = v.slice(0, -1) + base;
+      });
+    }
+    if (!out.availability_topic && Array.isArray(out.availability) && out.availability.length) {
+      var a = out.availability[0];
+      if (a && typeof a.topic === 'string') {
+        out.availability_topic = a.topic;
+        if (a.payload_available) out.payload_available = a.payload_available;
+        if (a.payload_not_available) out.payload_not_available = a.payload_not_available;
+      }
+    }
+    return out;
+  }
+
+  function index(map, key, dtopic) {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(dtopic);
+  }
+
+  // The missing half of index(). Without it a re-published config left the entity indexed
+  // under its OLD state topic, so one board's number showed up under another board's name.
+  function unindex(map, key, dtopic) {
+    if (!key || !map.has(key)) return;
+    var set = map.get(key);
+    set.delete(dtopic);
+    if (set.size === 0) { map.delete(key); unsub(key); }
+  }
+
+  function removeEntity(dtopic) {
+    var gone = entities.get(dtopic);
+    if (!gone) return false;
+    entities.delete(dtopic);
+    if (gone.uid && byUid.get(gone.uid) === dtopic) byUid.delete(gone.uid);
+    unindex(byState, gone.stateTopic, dtopic);
+    unindex(byAvail, gone.availTopic, dtopic);
+    return true;
+  }
+
+  function matchesFilter(topic) {
+    return !activeFilter || String(topic).indexOf(activeFilter) === 0;
+  }
+
+  function onDiscovery(dtopic, text) {
+    // An empty retained payload is HA's "delete this entity".
+    if (text.trim() === '') {
+      filteredOut.delete(dtopic);
+      removeEntity(dtopic);
+      noteProblems();
+      return;
+    }
+
+    var cfg;
+    try { cfg = JSON.parse(text); }
+    catch (e) { parseErrors++; noteProblems(); return; }   // one bad retained message must not kill the wall
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) { parseErrors++; noteProblems(); return; }
+
+    cfg = expand(cfg);
+    if (typeof cfg.state_topic !== 'string' || !cfg.state_topic) return;
+
+    // Scope the wall. Anything outside the filter is dropped BEFORE it takes a subscription
+    // or a slot under the MAX_SUBS ceiling — and counted, so the footnote can say so.
+    if (!matchesFilter(cfg.state_topic)) {
+      filteredOut.add(dtopic);
+      removeEntity(dtopic);
+      noteProblems();
+      return;
+    }
+    filteredOut.delete(dtopic);
+
+    var parts = dtopic.split('/');
+    var measure = typeof cfg.name === 'string' && cfg.name ? cfg.name : (parts[2] || 'sensor');
+    var expire = Number(cfg.expire_after);
+    var uid = typeof cfg.unique_id === 'string' && cfg.unique_id ? cfg.unique_id : '';
+    var board = boardFromTopic(cfg.state_topic);
+    var newAvail = typeof cfg.availability_topic === 'string' ? cfg.availability_topic : '';
+
+    // HA collapses two discovery topics carrying one unique_id into a single entity; keyed on
+    // the discovery topic alone this page counted the same sensor twice.
+    if (uid && byUid.has(uid) && byUid.get(uid) !== dtopic) removeEntity(byUid.get(uid));
+
+    var ent = entities.get(dtopic) || { key: dtopic, value: null, at: 0, availRaw: null, availAt: 0 };
+
+    // Drop the OLD index entries before writing the new ones, and drop what was measured
+    // there with them. A value read from DBK-001 must never survive under DBK-999's name.
+    if (ent.stateTopic && ent.stateTopic !== cfg.state_topic) {
+      unindex(byState, ent.stateTopic, dtopic);
+      ent.value = null; ent.at = 0; ent.raw = undefined;
+    }
+    if (ent.availTopic && ent.availTopic !== newAvail) {
+      unindex(byAvail, ent.availTopic, dtopic);
+      ent.availRaw = null; ent.availAt = 0;
+    }
+    if (ent.uid && ent.uid !== uid && byUid.get(ent.uid) === dtopic) byUid.delete(ent.uid);
+
+    ent.measure = measure;               // "PM2.5" for every board — used to CLASSIFY, never to NAME
+    ent.uid = uid;
+    ent.stateTopic = cfg.state_topic;
+    ent.availTopic = newAvail;
+    ent.unit = typeof cfg.unit_of_measurement === 'string' ? cfg.unit_of_measurement : '';
+    ent.deviceClass = typeof cfg.device_class === 'string' ? cfg.device_class : '';
+    ent.expire = Number.isFinite(expire) && expire > 0 ? expire : DEFAULT_EXPIRE;
+    ent.pAvail = typeof cfg.payload_available === 'string' ? cfg.payload_available : 'online';
+    ent.pNot = typeof cfg.payload_not_available === 'string' ? cfg.payload_not_available : 'offline';
+    ent.templated = !!cfg.value_template;
+    ent.board = board;
+
+    // A sensor this page cannot listen to must never occupy the wall: ignoring the refusal
+    // left a permanent board stuck in WAITING for a topic no data will ever arrive on.
+    if (!sub(ent.stateTopic)) { removeEntity(dtopic); return; }
+
+    entities.set(dtopic, ent);
+    if (uid) byUid.set(uid, dtopic);
+    index(byState, ent.stateTopic, dtopic);
+    if (ent.availTopic) { index(byAvail, ent.availTopic, dtopic); sub(ent.availTopic); }
+
+    noteProblems();
+    paint();
+  }
+
+  // ================================================================ messages
+  function onMessage(topic, payload) {
+    var text;
+    try { text = new TextDecoder('utf-8').decode(payload); }
+    catch (e) { text = String(payload); }
+
+    if (/^homeassistant\/.+\/config$/.test(topic)) {
+      try { onDiscovery(topic, text); }
+      catch (e) { parseErrors++; noteProblems(); }
+      return;
+    }
+
+    var now = Date.now();
+
+    // Board availability, even where discovery declared no availability_topic.
+    var b = /^dbk\/([^/]+)\/status$/i.exec(topic);
+    if (b) { boardStatus.set(b[1], { raw: text.trim(), at: now }); }
+
+    // The board's other sensors. These have no discovery config, so they carry no unit and
+    // no band — they are printed verbatim as footnotes and never dressed up as a reading.
+    var s = /^dbk\/([^/]+)\/sensor\/([^/]+)\/state$/i.exec(topic);
+    if (s) {
+      var m = extrasByBoard.get(s[1]);
+      if (!m) { m = new Map(); extrasByBoard.set(s[1], m); }
+      m.set(s[2], { text: text.trim(), at: now });
+    }
+
+    if (byState.has(topic)) {
+      byState.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.raw = text; e.value = parseValue(text); e.at = now;
+      });
+    }
+    if (byAvail.has(topic)) {
+      byAvail.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.availRaw = text.trim(); e.availAt = now;
+      });
+    }
+    paint();
+  }
+
+  // ================================================================ board state
+  function availabilityOf(ent) {
+    if (ent.availTopic && ent.availRaw !== null) {
+      if (ent.availRaw === ent.pNot) return 'offline';
+      if (ent.availRaw === ent.pAvail) return 'online';
+      return 'unknown';
+    }
+    if (ent.board && boardStatus.has(ent.board)) {
+      var raw = boardStatus.get(ent.board).raw;
+      if (raw === ent.pNot || raw === 'offline') return 'offline';
+      if (raw === ent.pAvail || raw === 'online') return 'online';
+    }
+    return 'unknown';
+  }
+
+  function stateOf(ent) {
+    if (availabilityOf(ent) === 'offline') return 'offline';
+    if (!ent.at || !ent.value) return 'waiting';
+    if (ent.value.kind === 'unknown' || ent.value.kind === 'empty') return 'unknown';
+    // A concentration cannot be negative. Checked BEFORE stale and before live so a broken
+    // sensor is never dressed up as a reading — least of all as a green one.
+    if (ent.value.kind === 'number' && ent.value.n1 < 0 && isPm(ent)) return 'fault';
+    if ((Date.now() - ent.at) / 1000 > ent.expire) return 'stale';
+    return 'live';
+  }
+
+  var RANK = { live: 0, stale: 1, fault: 2, unknown: 3, waiting: 4, offline: 5, unannounced: 6 };
+  var ST_WORD = {
+    live: 'reporting', stale: 'reading expired', fault: 'sensor fault',
+    unknown: 'no reading', waiting: 'no reading yet', offline: 'OFFLINE',
+    unannounced: 'no sensor announced'
+  };
+
+  // ================================================================ the fit
+  // BUG B LIVES HERE. The reading's box is .stage; its size must therefore come from .stage.
+  // Measure the glyphs at a known size, scale by the ratio the container allows, apply px.
+  // Nothing in this function reads the viewport.
+  var fitKey = '';
+  function fitShout(force) {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    var key = digits.textContent + '|' + w + 'x' + h;
+    if (!force && key === fitKey) return;
+    fitKey = key;
+    digits.style.fontSize = '100px';
+    var r = digits.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    var size = Math.floor(Math.min((w * 0.985) / r.width, (h * 0.985) / r.height) * 100);
+    digits.style.fontSize = Math.max(24, Math.min(size, 4000)) + 'px';
+  }
+
+  // ================================================================ paint
+  function boardsView() {
+    var map = new Map();
+    entities.forEach(function (e) {
+      if (!isPm(e)) return;
+      var id = identityOf(e);
+      var st = stateOf(e);
+      var cur = map.get(id);
+      if (!cur || RANK[st] < RANK[cur.st]) map.set(id, { id: id, ent: e, st: st });
+    });
+    // A board that announces itself on dbk/<id>/status but has published no discovery config
+    // still belongs on this wall — as a named absence, not as a missing card.
+    boardStatus.forEach(function (v, id) {
+      if (map.has(id)) return;
+      map.set(id, { id: id, ent: null, st: v.raw === 'offline' ? 'offline' : 'unannounced' });
+    });
+    return Array.from(map.values()).sort(function (a, b) { return a.id.localeCompare(b.id); });
+  }
+
+  var chipEls = new Map();
+  function paintBoards(list) {
+    var host = $('boards');
+    var seen = new Set();
+    list.forEach(function (c) {
+      seen.add(c.id);
+      var el = chipEls.get(c.id);
+      if (!el) {
+        var root = document.createElement('div');
+        root.className = 'bd';
+        var b = document.createElement('b'), s = document.createElement('span');
+        root.appendChild(b); root.appendChild(s);
+        el = { root: root, b: b, s: s };
+        chipEls.set(c.id, el);
+        host.appendChild(root);
+      }
+      el.root.setAttribute('data-st', c.st);
+      setText(el.b, c.id);                       // board id off the wire — never re-cased
+      var line;
+      if (c.st === 'live' && c.ent && c.ent.value) {
+        line = c.ent.value.text + ' ' + (c.ent.unit || '');
+      } else if (c.st === 'offline') {
+        // A dead board's last number is HISTORY and is labelled as history. It never stands
+        // in the live slot, and it never appears without the word that dates it.
+        line = c.ent && c.ent.value && c.ent.value.kind === 'number'
+          ? 'OFFLINE · last ' + c.ent.value.text + ' ' + (c.ent.unit || '') + ' ' + ago(c.ent.at)
+          : 'OFFLINE · no reading';
+      } else {
+        line = ST_WORD[c.st] || c.st;
+      }
+      setText(el.s, line.trim());
+    });
+    chipEls.forEach(function (el, id) {
+      if (seen.has(id)) return;
+      el.root.remove();
+      chipEls.delete(id);
+    });
+  }
+
+  function paintExtras(boardId) {
+    var host = $('extras');
+    var m = boardId ? extrasByBoard.get(boardId) : null;
+    var out = [];
+    if (m) {
+      Array.from(m.keys()).sort().forEach(function (k) {
+        var v = m.get(k);
+        if (!v || v.text === '') return;
+        if ((Date.now() - v.at) / 1000 > DEFAULT_EXPIRE) return;   // expired is not a reading
+        out.push([k, v.text]);
+      });
+    }
+    out = out.slice(0, 5);
+    if (host.childElementCount !== out.length) host.textContent = '';
+    out.forEach(function (pair, i) {
+      var el = host.children[i];
+      if (!el) {
+        el = document.createElement('span');
+        el.appendChild(document.createElement('i'));
+        el.appendChild(document.createTextNode(''));
+        host.appendChild(el);
+      }
+      setText(el.firstChild, pair[0]);           // topic segment, verbatim
+      var tail = el.childNodes[1];
+      if (tail.nodeValue !== ' ' + pair[1]) tail.nodeValue = ' ' + pair[1];
+    });
+  }
+
+  function paint() {
+    var list = boardsView();
+    paintBoards(list);
+
+    // The worst LIVE reading. Not the newest, not the first — the worst, because that is the
+    // one the room has to act on. Stale, offline, faulty and waiting boards are not candidates.
+    var hero = null;
+    list.forEach(function (c) {
+      if (c.st !== 'live' || !c.ent || !c.ent.value || c.ent.value.kind !== 'number') return;
+      if (!hero || c.ent.value.n1 > hero.ent.value.n1) hero = c;
+    });
+
+    var band = hero ? bandFor(hero.ent.value.n1) : null;
+
+    if (hero && band) {
+      screen.setAttribute('data-band', band.key);
+      setText(digits, hero.ent.value.text);
+      digits.setAttribute('data-kind', 'num');
+      setText($('hero-who'), hero.id);
+      setText($('hero-unit'), hero.ent.unit || '');   // wire unit, verbatim: µg/m³ stays µg/m³
+      setText($('v-head'), band.head);
+      setText($('v-say'), band.say);
+      setText($('v-band'), band.label);
+      setText($('v-src'), hero.id + ' · updated ' + ago(hero.ent.at));
+      paintExtras(hero.id);
+    } else {
+      // No live number anywhere. The wall says so in words and shows NO number at all —
+      // a zero here would be a dead sensor wearing a healthy reading.
+      var anyKnown = list.length > 0;
+      var allOff = anyKnown && list.every(function (c) { return c.st === 'offline'; });
+      screen.setAttribute('data-band', 'dead');
+      setText(digits, !anyKnown ? 'NO BOARDS' : (allOff ? 'ALL OFFLINE' : 'NO READING'));
+      digits.setAttribute('data-kind', 'word');
+      setText($('hero-who'), '—');
+      setText($('hero-unit'), '');
+      setText($('v-head'), anyKnown ? 'WE CANNOT TELL RIGHT NOW.' : 'WAITING FOR THE SENSORS.');
+      setText($('v-say'), !anyKnown
+        ? 'No board has announced itself to this screen yet.'
+        : (allOff
+            ? 'Every board is offline, so nothing here knows the air. Treat the last known state below as history, not as now.'
+            : 'A board is online but has not published a reading yet. Readings are sent live, not stored, so a freshly opened screen waits for the next one.'));
+      setText($('v-band'), '—');
+      setText($('v-src'), 'no live reading');
+      paintExtras(null);
+    }
+
+    var reporting = list.filter(function (c) { return c.st === 'live'; }).length;
+    var quiet = list.filter(function (c) { return c.st !== 'live'; })
+      .map(function (c) { return c.id + ' ' + (c.st === 'offline' ? 'offline' : (ST_WORD[c.st] || c.st)); });
+    setText($('tally'), list.length
+      ? reporting + ' of ' + list.length + ' boards reporting' + (quiet.length ? ' · ' + quiet.join(' · ') : '')
+      : 'no boards have announced themselves yet');
+
+    fitShout();
+  }
+
+  // A dead board must age visibly, so repaint on a clock as well as on traffic.
+  setInterval(paint, 1000);
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(function () { fitShout(true); }).observe(stage);
+  } else {
+    window.addEventListener('resize', function () { fitShout(true); });
+  }
+  // A late webfont swap changes the glyph metrics the fit was measured from.
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(function () { fitShout(true); });
+  }
+
+  // ================================================================ connect
+  function describe(err) {
+    var code = err && (err.code !== undefined ? err.code : err.reasonCode);
+    var map = {
+      1: 'the broker rejected the MQTT protocol version',
+      2: 'the broker rejected this screen’s client id',
+      3: 'the broker is unavailable',
+      4: 'the username or passphrase is wrong',
+      5: 'this account is not authorised for the broker'
+    };
+    if (map[code]) return { text: map[code], fatal: code === 2 || code === 4 || code === 5 };
+    var m = String((err && err.message) || err || 'unknown error');
+    if (/not authoriz|bad user/i.test(m)) return { text: m, fatal: true };
+    return { text: m, fatal: false };
+  }
+
+  function disconnect() {
+    manualStop = true;
+    if (client) { try { client.end(true); } catch (e) {} client = null; }
+    subs.clear();
+  }
+
+  function connect(cfg) {
+    // THE HARD LOCK. A screen must never carry real and simulated readings at once, so demo
+    // mode opens no socket at all — not on boot, not from the settings panel, not ever.
+    if (DEMO) return;
+
+    if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
+      setConn('fatal', 'no library');
+      showDown('This screen could not load the piece of software it uses to talk to the sensors. Reload the page while the network is up.');
+      return;
+    }
+
+    disconnect();
+    manualStop = false;
+    everConnected = false;
+    activeFilter = typeof cfg.filter === 'string' ? cfg.filter.trim() : '';
+    filteredOut.clear();
+
+    var url = (cfg.tls ? 'wss' : 'ws') + '://' + cfg.host + ':' + cfg.port;
+    setConn('connecting');
+
+    // A page served over HTTPS cannot open a plaintext ws:// socket, and the browser will
+    // never say why. Say it here instead of letting the wall sit blank.
+    if (!cfg.tls && location.protocol === 'https:') {
+      showDown('This screen is served over HTTPS, so the browser blocks its plain connection to the sensors. Press s and tick TLS, or open this file directly from disk.');
+    }
+
+    try {
+      client = mqtt.connect(url, {
+        username: cfg.user || undefined,
+        password: cfg.pass || undefined,
+        clientId: 'shout-' + Math.random().toString(16).slice(2, 10),
+        clean: true,
+        reconnectPeriod: 4000,
+        connectTimeout: 8000,
+        keepalive: 45,
+        resubscribe: true
+      });
+    } catch (e) {
+      setConn('fatal');
+      showDown('This screen could not start its connection to the sensors. Press s and check the broker address.');
+      return;
+    }
+
+    client.on('connect', function () {
+      everConnected = true;
+      setConn('connected');
+      hideDown();
+      // Bounded discovery wildcards — the two shapes HA publishes, plus board availability and
+      // the boards' own extra sensors. subRaw, not sub: these four are authored HERE and are
+      // the only wildcards this page may ever hold. '#' is never among them, at any depth.
+      subRaw('homeassistant/+/+/config');       // <component>/<object_id>/config
+      subRaw('homeassistant/+/+/+/config');     // <component>/<node_id>/<object_id>/config
+      subRaw('dbk/+/status');
+      subRaw('dbk/+/sensor/+/state');
+      paint();
+    });
+
+    client.on('message', function (topic, payload) {
+      try { onMessage(topic, payload); }
+      catch (e) { /* one bad message must never stop the stream */ }
+    });
+
+    client.on('reconnect', function () { if (!manualStop && connState !== 'fatal') setConn('reconnecting'); });
+    client.on('offline', function () { if (!manualStop && connState !== 'fatal') setConn('reconnecting'); });
+
+    client.on('close', function () {
+      if (manualStop || connState === 'fatal') return;
+      if (!everConnected) {
+        setConn('error');
+        showDown('This screen cannot reach the air sensors. It keeps trying every few seconds — if nothing changes, check that the broker is up on port ' + cfg.port + '.');
+      } else {
+        setConn('reconnecting');
+        // Give a brief drop the chance to heal before taking the wall over. Past that, the
+        // room deserves to know that nothing on this screen is current.
+        if (!dropTimer) {
+          dropTimer = setTimeout(function () {
+            dropTimer = null;
+            if (connState !== 'connected') {
+              showDown('This screen has lost its connection to the air sensors, so nothing it was showing is current. It is still trying.');
+            }
+          }, 15000);
+        }
+      }
+    });
+
+    client.on('error', function (err) {
+      var d = describe(err);
+      if (d.fatal) {
+        setConn('fatal');
+        manualStop = true;
+        try { client.end(true); } catch (e) {}
+        client = null;
+        showDown('The broker refused this screen: ' + d.text + '. Press s, correct the details, and press Connect.');
+      } else {
+        setConn('error');
+        showDown('This screen cannot reach the air sensors. It keeps trying every few seconds — if nothing changes, check that the broker is up on port ' + cfg.port + '.');
+      }
+    });
+  }
+
+  // ================================================================ settings (behind "s")
+  var panel = $('settings'), form = $('form');
+  function readForm() {
+    return {
+      host: $('f-host').value.trim(),
+      port: $('f-port').value.trim(),
+      user: $('f-user').value,
+      pass: $('f-pass').value,
+      tls: $('f-tls').checked,
+      filter: $('f-filter').value.trim(),
+      remember: $('f-remember').checked
+    };
+  }
+  function fillForm(v) {
+    $('f-host').value = (v && v.host) || DEFAULT_HOST;
+    $('f-port').value = (v && v.port) || DEFAULT_PORT;
+    $('f-user').value = (v && v.user) || '';
+    $('f-pass').value = (v && v.pass) || '';
+    $('f-tls').checked = !!(v && v.tls);
+    $('f-filter').value = v && typeof v.filter === 'string' ? v.filter : DEFAULT_FILTER;
+    $('f-remember').checked = !!(v && (v.remember || v.pass));
+  }
+  // What goes to disk is not what is in the form: the passphrase is opt-in.
+  function storable(cfg) {
+    var out = { host: cfg.host, port: cfg.port, user: cfg.user, tls: cfg.tls,
+                filter: cfg.filter, remember: !!cfg.remember };
+    if (cfg.remember) out.pass = cfg.pass;
+    return out;
+  }
+  function openPanel() {
+    panel.hidden = false;
+    setText($('store-hint'), storeWorks
+      ? 'Kept in this browser, on this device only. The passphrase is stored only if you tick Remember.'
+      : 'This browser blocks local storage, so nothing here can be remembered between reloads.');
+    $('f-host').focus();
+  }
+  function closePanel() { panel.hidden = true; }
+
+  document.addEventListener('keydown', function (ev) {
+    var t = ev.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) {
+      if (ev.key === 'Escape') closePanel();
+      return;
+    }
+    // In demo mode there is no connection to configure, and the panel is a full-screen sheet
+    // that would sit between a photographer and the DEMO bars. The door stays shut.
+    if ((ev.key === 's' || ev.key === 'S') && !DEMO) { ev.preventDefault(); panel.hidden ? openPanel() : closePanel(); }
+    else if (ev.key === 'Escape') closePanel();
+  });
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var cfg = readForm();
+    if (!cfg.host || !cfg.port) return;
+    entities.clear(); byState.clear(); byAvail.clear(); byUid.clear();
+    boardStatus.clear(); extrasByBoard.clear(); filteredOut.clear();
+    chipEls.forEach(function (el) { el.root.remove(); });
+    chipEls.clear();
+    parseErrors = 0; wildcardRefusals = 0;
+    noteProblems(); paint();
+    var ok = saveStore(storable(cfg));
+    setText($('store-hint'), ok
+      ? (cfg.remember ? 'Saved in this browser, passphrase included. Nothing is uploaded.'
+                      : 'Saved in this browser. The passphrase was NOT stored.')
+      : 'This browser refused to save settings. The connection still works for now.');
+    closePanel();
+    connect(cfg);
+  });
+
+  $('btn-close').addEventListener('click', closePanel);
+  $('btn-forget').addEventListener('click', function () {
+    clearStore();
+    fillForm(null);
+    $('f-pass').value = '';
+    setText($('store-hint'), 'Saved settings cleared from this browser.');
+  });
+
+  // ================================================================ demo mode (opt-in, URL only)
+  // Why this exists: the fleet reads 0 µg/m³ most of the year, so Moderate through Hazardous —
+  // the states this wall is FOR — are never seen until the season that gives no time to fix a
+  // layout. "163.3" once wrapped mid-digit because nobody had watched a three-digit reading
+  // land on the stage.
+  //
+  // Why it is caged: this screen tells children whether it is safe to go outside. Invented air
+  // must be impossible to read as measured air. The cage has four bars:
+  //   1. ONE door. ?demo= in the URL and nothing else. No default, no keystroke, no stored
+  //      preference, and nothing below ever writes to localStorage — close the tab or drop the
+  //      parameter and the page is a live wall again.
+  //   2. No socket. connect() returns early while DEMO is set, so real and fake can never share
+  //      a screen; the link chip says "no link · DEMO", never "live".
+  //   3. Two hazard bars framing the screen, in the layout, for as long as demo mode is on.
+  //   4. One renderer. Everything below is pushed through onMessage() — the same function the
+  //      broker's messages go through — so what you are judging is the shipped render path,
+  //      not a second one written to flatter it.
+  var DEMO = null;
+
+  // One representative value from the MIDDLE of each EPA band, so a named band always lands
+  // clear of its own edges.
+  var DEMO_BANDS = {
+    good: 6.4, moderate: 23.7, sensitive: 45.2, unhealthy: 103.5, verybad: 200.4, hazardous: 312.6
+  };
+  var DEMO_ORDER = ['good', 'moderate', 'sensitive', 'unhealthy', 'verybad', 'hazardous'];
+  // Typed once, here, as a lowercase µ, and never passed through anything that re-cases text:
+  // this is the one character on this wall whose corruption is a 1000x error.
+  var UG = 'µg/m³';
+  var WARN = '⚠';
+  var DEMO_FOOT = 'nothing on this screen was measured — no sensor is connected and no ' +
+                  'broker link is open · reload without ?demo= to see the real air';
+
+  function readDemo() {
+    var q;
+    try { q = new URLSearchParams(location.search); } catch (e) { return null; }
+    if (!q || !q.has('demo')) return null;              // the only door, and it is shut by default
+    var raw = String(q.get('demo') == null ? '' : q.get('demo')).trim();
+    var s = raw.toLowerCase();
+    if (s === 'cycle') return { mode: 'cycle', raw: raw };
+    if (s === 'mixed') return { mode: 'mixed', raw: raw };
+    if (Object.prototype.hasOwnProperty.call(DEMO_BANDS, s)) {
+      return { mode: 'value', raw: raw, text: DEMO_BANDS[s].toFixed(1) };
+    }
+    // A demo value is a plain non-negative number, kept at the precision it was typed at so
+    // ?demo=163.3 shows 163.3 and ?demo=163.35 exercises the truncate-then-classify path.
+    if (/^\d{1,6}(\.\d{1,3})?$/.test(s) && Number(s) <= 100000) return { mode: 'value', raw: raw, text: s };
+    // Not understood. Refuse to guess: a wrong guess here is a wrong health message.
+    return { mode: 'unknown', raw: raw };
+  }
+
+  var demoEnc = (typeof TextEncoder === 'function') ? new TextEncoder() : null;
+  // The whole demo feed goes through here, into the same handler the client's 'message' event
+  // calls, with the same swallow-one-bad-message contract.
+  function demoPublish(topic, text) {
+    var payload = demoEnc ? demoEnc.encode(String(text)) : String(text);
+    try { onMessage(topic, payload); } catch (e) {}
+  }
+
+  // A discovery config in the shape these boards actually publish: abbreviated keys, a "~" base
+  // topic, and the name "PM2.5" on every board — the reason identity has to come from the board
+  // id inside state_topic and never from the announced name.
+  function demoConfig(id) {
+    return JSON.stringify({
+      '~': 'dbk/' + id,
+      name: 'PM2.5',
+      stat_t: '~/sensor/pm2_5/state',
+      avty_t: '~/status',
+      uniq_id: 'dbk_' + id.toLowerCase().replace(/-/g, '_') + '_pm2_5',
+      dev_cla: 'pm25',
+      stat_cla: 'measurement',
+      unit_of_meas: UG,
+      exp_aft: DEFAULT_EXPIRE,
+      dev: { name: id, ids: [id.toLowerCase()] }
+    });
+  }
+
+  // The board's other sensors, derived from its own PM2.5 rather than invented separately —
+  // a fleet whose pm10 disagreed with its pm2.5 would be teaching the reader a false shape.
+  function demoExtras(b) {
+    var n = Number(b.pm), out = [];
+    if (Number.isFinite(n)) {
+      out.push(['pm1_0', (n * 0.62).toFixed(1)]);
+      out.push(['pm10', (n * 1.45).toFixed(1)]);
+    }
+    out.push(['uptime', String(b.up)]);
+    out.push(['wi-fi_rssi', String(b.rssi)]);
+    if (b.rich && Number.isFinite(n)) {
+      var band = bandFor(Math.trunc(n * 10) / 10);
+      if (band) out.push(['air_quality_level', band.label]);   // text sensor, printed verbatim
+    }
+    return out;
+  }
+
+  // onMessage stamps everything with Date.now(). Age the board afterwards so "updated 34m ago",
+  // the expire_after cutoff and the OFFLINE-history line have something real to render.
+  function demoAge(id, secs) {
+    var t = Date.now() - Math.max(0, secs) * 1000;
+    entities.forEach(function (e) {
+      if (e.board !== id) return;
+      if (e.at) e.at = t;
+      if (e.availAt) e.availAt = t;
+    });
+    var st = boardStatus.get(id);
+    if (st) st.at = t;
+    var m = extrasByBoard.get(id);
+    if (m) m.forEach(function (v) { v.at = t; });
+  }
+
+  function demoBoard(b) {
+    var slug = b.id.toLowerCase().replace(/-/g, '_');
+    demoPublish('homeassistant/sensor/' + slug + '/pm2_5/config', demoConfig(b.id));
+    demoPublish('dbk/' + b.id + '/status', b.status);
+    if (b.pm) demoPublish('dbk/' + b.id + '/sensor/pm2_5/state', b.pm);
+    demoExtras(b).forEach(function (kv) {
+      demoPublish('dbk/' + b.id + '/sensor/' + kv[0] + '/state', kv[1]);
+    });
+    demoAge(b.id, b.age);
+  }
+
+  function demoRun(boards) { boards.forEach(demoBoard); paint(); }
+
+  // Every board reporting the same value, at three different ages.
+  function demoFleet(text) {
+    return [
+      { id: 'DBK-001', status: 'online', pm: text, age: 12, up: 48213, rssi: -67 },
+      { id: 'DBK-002', status: 'online', pm: text, age: 34, up: 219884, rssi: -54, rich: true },
+      { id: 'DBK-010', status: 'online', pm: text, age: 51, up: 3921, rssi: -78 }
+    ];
+  }
+
+  // The state the real wall is in most days: one board reporting, one dead, one whose reading
+  // has outlived its expire_after. This is the layout most likely to be rendered badly, so it
+  // gets a mode of its own rather than being left to chance.
+  function demoMixed() {
+    return [
+      { id: 'DBK-001', status: 'offline', pm: '62.1', age: 2040, up: 0, rssi: -71 },
+      { id: 'DBK-002', status: 'online', pm: '87.4', age: 22, up: 219884, rssi: -54, rich: true },
+      { id: 'DBK-010', status: 'online', pm: '41.7', age: 1680, up: 3921, rssi: -78 }
+    ];
+  }
+
+  function demoMark(head, foot) {
+    setText($('demo-top-txt'),
+      WARN + ' DEMO · ตัวอย่าง — SIMULATED DATA, NOT A REAL READING · ' + head + ' ' + WARN);
+    setText($('demo-bot-txt'), WARN + ' DEMO · ' + foot + ' ' + WARN);
+  }
+
+  function startDemo() {
+    document.title = 'DEMO · simulated air · SHOUT';
+    screen.setAttribute('data-demo', 'on');
+    $('demo-top').hidden = false;
+    $('demo-bot').hidden = false;
+    // The masthead says "WORST LIVE PM2.5 RIGHT NOW" on a live wall. In demo mode that sentence
+    // would be a lie in the largest type on the header, so it is replaced.
+    setText($('mark-line'), 'KIT4KIDS AIR · DEMO — SIMULATED PM2.5, NOT LIVE');
+    setText($('hint-s'), 'DEMO · no broker connection · settings disabled');
+    setConn('idle', 'no link · DEMO');       // never the word "live" while faking
+    activeFilter = DEFAULT_FILTER;                // the same scoping the real wall runs with
+
+    if (DEMO.mode === 'unknown') {
+      demoMark('nothing is being simulated',
+        '"' + DEMO.raw + '" is not a demo value, so this screen is showing nothing rather than ' +
+        'guessing · try ?demo=163.3 · ?demo=hazardous · ?demo=cycle · ?demo=mixed');
+      paint();
+      return;
+    }
+
+    if (DEMO.mode === 'mixed') {
+      var boards = demoMixed();
+      demoMark('a faked fleet — DBK-002 ' + boards[1].pm + ' ' + UG + ' live · ' +
+               'DBK-001 offline · DBK-010 reading expired', DEMO_FOOT);
+      demoRun(boards);
+      return;
+    }
+
+    if (DEMO.mode === 'cycle') {
+      var i = 0;
+      var step = function () {
+        var key = DEMO_ORDER[i % DEMO_ORDER.length];
+        i++;
+        var text = DEMO_BANDS[key].toFixed(1);
+        var band = bandFor(Number(text));
+        demoMark('every board faked at ' + text + ' ' + UG + ' · ' + (band ? band.label : key) +
+                 ' · stepping through all six bands every 4s', DEMO_FOOT);
+        demoRun(demoFleet(text));
+      };
+      step();
+      setInterval(step, 4000);
+      return;
+    }
+
+    demoMark('every board faked at ' + DEMO.text + ' ' + UG, DEMO_FOOT);
+    demoRun(demoFleet(DEMO.text));
+  }
+
+  // ================================================================ boot
+  // NO configuration UI on load. A wall display that asks a question is a wall display that
+  // is showing nothing. Stored settings first, then ?u=&p= in the URL, then anonymous.
+  DEMO = readDemo();
+  if (DEMO) {
+    // Demo boot reads no stored settings and writes none, so demo mode cannot outlive the URL
+    // that asked for it.
+    startDemo();
+  } else {
+    // ---- the live path, exactly as it was before demo mode existed ----
+    var saved = loadStore();
+    var boot;
+    if (saved && saved.host && saved.port) {
+      boot = saved;
+    } else {
+      var q = null;
+      try { q = new URLSearchParams(location.search); } catch (e) { q = null; }
+      boot = {
+        host: (q && q.get('h')) || DEFAULT_HOST,
+        port: (q && q.get('port')) || DEFAULT_PORT,
+        user: (q && q.get('u')) || '',
+        pass: (q && q.get('p')) || '',
+        tls: !!(q && q.get('tls')),
+        filter: (q && q.get('f')) || DEFAULT_FILTER,
+        remember: false
+      };
+    }
+    fillForm(boot);
+    activeFilter = typeof boot.filter === 'string' ? boot.filter.trim() : '';
+    paint();
+    connect(boot);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2061 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Kit4Kids Air Record — PM2.5, Chiang Mai</title>
+<style>
+/* ============================================================================
+   THE KIT4KIDS AIR RECORD — a published page, not a dashboard.
+   Paper ground, one text face, hairline rules, numbered figures, real captions,
+   footnotes and a reference line. Everything quiet; the reading is the only
+   thing allowed to be large.
+
+   Typographic rule that outranks every aesthetic choice in this file:
+   NOTHING that came off the wire is ever case-transformed. CSS uppercasing maps
+   "µ" to "M", turning µg/m³ into mg/m³ — a 1000x unit error caused by styling.
+   There is therefore no text-transform in this stylesheet at all. Small capitals
+   are done with font-variant-caps, and only on ASCII words authored right here.
+   ========================================================================== */
+:root{
+  --paper:#f4f1e8;
+  --paper-2:#eee9dc;
+  --paper-3:#e6e0d0;
+  --ink:#191712;
+  --ink-2:#4b463c;
+  --ink-3:#7b7466;
+  --ink-4:#9d9585;
+  --rule:#c6bfad;
+  --rule-2:#a49b87;
+  --accent:#8a2b1e;              /* vermilion: figure numbers, footnote marks */
+  /* Printer's inks, not screen neon. Same variable names the tested engine
+     reads out of BANDS[i].v, so the banding logic is reused unchanged. */
+  --band-good:#3d6b45;
+  --band-mod:#8a6712;
+  --band-usg:#a55120;
+  --band-unh:#992119;
+  --band-vun:#5d3870;
+  --band-haz:#45101a;
+  --band:var(--ink-3);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Hoefler Text",Georgia,"Times New Roman",Times,serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;max-width:100%}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font:16px/1.58 var(--serif);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  font-variant-numeric:oldstyle-nums proportional-nums;
+  padding:clamp(.6rem,1.6vw,2rem);
+  min-height:100vh;
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.sheet{
+  max-width:76rem;margin:0 auto;
+  background:var(--paper);
+  border:1px solid var(--rule);
+  box-shadow:0 1px 0 rgba(0,0,0,.05),0 12px 34px -28px rgba(0,0,0,.5);
+  padding:clamp(1rem,2.6vw,2.6rem) clamp(1rem,3vw,3.2rem) clamp(1.4rem,3vw,2.6rem);
+}
+
+/* ---------------------------------------------------------------- running head */
+.runhead{
+  display:flex;align-items:baseline;gap:.6rem 1.2rem;flex-wrap:wrap;
+  border-bottom:1px solid var(--ink);
+  padding-bottom:.45rem;margin-bottom:.28rem;
+  font-size:clamp(.66rem,.95vw,.78rem);
+  font-variant-caps:all-small-caps;letter-spacing:.14em;color:var(--ink-2);
+}
+.runhead .rh-l{font-weight:600;color:var(--ink)}
+.runhead .rh-c{color:var(--ink-3)}
+.runhead .rh-r{margin-left:auto;display:flex;align-items:center;gap:.5rem;color:var(--ink-3)}
+.runhead .rh-r .stamp{font-variant-numeric:tabular-nums lining-nums;letter-spacing:.08em}
+.rule-thin{border:0;border-top:1px solid var(--rule);margin:0 0 clamp(1rem,2.4vw,1.8rem)}
+.state-dot{width:.42rem;height:.42rem;border-radius:50%;background:var(--ink-4);display:inline-block;flex:none}
+[data-conn="connected"] .state-dot{background:var(--band-good)}
+[data-conn="connecting"] .state-dot,[data-conn="reconnecting"] .state-dot{background:var(--band-mod)}
+[data-conn="error"] .state-dot,[data-conn="fatal"] .state-dot{background:var(--band-unh)}
+
+/* ---------------------------------------------------------------- masthead */
+.title{
+  font-size:clamp(1.9rem,4.6vw,3.5rem);line-height:1.02;letter-spacing:-.022em;
+  font-weight:600;margin:0 0 .5rem;max-width:22ch;
+}
+.standfirst{
+  margin:0 0 .45rem;max-width:56ch;color:var(--ink-2);
+  font-size:clamp(1rem,1.35vw,1.16rem);line-height:1.5;
+}
+.byline{
+  margin:0 0 clamp(1rem,2.2vw,1.6rem);color:var(--ink-3);
+  font-size:clamp(.68rem,.95vw,.8rem);
+  font-variant-caps:all-small-caps;letter-spacing:.12em;
+}
+sup.fn{color:var(--accent);font-size:.62em;font-weight:600;padding-left:.06em;vertical-align:super;line-height:0}
+.sub{font-size:.74em;vertical-align:-.22em;letter-spacing:0}
+/* Units and any other literal from the wire: pinned to plain roman, never
+   case-shifted, never small-capped, whatever a parent rule tries. */
+.lit{font-variant-caps:normal;font-variant-numeric:lining-nums tabular-nums;letter-spacing:0}
+
+/* ---------------------------------------------------------------- the lede */
+.lede{
+  display:grid;gap:clamp(1rem,2.6vw,2.4rem);
+  grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);
+  align-items:start;
+  padding-bottom:clamp(1rem,2.4vw,1.7rem);
+  border-bottom:1px solid var(--rule);
+  margin-bottom:clamp(1rem,2.4vw,1.7rem);
+}
+@media (max-width:52rem){.lede{grid-template-columns:minmax(0,1fr)}}
+.lede p.body{margin:0 0 .7rem;font-size:1.02rem;line-height:1.6;color:var(--ink-2);max-width:62ch}
+.lede p.body:first-letter{
+  float:left;font-size:3.35em;line-height:.78;padding:.06em .1em 0 0;
+  font-weight:600;color:var(--ink);
+}
+.lede p.body.plain:first-letter{float:none;font-size:inherit;line-height:inherit;padding:0;font-weight:inherit}
+.kicker{
+  font-variant-caps:all-small-caps;letter-spacing:.16em;font-size:.76rem;
+  color:var(--accent);margin:0 0 .35rem;
+}
+.verdict{
+  margin:0 0 .5rem;font-size:clamp(1.35rem,3vw,2.1rem);line-height:1.16;
+  letter-spacing:-.015em;font-weight:600;color:var(--band);max-width:20ch;
+}
+.verdict-sub{margin:0;font-size:.94rem;line-height:1.5;color:var(--ink-2);max-width:44ch}
+.verdict-sub .n{font-variant-numeric:lining-nums tabular-nums;white-space:nowrap}
+
+/* ---------------------------------------------------------------- figures */
+figure{margin:0}
+figcaption{
+  margin-top:.55rem;padding-top:.4rem;border-top:1px solid var(--rule);
+  font-size:.8rem;line-height:1.45;color:var(--ink-2);max-width:64ch;
+}
+.figno{font-variant-caps:all-small-caps;letter-spacing:.1em;color:var(--accent);font-weight:600}
+
+.fig-plates{margin-bottom:clamp(1.2rem,2.6vw,2rem)}
+.plates{
+  display:grid;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));
+}
+.plates[hidden]{display:none}
+.plate{
+  /* The figure sizes off THIS PLATE, never off the viewport. A vw-sized reading
+     inside a grid column split "163.3" into "163." + "3" — precisely in the
+     hazardous range. cqi keeps the type and the column coupled. */
+  container-type:inline-size;
+  background:var(--paper);
+  padding:clamp(.75rem,1.5vw,1.15rem) clamp(.8rem,1.6vw,1.25rem) clamp(.85rem,1.6vw,1.2rem);
+  display:flex;flex-direction:column;gap:.32rem;min-width:0;
+}
+.plate[data-state="offline"],.plate[data-state="waiting"],
+.plate[data-state="unknown"],.plate[data-state="fault"]{
+  background:
+    repeating-linear-gradient(45deg,transparent 0 7px,rgba(25,23,18,.045) 7px 8px),
+    var(--paper-2);
+}
+.p-head{display:flex;align-items:baseline;gap:.5rem;min-width:0}
+.p-id{
+  font-size:clamp(.9rem,1.3vw,1.05rem);font-weight:600;letter-spacing:.01em;
+  overflow-wrap:anywhere;min-width:0;
+}
+.p-tag{
+  margin-left:auto;flex:none;font-size:.66rem;letter-spacing:.13em;
+  font-variant-caps:all-small-caps;color:var(--ink-3);
+  border:1px solid var(--rule-2);border-radius:2px;padding:.02rem .34rem;
+}
+.plate[data-state="live"] .p-tag{color:var(--band);border-color:currentColor}
+.p-figure{display:flex;align-items:baseline;gap:.35rem;min-width:0;padding:.15rem 0 .05rem}
+.p-num{
+  font-size:clamp(2.1rem,31cqi,6.4rem);line-height:.92;font-weight:600;
+  letter-spacing:-.035em;color:var(--band);
+  font-variant-numeric:lining-nums tabular-nums;
+  /* Words below may break. Digits may not: "163.3" wrapped across two lines
+     reads as 163, or as 1633, from the far side of a room. */
+  white-space:nowrap;
+}
+.p-num[data-long="1"]{font-size:clamp(1.5rem,15cqi,3rem);white-space:normal;overflow-wrap:anywhere}
+.p-num[data-kind="word"]{
+  font-size:clamp(1.15rem,13cqi,2.05rem);font-style:italic;font-weight:400;
+  letter-spacing:0;white-space:normal;color:var(--ink-2);
+}
+.p-unit{font-size:clamp(.78rem,1.1vw,.92rem);color:var(--ink-3);font-weight:400}
+.p-band{font-size:.92rem;font-weight:600;color:var(--band);min-height:1.3em;line-height:1.3}
+.p-note{
+  margin-top:auto;padding-top:.5rem;border-top:1px solid var(--rule);
+  font-size:.74rem;line-height:1.42;color:var(--ink-3);
+}
+.p-note .hist{display:block;font-style:italic;color:var(--ink-4)}
+
+/* ---------------------------------------------------------------- lower deck */
+.deck{
+  display:grid;gap:clamp(1.2rem,3vw,2.6rem);
+  grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);
+  align-items:start;
+}
+@media (max-width:60rem){.deck{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------------------------------------------------------------- table */
+table.record{
+  width:100%;border-collapse:collapse;table-layout:auto;
+  font-size:.86rem;
+}
+table.record[hidden]{display:none}
+.record thead th{
+  text-align:left;font-weight:600;color:var(--ink-2);
+  font-variant-caps:all-small-caps;letter-spacing:.11em;font-size:.78rem;
+  border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-2);
+  padding:.42rem .55rem .3rem 0;white-space:nowrap;
+}
+.record thead th:last-child{padding-right:0;text-align:right}
+.record tbody td{
+  border-bottom:1px solid var(--rule);
+  padding:.5rem .55rem .5rem 0;vertical-align:baseline;color:var(--ink-2);
+}
+.record tbody td:last-child{padding-right:0;text-align:right;white-space:nowrap;color:var(--ink-3)}
+.record tbody tr:last-child td{border-bottom:2px solid var(--ink)}
+.t-id{font-weight:600;color:var(--ink);white-space:nowrap}
+.t-read{white-space:nowrap;color:var(--ink)}
+.t-read .rd{font-variant-numeric:lining-nums tabular-nums;font-weight:600;font-size:1.02em}
+.t-read .ru{color:var(--ink-3);font-size:.86em}
+.record tr[data-state="offline"] .t-id,
+.record tr[data-state="waiting"] .t-id{color:var(--ink-3);font-weight:400;font-style:italic}
+.t-band{color:var(--band);font-weight:600}
+.t-adv{color:var(--ink-2);min-width:14ch}
+.none{color:var(--ink-4);font-style:italic}
+/* An em-dash is not a zero, and this is the row where that distinction matters. */
+.dash{color:var(--ink-4);font-variant-numeric:lining-nums}
+
+/* Narrow: the record re-sets as stacked entries rather than growing a
+   horizontal scrollbar. There is not one scroll container in this file. */
+@media (max-width:44rem){
+  .record thead{display:none}
+  .record tbody tr{display:block;border-bottom:1px solid var(--rule);padding:.6rem 0}
+  .record tbody tr:last-child{border-bottom:2px solid var(--ink)}
+  .record tbody td{display:block;border:0;padding:.06rem 0;text-align:left!important;white-space:normal}
+  .record tbody td:last-child{text-align:left}
+  .record tbody td[data-l]::before{
+    content:attr(data-l) "  ";color:var(--ink-4);
+    font-variant-caps:all-small-caps;letter-spacing:.11em;font-size:.82em;
+  }
+  .record .t-id{font-size:1.06rem}
+}
+
+/* ---------------------------------------------------------------- scale */
+.scale-wrap{padding:0 .55rem}
+.ruler{position:relative;padding-top:1.5rem;margin-bottom:.3rem}
+.ruler-track{height:0;border-top:1px solid var(--ink);position:relative}
+.ruler-track::before,.ruler-track::after{
+  content:"";position:absolute;top:-4px;width:1px;height:9px;background:var(--ink);
+}
+.ruler-track::before{left:0}
+.ruler-track::after{right:0}
+.mark{
+  position:absolute;top:-1.45rem;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;line-height:1;
+}
+.mark[hidden]{display:none}
+.mark i{
+  display:block;width:0;height:0;
+  border-left:.34rem solid transparent;border-right:.34rem solid transparent;
+  border-top:.44rem solid var(--band);
+}
+.mark b{
+  font-size:.68rem;font-weight:600;color:var(--band);
+  font-variant-numeric:lining-nums tabular-nums;margin-bottom:.16rem;white-space:nowrap;
+}
+.seg{display:grid;grid-template-columns:repeat(6,minmax(0,1fr))}
+.seg div{
+  padding:.3rem .3rem .1rem 0;border-right:1px solid var(--rule);
+  font-size:.66rem;line-height:1.28;color:var(--ink-3);min-width:0;
+}
+.seg div:last-child{border-right:0}
+.seg span{
+  display:block;color:var(--ink-2);font-weight:600;
+  font-variant-caps:all-small-caps;letter-spacing:.07em;font-size:1.06em;
+}
+.seg em{display:block;font-style:normal;font-variant-numeric:lining-nums tabular-nums}
+
+/* ---------------------------------------------------------------- notes */
+.notes{
+  margin-top:clamp(1.3rem,3vw,2.2rem);padding-top:.7rem;
+  border-top:1px solid var(--ink);
+}
+.notes h2{
+  margin:0 0 .55rem;font-size:.76rem;font-weight:600;color:var(--ink-2);
+  font-variant-caps:all-small-caps;letter-spacing:.16em;
+}
+.notes ol{
+  margin:0;padding:0 0 0 1.1rem;
+  columns:2;column-gap:clamp(1.2rem,3vw,2.6rem);
+  font-size:.76rem;line-height:1.5;color:var(--ink-3);
+}
+@media (max-width:52rem){.notes ol{columns:1}}
+.notes li{margin:0 0 .5rem;break-inside:avoid;padding-left:.12rem}
+.notes li::marker{color:var(--accent);font-weight:600}
+.notes cite{font-style:italic}
+.notes .mono{font-family:var(--mono);font-size:.92em;letter-spacing:-.01em}
+
+.errata:empty{display:none}
+.errata{
+  margin-top:.9rem;padding-top:.55rem;border-top:1px solid var(--rule);
+  display:flex;flex-direction:column;gap:.3rem;
+  font-size:.75rem;line-height:1.45;color:var(--ink-3);max-width:74ch;
+}
+.errata .alert::before{
+  content:"Notice  ";color:var(--accent);
+  font-variant-caps:all-small-caps;letter-spacing:.12em;font-weight:600;
+}
+.errata .alert[data-l="bad"]::before{content:"Correction  "}
+.errata .alert b{color:var(--ink-2);font-weight:600}
+.errata .mono{font-family:var(--mono);font-size:.92em}
+
+.colophon{
+  margin-top:1rem;padding-top:.5rem;border-top:1px solid var(--rule);
+  font-size:.7rem;line-height:1.55;color:var(--ink-4);
+  font-variant-caps:all-small-caps;letter-spacing:.1em;
+  display:flex;flex-wrap:wrap;gap:.2rem .9rem;
+}
+.colophon .lit{font-variant-caps:normal;letter-spacing:0}
+.colophon b{font-weight:600;color:var(--ink-3);font-variant-numeric:lining-nums tabular-nums}
+
+/* ---------------------------------------------------------------- empty */
+.empty{
+  border:1px solid var(--rule);background:var(--paper-2);
+  padding:clamp(1.2rem,3vw,2.2rem);color:var(--ink-2);
+  font-size:1rem;line-height:1.55;max-width:60ch;
+}
+.empty[hidden]{display:none}
+.empty b{font-weight:600;color:var(--ink)}
+
+/* ---------------------------------------------------------------- demonstration
+   Every rule in this block is inert unless the address carries ?demo=. Nothing
+   below is reachable by a page that is reading a real broker.
+
+   Mock figures are the one thing on a health display that can actually hurt a
+   reader, so the marker is not a toast and not a corner label. It is four marks
+   at once, because a photograph of a wall rarely contains the whole wall:
+
+     1. a full-bleed vermilion band that holds the top of the screen through any
+        scroll (position:sticky, so it also reserves its own space and never
+        lands on top of the running head),
+     2. the sheet itself struck through with specimen hatching and re-ruled in
+        vermilion instead of grey,
+     3. a DEMO strip across the top of every plate — the plates are what a phone
+        camera actually gets pointed at,
+     4. the word DEMO set in front of the verdict, which is the sentence a child
+        reads and acts on.
+
+   No text-transform anywhere here either: "DEMO" and "SIMULATED" are authored in
+   this file already uppercase, and nothing off the wire passes through them. */
+.demo-band{
+  position:sticky;top:0;z-index:60;
+  /* Full bleed: these negative margins are exactly the body padding, so the band
+     spans the border box and adds no horizontal overflow of its own. */
+  margin:calc(-1 * clamp(.6rem,1.6vw,2rem))
+         calc(-1 * clamp(.6rem,1.6vw,2rem))
+         clamp(.7rem,1.8vw,1.4rem);
+  background:var(--accent);color:#fdf6ea;
+  border-bottom:3px solid var(--ink);
+  padding:.5rem clamp(.7rem,2vw,1.5rem) .58rem;
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:.1rem .85rem;
+  font-size:clamp(.88rem,1.5vw,1.1rem);line-height:1.32;
+  box-shadow:0 10px 26px -18px rgba(0,0,0,.85);
+}
+.demo-band[hidden]{display:none}
+.demo-band .db-word{
+  font-weight:700;letter-spacing:.24em;line-height:1.04;
+  font-size:clamp(1.15rem,2.5vw,1.85rem);
+}
+.demo-band .db-thai{
+  font-size:clamp(1rem,2vw,1.4rem);font-weight:600;letter-spacing:.02em;opacity:.95;
+}
+.demo-band .db-what{font-weight:600}
+.demo-band .db-tail{opacity:.86;font-size:.92em;flex:1 1 18rem;min-width:0}
+[data-conn="demo"] .state-dot{background:var(--accent)}
+
+body.demo .sheet{
+  border-color:var(--accent);
+  background:
+    repeating-linear-gradient(135deg,rgba(138,43,30,.055) 0 13px,transparent 13px 34px),
+    var(--paper);
+  box-shadow:0 0 0 3px rgba(138,43,30,.15),0 1px 0 rgba(0,0,0,.05),0 12px 34px -28px rgba(0,0,0,.5);
+}
+body.demo .plate{
+  position:relative;
+  padding-top:calc(clamp(.75rem,1.5vw,1.15rem) + 1.15rem);
+}
+body.demo .plate::before{
+  /* Literal characters, not \-escapes: a CSS escape eats the space that follows it,
+     which silently welded the two words together the first time this was written. */
+  content:"DEMO · ตัวอย่าง";
+  position:absolute;left:0;right:0;top:0;
+  background:var(--accent);color:#fdf6ea;
+  font-size:.64rem;font-weight:700;letter-spacing:.16em;line-height:1.5;
+  padding:.1rem .5rem;
+}
+body.demo #verdict::before{
+  content:"DEMO — ";color:var(--accent);font-weight:700;letter-spacing:.08em;
+}
+body.demo .record .t-id::after{
+  content:" · DEMO";color:var(--accent);font-weight:700;
+  font-size:.78em;letter-spacing:.1em;
+}
+body.demo .colophon b,body.demo .colophon #co-keys{color:var(--accent)}
+
+/* ---------------------------------------------------------------- overlays */
+.overlay{
+  position:fixed;inset:0;z-index:20;background:var(--paper);
+  display:flex;align-items:center;justify-content:center;
+  padding:clamp(1.2rem,6vw,4rem);
+}
+.overlay[hidden]{display:none}
+#fatal p{
+  margin:0;max-width:30ch;text-align:left;
+  font-size:clamp(1.15rem,2.7vw,1.85rem);line-height:1.34;
+  color:var(--ink);font-weight:400;letter-spacing:-.01em;
+}
+#fatal .mark-rule{border:0;border-top:1px solid var(--ink);margin:0 0 1rem;width:4rem}
+#fatal .after{margin-top:1rem;font-size:.8rem;color:var(--ink-3);max-width:40ch;letter-spacing:.02em}
+
+.slip{
+  background:var(--paper);border:1px solid var(--ink);
+  padding:clamp(1rem,2.4vw,1.7rem);max-width:34rem;width:100%;
+  box-shadow:0 14px 40px -30px rgba(0,0,0,.6);
+}
+.slip h2{
+  margin:0 0 .2rem;font-size:.78rem;font-weight:600;
+  font-variant-caps:all-small-caps;letter-spacing:.16em;color:var(--accent);
+}
+.slip p.lead{margin:0 0 .9rem;font-size:.82rem;color:var(--ink-3);line-height:1.45}
+.form{display:grid;gap:.6rem .9rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr))}
+.f{display:flex;flex-direction:column;gap:.2rem;min-width:0}
+.f label{
+  font-size:.68rem;color:var(--ink-3);
+  font-variant-caps:all-small-caps;letter-spacing:.11em;
+}
+.f input{
+  background:var(--paper-2);color:var(--ink);border:0;border-bottom:1px solid var(--rule-2);
+  padding:.35rem .2rem;font:inherit;font-size:.88rem;min-width:0;width:100%;border-radius:0;
+}
+.f input:focus{outline:2px solid var(--accent);outline-offset:2px}
+.f-check{flex-direction:row;align-items:center;gap:.45rem}
+.f-check label{font-variant-caps:normal;letter-spacing:0;font-size:.82rem;color:var(--ink-2)}
+.f-check input{width:auto}
+.acts{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.9rem}
+button{
+  font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;border-radius:0;
+  padding:.4rem .95rem;background:var(--ink);color:var(--paper);border:1px solid var(--ink);
+}
+button.ghost{background:transparent;color:var(--ink-2);border-color:var(--rule-2)}
+button.ghost:hover{color:var(--ink);border-color:var(--ink)}
+.hint{margin:.7rem 0 0;font-size:.72rem;color:var(--ink-4);line-height:1.45}
+kbd{
+  font-family:var(--mono);font-size:.86em;border:1px solid var(--rule-2);
+  border-bottom-width:2px;padding:0 .28em;border-radius:2px;color:var(--ink-2);
+}
+</style>
+</head>
+<body>
+
+<!-- The demonstration marker. Present in the document but hidden, and unhidden by
+     exactly one line of script, reached only when the address carries a readable
+     ?demo= (see readDemo). A page reading a real broker never shows it, and no
+     stored setting can ever turn it on. -->
+<div class="demo-band" id="demo-band" role="note" hidden>
+  <span class="db-word">DEMO</span>
+  <span class="db-thai" lang="th">&#3605;&#3633;&#3623;&#3629;&#3618;&#3656;&#3634;&#3591;</span>
+  <span class="db-what lit" id="demo-what">simulated figures</span>
+  <span class="db-tail">SIMULATED DATA &middot; no broker is connected &middot; nothing on this page
+    is a measurement of real air &middot; &#3652;&#3617;&#3656;&#3651;&#3594;&#3656;&#3588;&#3656;&#3634;&#3592;&#3619;&#3636;&#3591;</span>
+</div>
+
+<div class="sheet">
+
+  <header class="runhead" id="runhead" data-conn="idle">
+    <span class="rh-l">The Kit4Kids Air Record</span>
+    <span class="rh-c">Fine particulate matter &middot; Chiang Mai</span>
+    <span class="rh-r">
+      <span class="stamp" id="stamp">&mdash;</span>
+      <span class="state-dot"></span><span id="conn-word">not recording</span>
+    </span>
+  </header>
+  <hr class="rule-thin">
+
+  <article>
+
+    <h1 class="title">Three rooms, three monitors, one figure worth watching</h1>
+    <p class="standfirst">A continuously updated record of fine particulate matter
+      (PM<span class="sub">2.5</span>) at the Kit4Kids stations, set from the readings the
+      stations publish for themselves.<sup class="fn">3</sup></p>
+    <p class="byline">Stations DBK-001, DBK-002 and DBK-010 &middot; typeset live as the readings arrive</p>
+
+    <section class="lede">
+      <div>
+        <p class="body">Three small monitors sit in three rooms in Chiang Mai. Each measures
+          the mass of fine particles floating in the air around it &mdash; smoke, soot, dust small
+          enough to slip past the nose and settle in a lung &mdash; and publishes that mass, in
+          micrograms per cubic metre, as often as it can. What follows is that publication, set as
+          it arrives.</p>
+        <p class="body plain">Nothing here is averaged, smoothed or filled in. Where a station is
+          silent, the space where its figure would go is left empty and said so;<sup class="fn">2</sup>
+          a dash in this record is never a zero, and a zero is never a stand-in for a monitor that
+          has stopped speaking.</p>
+      </div>
+      <div>
+        <p class="kicker">Should we go outside?</p>
+        <p class="verdict" id="verdict">Reading the stations&hellip;</p>
+        <p class="verdict-sub" id="verdict-sub">This page is opening its connection to the monitors.</p>
+      </div>
+    </section>
+
+    <figure class="fig-plates">
+      <div class="plates" id="plates"></div>
+      <div class="empty" id="empty" hidden><b>The record is empty.</b>
+        <span id="empty-msg">No station has announced itself on this broker yet. Announcements are
+        retained, so they normally replay the instant this page connects.</span></div>
+      <figcaption><span class="figno">Fig. 1</span> &mdash; <span id="cap-1">PM2.5 by station,
+        in micrograms per cubic metre, as published.</span></figcaption>
+    </figure>
+
+    <div class="deck">
+
+      <figure>
+        <table class="record" id="record">
+          <thead>
+            <tr>
+              <th scope="col">Station</th>
+              <th scope="col">Reading</th>
+              <th scope="col">Band</th>
+              <th scope="col">Outside?</th>
+              <th scope="col">Last heard</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <figcaption><span class="figno">Table 1</span> &mdash; <span id="cap-2">The full record,
+          one line per station.</span> Readings are given in micrograms per cubic metre
+          (<span class="lit">&micro;g/m&sup3;</span>) to the precision the station itself reported.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="scale-wrap">
+          <div class="ruler">
+            <div class="ruler-track">
+              <div class="mark" id="mark" hidden><b id="mark-val"></b><i></i></div>
+            </div>
+            <div class="seg" id="seg"></div>
+          </div>
+        </div>
+        <figcaption><span class="figno">Fig. 2</span> &mdash; The United States Environmental
+          Protection Agency scale for PM2.5,<sup class="fn">1</sup> drawn with each band given
+          equal width. <span id="cap-3">No figure is reporting, so the scale carries no
+          marker.</span></figcaption>
+      </figure>
+
+    </div>
+
+    <section class="notes">
+      <h2>Notes and references</h2>
+      <ol>
+        <li id="note-1">Breakpoints are those of the United States Environmental Protection Agency
+          for PM2.5: 0&ndash;12.0 good; 12.1&ndash;35.4 moderate; 35.5&ndash;55.4 unhealthy for
+          sensitive groups; 55.5&ndash;150.4 unhealthy; 150.5&ndash;250.4 very unhealthy;
+          250.5 and above hazardous, all in <span class="lit">&micro;g/m&sup3;</span>. See
+          U.S. Environmental Protection Agency, <cite>Technical Assistance Document for the
+          Reporting of Daily Air Quality &mdash; the Air Quality Index (AQI)</cite>, Office of Air
+          Quality Planning and Standards (revised 2024), breakpoint table for PM2.5. Those
+          breakpoints are defined for a 24-hour average; the figures printed here are single
+          instantaneous readings placed on the same scale. That is a simplification, and it is
+          stated rather than hidden: a brief spike reads worse here than the EPA method would
+          score a whole day.</li>
+        <li id="note-2">Readings are published without the retained flag, so a station that is
+          alive but has not spoken since this page opened is printed as <em>awaiting</em> rather
+          than carrying a figure. A figure older than the station&rsquo;s declared expiry is
+          marked expired and is not treated as current. Two of the three stations are ordinarily
+          silent; that is the normal state of this record, not a fault in the page.</li>
+        <li id="note-3">Each station announces itself over MQTT discovery, and the announcement
+          names every one of them <span class="mono">PM2.5</span>. The station identity printed in
+          this record is therefore parsed from the state topic
+          (<span class="mono">dbk/DBK-002/pm2_5</span>), never from the announced name, which
+          cannot tell one room from another.</li>
+        <li id="note-4">This page subscribes only to concrete topics and to three bounded discovery
+          patterns of its own. It never subscribes to a wildcard that arrives in a payload, and
+          never to the whole tree.</li>
+      </ol>
+      <div class="errata" id="errata"></div>
+      <div class="colophon" id="colophon">
+        <span>Set live from <b class="lit" id="co-host">&mdash;</b> over MQTT&#8209;over&#8209;WebSocket</span>
+        <span><b id="co-ents">0</b> sensors announced</span>
+        <span><b id="co-subs">0</b> subscriptions</span>
+        <span id="co-state">not recording</span>
+        <span id="co-keys">Press <kbd>s</kbd> for broker settings</span>
+      </div>
+    </section>
+
+  </article>
+</div>
+
+<div class="overlay" id="fatal" hidden>
+  <div>
+    <hr class="mark-rule">
+    <p id="fatal-text"></p>
+    <p class="after">Press <kbd>s</kbd> to change where this page looks.</p>
+  </div>
+</div>
+
+<div class="overlay" id="settings" hidden>
+  <div class="slip">
+    <h2>Broker settings</h2>
+    <p class="lead">Where this record is typeset from. Kept in this browser, on this device, and
+      sent nowhere but to the broker named below.</p>
+    <form class="form" id="form" autocomplete="off">
+      <div class="f">
+        <label for="f-host">Host</label>
+        <input id="f-host" name="host" spellcheck="false" required>
+      </div>
+      <div class="f">
+        <label for="f-port">WebSocket port</label>
+        <input id="f-port" name="port" inputmode="numeric" required>
+      </div>
+      <div class="f">
+        <label for="f-user">Username</label>
+        <input id="f-user" name="user" spellcheck="false">
+      </div>
+      <div class="f">
+        <label for="f-pass">Passphrase</label>
+        <input id="f-pass" name="pass" type="password" autocomplete="off">
+      </div>
+      <div class="f">
+        <label for="f-filter">Topic prefix</label>
+        <input id="f-filter" name="filter" spellcheck="false" placeholder="dbk/">
+      </div>
+      <div class="f f-check">
+        <input id="f-tls" name="tls" type="checkbox">
+        <label for="f-tls">Secure socket (wss)</label>
+      </div>
+      <div class="f f-check">
+        <input id="f-remember" name="remember" type="checkbox">
+        <label for="f-remember">Remember passphrase</label>
+      </div>
+      <div class="f acts">
+        <button type="submit">Connect</button>
+        <button type="button" class="ghost" id="btn-forget">Forget</button>
+        <button type="button" class="ghost" id="btn-close">Close</button>
+      </div>
+    </form>
+    <p class="hint" id="store-hint"></p>
+  </div>
+</div>
+
+<!-- Pinned AND hash-locked, exactly as the source page pins it. This page can be given a
+     broker passphrase, so a hijacked CDN response must not be able to execute here; version
+     pinning alone does not stop unpkg serving different bytes. sha384 of the 369,231-byte
+     bundle. If the hash ever fails to match, the browser refuses the script and the
+     "library did not load" branch below explains it in one sentence. -->
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"
+        integrity="sha384-haZiwxTLortiFcYMBEEE1+8ayC+o18YtuwHZv+4WQHoPaLzRjwOV6h7Vva5iLSCZ"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ==========================================================================
+     DATA LAYER — carried over from tools/mqtt-dashboard.html essentially
+     unchanged: discovery expansion, topic indexing, wildcard refusal, value
+     parsing, EPA banding, availability and expiry. It is tested; the only new
+     work in this file is the presentation above it.
+     ========================================================================== */
+
+  // ---------------------------------------------------------------- config
+  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
+                                        // A browser cannot speak to the raw TCP listener at
+                                        // all; pointing it there fails in a way that looks
+                                        // exactly like a wrong passphrase.
+  var STORE_KEY = 'air-wall.conn.v1';
+  var MAX_SUBS = 64;                    // hard ceiling; a browser must never firehose a broker
+  var DEFAULT_EXPIRE = 900;             // seconds, when discovery does not declare expire_after
+  var DEFAULT_FILTER = 'dbk/';          // scope the record to the Kit4Kids boards
+
+  // US EPA PM2.5 AQI breakpoints, micrograms per cubic metre.
+  // Single source of truth: drives the plates, the table, the scale and the verdict.
+  // `answer` and `care` are this edition's addition — the plain-language reply to
+  // "should we go outside?", written for a reader who is eight years old.
+  var BANDS = [
+    { max: 12.0,  label: 'Good',                           short: 'Good',             note: 'air is fine',           v: '--band-good', r: '0 – 12.0',
+      answer: 'Yes. Go outside — the air is clean.',            care: 'Nothing needs doing differently today.' },
+    { max: 35.4,  label: 'Moderate',                       short: 'Moderate',         note: 'acceptable',            v: '--band-mod',  r: '12.1 – 35.4',
+      answer: 'Yes, go outside. Take it gently if you cough easily.', care: 'Fine for most people; a few will notice it.' },
+    { max: 55.4,  label: 'Unhealthy for sensitive groups', short: 'Sensitive groups', note: 'sensitive people care', v: '--band-usg',  r: '35.5 – 55.4',
+      answer: 'Go out for a while, but not all day.',            care: 'Children with asthma should stay in and play indoors.' },
+    { max: 150.4, label: 'Unhealthy',                      short: 'Unhealthy',        note: 'limit time outdoors',   v: '--band-unh',  r: '55.5 – 150.4',
+      answer: 'Stay inside today.',                             care: 'Keep the windows and doors shut. Indoor games only.' },
+    { max: 250.4, label: 'Very unhealthy',                 short: 'Very unhealthy',   note: 'stay indoors',          v: '--band-vun',  r: '150.5 – 250.4',
+      answer: 'Stay inside. Everyone.',                         care: 'If someone must go out, they need a proper mask.' },
+    { max: Infinity, label: 'Hazardous',                   short: 'Hazardous',        note: 'stay indoors',          v: '--band-haz',  r: '250.5 +',
+      answer: 'Nobody goes outside.',                           care: 'Close every window and door and keep them closed.' }
+  ];
+
+  /* ------------------------------------------------------------ demonstration flag
+     null on every ordinary load. It is set from the address bar and from nowhere
+     else: never from localStorage, never from a default, never from a stored
+     broker profile. Drop ?demo= from the address and reload and the page is the
+     real page again, because there is nothing left anywhere that remembers this.
+
+     A value that cannot be read leaves DEMO null on purpose. The safe failure of
+     a health display is REAL data plus a loud notice, never invented data. */
+  var DEMO = null;
+  var DEMO_UNREAD = '';
+
+  // Representative figure for each band, matched across every wall version so the
+  // index page can drive them all with one link and get comparable screens.
+  var DEMO_BAND_VALUE = {
+    good: 6, moderate: 24, sensitive: 45, unhealthy: 100, verybad: 200, hazardous: 320
+  };
+  var DEMO_BAND_ORDER = ['good', 'moderate', 'sensitive', 'unhealthy', 'verybad', 'hazardous'];
+
+  function readDemo() {
+    var raw;
+    try { raw = new URLSearchParams(location.search).get('demo'); }
+    catch (e) { return null; }
+    if (raw === null) return null;
+    var s = String(raw).trim().toLowerCase();
+    if (s === '') { DEMO_UNREAD = '(empty)'; return null; }
+    if (s === 'cycle') return { mode: 'cycle' };
+    if (s === 'mixed') return { mode: 'mixed' };
+    if (Object.prototype.hasOwnProperty.call(DEMO_BAND_VALUE, s)) {
+      return { mode: 'value', n: DEMO_BAND_VALUE[s], band: s };
+    }
+    // A bare number. Rejecting the non-finite, the negative and the absurd here
+    // keeps ?demo= from being a way to put an impossible figure on a wall.
+    if (/^\d+(\.\d+)?$/.test(s)) {
+      var n = Number(s);
+      if (Number.isFinite(n) && n >= 0 && n <= 9999) return { mode: 'value', n: n };
+    }
+    DEMO_UNREAD = raw;
+    return null;
+  }
+
+  // Decided once, here, before a single line of the page has run. Everything below
+  // only ever reads it.
+  DEMO = readDemo();
+
+  // Home Assistant discovery allows abbreviated keys. Expand the ones we read.
+  var ALIASES = {
+    stat_t: 'state_topic', avty_t: 'availability_topic', uniq_id: 'unique_id',
+    unit_of_meas: 'unit_of_measurement', dev_cla: 'device_class', stat_cla: 'state_class',
+    exp_aft: 'expire_after', pl_avail: 'payload_available', pl_not_avail: 'payload_not_available',
+    dev: 'device', val_tpl: 'value_template', avty: 'availability', ic: 'icon'
+  };
+
+  // ---------------------------------------------------------------- state
+  var client = null;
+  var entities = new Map();      // discovery topic -> entity
+  var byState = new Map();       // state topic     -> Set(discovery topic)
+  var byAvail = new Map();       // avail topic     -> Set(discovery topic)
+  var byUid = new Map();         // unique_id       -> discovery topic (HA collapses these)
+  var boardStatus = new Map();   // board id        -> { raw, at }
+  var subs = new Set();
+  var filteredOut = new Set();
+  var activeFilter = '';
+  var parseErrors = 0;
+  var connState = 'idle';
+  var manualStop = false;
+  var everConnected = false;
+  var discoveryTimer = null;
+  var brokerLabel = '';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var plates = $('plates'), rows = $('rows'), record = $('record'),
+      empty = $('empty'), errata = $('errata');
+  var emptyBase = $('empty-msg').textContent;
+
+  // ---------------------------------------------------------------- helpers
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#7b7466';
+  }
+
+  // The EPA scale starts at 0. Without a lower bound every negative value fell into the
+  // first band, so a faulty sensor reporting -999 printed as a reassuring "Good".
+  function bandFor(n) {
+    if (!Number.isFinite(n) || n < 0) return null;
+    for (var i = 0; i < BANDS.length; i++) if (n <= BANDS[i].max) return BANDS[i];
+    return BANDS[BANDS.length - 1];
+  }
+
+  function isPm(ent) {
+    return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
+  }
+
+  function ago(ts) {
+    if (!ts) return 'never';
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 2) return 'just now';
+    if (s < 60) return s + ' s ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + ' min ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + ' h ' + (m % 60) + ' min ago';
+    return Math.floor(h / 24) + ' d ago';
+  }
+
+  // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
+  function parseValue(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (s === '') return { kind: 'empty', text: 'no value' };
+    if (/^(unknown|unavailable|none|null|nan|n\/a)$/i.test(s)) {
+      return { kind: 'unknown', text: s.toLowerCase() };
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return { kind: 'text', text: s };
+    // The EPA method truncates the concentration to one decimal BEFORE applying
+    // breakpoints. Truncate ONCE, here, and use that one value for both the printed
+    // figure and the band — otherwise the record prints 35.4 while calling it
+    // "unhealthy for sensitive groups", and the scale beside it says 35.4 is moderate.
+    // Truncate, never round: rounding 35.44 up to 35.5 would invent a severity the
+    // station did not report.
+    var n1 = Math.trunc(n * 10) / 10;
+    var text;
+    if (/^[+-]?\d+(\.\d)?$/.test(s)) {
+      text = s.replace(/^\+/, '');            // keep the station's own precision: "0", "0.0"
+    } else {
+      text = n1.toFixed(1);                   // cap runaway precision AT the classified value
+    }
+    return { kind: 'number', n: n, n1: n1, text: text };
+  }
+
+  function boardFromTopic(topic) {
+    var m = /^dbk\/([^/]+)\//i.exec(topic || '');
+    return m ? m[1] : null;
+  }
+
+  var storeWorks = true;
+  // Two different failures used to land in one catch: a browser that blocks storage,
+  // and a corrupt stored value. The second was misreported as the first, and the bad
+  // entry was left in place to fail again on every load.
+  function loadStore() {
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); }
+    catch (e) { storeWorks = false; return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (e) {
+      try { localStorage.removeItem(STORE_KEY); } catch (e2) {}
+      return null;
+    }
+  }
+  function saveStore(v) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; }
+    catch (e) { storeWorks = false; return false; }
+  }
+  function clearStore() {
+    try { localStorage.removeItem(STORE_KEY); return true; } catch (e) { return false; }
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  // ---------------------------------------------------------------- errata
+  // The dashboard's alert stack, re-set as a journal's notices column.
+  function setAlert(id, level, html) {
+    var el = errata.querySelector('.alert[data-id="' + id + '"]');
+    if (!el) {
+      el = document.createElement('p');
+      el.className = 'alert';
+      el.style.margin = '0';
+      el.setAttribute('data-id', id);
+      errata.appendChild(el);
+    }
+    el.setAttribute('data-l', level);
+    el.innerHTML = html;
+  }
+  function clearAlert(id) {
+    var el = errata.querySelector('.alert[data-id="' + id + '"]');
+    if (el) el.remove();
+  }
+
+  // ---------------------------------------------------------------- masthead state
+  var CONN_TEXT = {
+    idle: 'not recording', connecting: 'opening the line', connected: 'recording',
+    reconnecting: 'line dropped, retrying', closed: 'not recording',
+    error: 'cannot reach the broker', fatal: 'the line is closed'
+  };
+  function setConn(state, detail) {
+    connState = state;
+    $('runhead').setAttribute('data-conn', state);
+    var word = detail || CONN_TEXT[state] || state;
+    $('conn-word').textContent = word;
+    $('co-state').textContent = word;
+  }
+  function refreshCounts() {
+    $('co-ents').textContent = String(entities.size);
+    $('co-subs').textContent = String(subs.size);
+  }
+
+  // ---------------------------------------------------------------- subscribe
+  // subRaw is the ONLY place that talks to the broker, and it is private to this file's
+  // own authored topics. Everything that came off the wire goes through sub(), which
+  // refuses wildcards. Keeping the two apart is the whole point: the three discovery
+  // patterns below are ours and bounded; a wildcard in a retained payload is someone
+  // else's and unbounded — on this fleet broker that costs roughly 109 GB a day.
+  function subRaw(topic) {
+    if (!topic || typeof topic !== 'string') return false;
+    // In demonstration mode there is no client and there must never be one. The
+    // book-keeping still runs, because the ceiling, the wildcard refusal and the
+    // "a sensor we cannot listen to gets no line" rule are part of what is being
+    // demonstrated; only the call to the broker is missing, because there is no
+    // broker. Without demo, a null client refuses exactly as it always did.
+    if (!client && !DEMO) return false;
+    if (subs.has(topic)) return true;
+    if (subs.size >= MAX_SUBS) {
+      setAlert('subcap', 'warn',
+        '<b>Subscription ceiling reached (' + MAX_SUBS + ').</b> Further sensors are left ' +
+        'out of this record so the page cannot flood the broker.');
+      return false;
+    }
+    subs.add(topic);
+    refreshCounts();
+    if (!client) return true;                 // demonstration: nothing leaves this page
+    client.subscribe(topic, { qos: 0 }, function (err) {
+      if (err) {
+        subs.delete(topic);
+        refreshCounts();
+        setAlert('suberr', 'bad',
+          '<b>A subscription was rejected.</b> <span class="mono">' + esc(topic) + '</span> — ' +
+          esc(err.message || String(err)) + '. The broker&rsquo;s access rules may not allow it.');
+      }
+    });
+    return true;
+  }
+
+  function sub(topic) {
+    if ((!client && !DEMO) || !topic || typeof topic !== 'string') return false;
+    // Absolute guard. '+' is every bit as dangerous as '#': a retained config declaring
+    // state_topic "+/+/+" delivered ten out of ten unrelated fleet topics in testing.
+    // A topic that came off the wire must name one exact topic.
+    if (/[#+]/.test(topic)) {
+      setAlert('wildcard', 'warn',
+        '<b>A wildcard subscription was refused.</b> An announcement asked for ' +
+        '<span class="mono">' + esc(topic) + '</span>. Topics arriving over the wire must name ' +
+        'one exact topic; neither <span class="mono">#</span> nor <span class="mono">+</span> ' +
+        'is ever subscribed.');
+      return false;
+    }
+    return subRaw(topic);
+  }
+
+  function unsub(topic) {
+    if (!topic || !subs.has(topic)) return;
+    if (byState.has(topic) || byAvail.has(topic)) return;   // still wanted by the other index
+    subs.delete(topic);
+    refreshCounts();
+    if (client) { try { client.unsubscribe(topic); } catch (e) {} }
+  }
+
+  // ---------------------------------------------------------------- discovery
+  function expand(cfg) {
+    var out = {};
+    Object.keys(cfg).forEach(function (k) { out[ALIASES[k] || k] = cfg[k]; });
+    // "~" is a base-topic abbreviation: "~/state" and "prefix/~" expand against it.
+    var base = out['~'];
+    if (typeof base === 'string' && base) {
+      ['state_topic', 'availability_topic'].forEach(function (k) {
+        var v = out[k];
+        if (typeof v !== 'string') return;
+        if (v.charAt(0) === '~') out[k] = base + v.slice(1);
+        else if (v.charAt(v.length - 1) === '~') out[k] = v.slice(0, -1) + base;
+      });
+    }
+    if (!out.availability_topic && Array.isArray(out.availability) && out.availability.length) {
+      var a = out.availability[0];
+      if (a && typeof a.topic === 'string') {
+        out.availability_topic = a.topic;
+        if (a.payload_available) out.payload_available = a.payload_available;
+        if (a.payload_not_available) out.payload_not_available = a.payload_not_available;
+      }
+    }
+    return out;
+  }
+
+  function index(map, key, dtopic) {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(dtopic);
+  }
+
+  // The missing half of index(). Without it a re-published config left the entity
+  // indexed under its OLD state topic, so a line footed dbk/DBK-999/pm2_5 happily
+  // printed a reading that arrived on the abandoned dbk/DBK-001/pm2_5 — one station's
+  // figure under another station's name.
+  function unindex(map, key, dtopic) {
+    if (!key || !map.has(key)) return;
+    var set = map.get(key);
+    set.delete(dtopic);
+    if (set.size === 0) { map.delete(key); unsub(key); }
+  }
+
+  function removeEntity(dtopic) {
+    var gone = entities.get(dtopic);
+    if (!gone) return false;
+    if (gone.plate) gone.plate.root.remove();
+    if (gone.row) gone.row.root.remove();
+    entities.delete(dtopic);
+    if (gone.uid && byUid.get(gone.uid) === dtopic) byUid.delete(gone.uid);
+    unindex(byState, gone.stateTopic, dtopic);
+    unindex(byAvail, gone.availTopic, dtopic);
+    refreshCounts();
+    return true;
+  }
+
+  function matchesFilter(topic) {
+    return !activeFilter || String(topic).indexOf(activeFilter) === 0;
+  }
+
+  function noteFilter() {
+    if (!activeFilter || filteredOut.size === 0) { clearAlert('filter'); return; }
+    setAlert('filter', 'info',
+      '<b>' + filteredOut.size + ' sensor' + (filteredOut.size === 1 ? '' : 's') +
+      ' held out of this record by the topic prefix.</b> It is scoped to state topics ' +
+      'beginning <span class="mono">' + esc(activeFilter) + '</span>. Clear that field in the ' +
+      'broker settings and reconnect to print everything on this broker.');
+  }
+
+  function onDiscovery(dtopic, text) {
+    // An empty retained payload is HA's "delete this entity".
+    if (text.trim() === '') {
+      filteredOut.delete(dtopic);
+      if (removeEntity(dtopic)) layout();
+      noteFilter();
+      return;
+    }
+
+    var cfg;
+    try {
+      cfg = JSON.parse(text);
+    } catch (e) {
+      parseErrors++;                            // one bad retained message must not kill the page
+      setAlert('parse', 'warn',
+        '<b>' + parseErrors + ' malformed announcement' + (parseErrors === 1 ? '' : 's') +
+        ' ignored.</b> Latest: <span class="mono">' + esc(dtopic) + '</span>. The rest of the ' +
+        'record is unaffected.');
+      return;
+    }
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) { parseErrors++; return; }
+
+    cfg = expand(cfg);
+    if (typeof cfg.state_topic !== 'string' || !cfg.state_topic) return;  // nothing to print
+
+    // Scope the record. Anything outside the prefix is dropped BEFORE it takes a line, a
+    // subscription, or a slot under the MAX_SUBS ceiling — and it is counted, so the page
+    // can say so out loud rather than looking mysteriously empty.
+    if (!matchesFilter(cfg.state_topic)) {
+      filteredOut.add(dtopic);
+      if (removeEntity(dtopic)) layout();
+      noteFilter();
+      return;
+    }
+    filteredOut.delete(dtopic);
+    noteFilter();
+
+    var parts = dtopic.split('/');
+    var dev = cfg.device && typeof cfg.device === 'object' ? cfg.device : null;
+    var devName = dev && typeof dev.name === 'string' ? dev.name : '';
+    var measure = typeof cfg.name === 'string' && cfg.name ? cfg.name : (parts[2] || 'sensor');
+    var expire = Number(cfg.expire_after);
+    var uid = typeof cfg.unique_id === 'string' && cfg.unique_id ? cfg.unique_id : '';
+    var board = boardFromTopic(cfg.state_topic);
+    var newAvail = typeof cfg.availability_topic === 'string' ? cfg.availability_topic : '';
+
+    // HA collapses two discovery topics carrying one unique_id into a single entity;
+    // keyed on the discovery topic alone this page printed the same station twice.
+    if (uid && byUid.has(uid) && byUid.get(uid) !== dtopic) removeEntity(byUid.get(uid));
+
+    var ent = entities.get(dtopic) ||
+      { key: dtopic, value: null, at: 0, availRaw: null, availAt: 0, plate: null, row: null };
+
+    // Drop the OLD index entries before writing the new ones, and drop what was measured
+    // there with them. A value read from DBK-001 must not survive under a line now named
+    // DBK-999, frozen or not.
+    if (ent.stateTopic && ent.stateTopic !== cfg.state_topic) {
+      unindex(byState, ent.stateTopic, dtopic);
+      ent.value = null; ent.at = 0; ent.raw = undefined;
+    }
+    if (ent.availTopic && ent.availTopic !== newAvail) {
+      unindex(byAvail, ent.availTopic, dtopic);
+      ent.availRaw = null; ent.availAt = 0;
+    }
+    if (ent.uid && ent.uid !== uid && byUid.get(ent.uid) === dtopic) byUid.delete(ent.uid);
+
+    // The announcement names EVERY station "PM2.5". Identity therefore comes from the
+    // board id parsed out of the state topic; the announced name is demoted to what is
+    // being measured. Three stations titled "PM2.5" are three lines that cannot be told
+    // apart, which is how one room's air got read as another's.
+    var who = devName || board || uid;
+    ent.title = who || measure;
+    ent.measure = who ? measure : '';
+    ent.uid = uid;
+    ent.stateTopic = cfg.state_topic;
+    ent.availTopic = newAvail;
+    ent.unit = typeof cfg.unit_of_measurement === 'string' ? cfg.unit_of_measurement : '';
+    ent.deviceClass = typeof cfg.device_class === 'string' ? cfg.device_class : '';
+    ent.expire = Number.isFinite(expire) && expire > 0 ? expire : DEFAULT_EXPIRE;
+    ent.pAvail = typeof cfg.payload_available === 'string' ? cfg.payload_available : 'online';
+    ent.pNot = typeof cfg.payload_not_available === 'string' ? cfg.payload_not_available : 'offline';
+    ent.templated = !!cfg.value_template;
+    ent.board = board;
+
+    // A sensor this page cannot listen to must never occupy a line. sub() returns false on
+    // both the wildcard refusal and the MAX_SUBS ceiling; ignoring it left a permanent
+    // entry stuck at "awaiting" for a topic no data will ever arrive on.
+    if (!sub(ent.stateTopic)) {
+      if (removeEntity(dtopic)) layout();
+      return;
+    }
+
+    var isNew = !entities.has(dtopic);
+    entities.set(dtopic, ent);
+    if (uid) byUid.set(uid, dtopic);
+    index(byState, ent.stateTopic, dtopic);
+    if (ent.availTopic) index(byAvail, ent.availTopic, dtopic);
+    if (ent.availTopic) sub(ent.availTopic);
+
+    if (isNew) { clearAlert('nodisc'); refreshCounts(); }
+    render(ent);
+    layout();
+  }
+
+  // ---------------------------------------------------------------- messages
+  function onMessage(topic, payload) {
+    var text;
+    try { text = new TextDecoder('utf-8').decode(payload); }
+    catch (e) { text = String(payload); }
+
+    if (/^homeassistant\/.+\/config$/.test(topic)) {
+      try { onDiscovery(topic, text); }
+      catch (e) {
+        parseErrors++;
+        setAlert('parse', 'warn',
+          '<b>An announcement could not be applied.</b> ' + esc(e.message || ''));
+      }
+      return;
+    }
+
+    var now = Date.now();
+    var touched = new Set();
+
+    // Station availability, even where the announcement declared no availability topic.
+    var b = /^dbk\/([^/]+)\/status$/i.exec(topic);
+    if (b) {
+      boardStatus.set(b[1], { raw: text.trim(), at: now });
+      entities.forEach(function (e) { if (e.board === b[1]) touched.add(e); });
+    }
+
+    if (byState.has(topic)) {
+      byState.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.raw = text; e.value = parseValue(text); e.at = now;
+        touched.add(e);
+      });
+    }
+    if (byAvail.has(topic)) {
+      byAvail.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.availRaw = text.trim(); e.availAt = now;
+        touched.add(e);
+      });
+    }
+    if (touched.size) { touched.forEach(render); summarise(); }
+  }
+
+  // ---------------------------------------------------------------- entry state
+  function availabilityOf(ent) {
+    if (ent.availTopic && ent.availRaw !== null) {
+      if (ent.availRaw === ent.pNot) return 'offline';
+      if (ent.availRaw === ent.pAvail) return 'online';
+      return 'unknown';
+    }
+    if (ent.board && boardStatus.has(ent.board)) {
+      var raw = boardStatus.get(ent.board).raw;
+      if (raw === ent.pNot || raw === 'offline') return 'offline';
+      if (raw === ent.pAvail || raw === 'online') return 'online';
+    }
+    return 'unknown';
+  }
+
+  function stateOf(ent) {
+    if (availabilityOf(ent) === 'offline') return 'offline';
+    if (!ent.at || !ent.value) return 'waiting';
+    if (ent.value.kind === 'unknown' || ent.value.kind === 'empty') return 'unknown';
+    // A concentration cannot be negative. Checked BEFORE stale and before live so a broken
+    // sensor is never dressed up as a reading — least of all as a good one.
+    if (ent.value.kind === 'number' && ent.value.n1 < 0 && isPm(ent)) return 'fault';
+    if ((Date.now() - ent.at) / 1000 > ent.expire) return 'stale';
+    return 'live';
+  }
+
+  /* ==========================================================================
+     PRESENTATION — the part that is new. Every string below is authored here,
+     so it may be capitalised; ent.unit and ent.value.text come off the wire and
+     are printed verbatim, always.
+     ========================================================================== */
+
+  var WORD = {
+    offline:  { plate: 'not reporting', tag: 'silent',   adv: 'not reporting' },
+    waiting:  { plate: 'awaiting',      tag: 'awaiting', adv: 'no figure yet' },
+    unknown:  { plate: 'no reading',    tag: 'no value', adv: 'no figure' },
+    fault:    { plate: 'sensor fault',  tag: 'fault',    adv: 'do not use' },
+    stale:    { plate: '',              tag: 'expired',  adv: 'figure expired' }
+  };
+
+  function buildPlate(ent) {
+    var root = document.createElement('div');
+    root.className = 'plate';
+    root.innerHTML =
+      '<div class="p-head"><span class="p-id"></span><span class="p-tag"></span></div>' +
+      '<div class="p-figure"><span class="p-num"></span><span class="p-unit lit"></span></div>' +
+      '<div class="p-band"></div>' +
+      '<div class="p-note"></div>';
+    var p = {
+      root: root,
+      id: root.querySelector('.p-id'),
+      tag: root.querySelector('.p-tag'),
+      num: root.querySelector('.p-num'),
+      unit: root.querySelector('.p-unit'),
+      band: root.querySelector('.p-band'),
+      note: root.querySelector('.p-note')
+    };
+    ent.plate = p;
+    plates.appendChild(root);
+    return p;
+  }
+
+  function buildRow(ent) {
+    var root = document.createElement('tr');
+    root.innerHTML =
+      '<td class="t-id" data-l="Station"></td>' +
+      '<td class="t-read" data-l="Reading"><span class="rd"></span> <span class="ru lit"></span></td>' +
+      '<td class="t-band" data-l="Band"></td>' +
+      '<td class="t-adv" data-l="Outside?"></td>' +
+      '<td class="t-seen" data-l="Last heard"></td>';
+    var r = {
+      root: root,
+      id: root.querySelector('.t-id'),
+      rd: root.querySelector('.rd'),
+      ru: root.querySelector('.ru'),
+      band: root.querySelector('.t-band'),
+      adv: root.querySelector('.t-adv'),
+      seen: root.querySelector('.t-seen')
+    };
+    ent.row = r;
+    rows.appendChild(root);
+    return r;
+  }
+
+  function render(ent) {
+    var p = ent.plate || buildPlate(ent);
+    var r = ent.row || buildRow(ent);
+    var st = stateOf(ent);
+    var avail = availabilityOf(ent);
+    var band = null;
+    // Classify on n1 — the same one-decimal value that is printed — so the figure, its
+    // band and the scale beside it can never contradict one another.
+    if (st === 'live' && ent.value && ent.value.kind === 'number' && isPm(ent)) {
+      band = bandFor(ent.value.n1);
+    }
+    var ink = band ? css(band.v) : (st === 'live' ? css('--ink') : css('--ink-3'));
+
+    p.root.setAttribute('data-state', st);
+    r.root.setAttribute('data-state', st);
+    p.root.style.setProperty('--band', ink);
+    r.root.style.setProperty('--band', ink);
+
+    p.id.textContent = ent.title;
+    r.id.textContent = ent.title;
+
+    // ---- the figure itself, on the plate
+    if (st === 'live' || st === 'stale' || st === 'fault') {
+      p.num.textContent = ent.value.text;                 // exactly what the station said
+      p.num.setAttribute('data-kind', ent.value.kind === 'number' ? 'num' : 'word');
+      p.unit.textContent = ent.unit;                      // verbatim; never case-shifted
+      // The tag is set in small capitals, so ONLY words authored in this file may go in
+      // it. The announced name (ent.measure) came off the wire and is printed further
+      // down, in a slot carrying no case styling of any kind.
+      p.tag.textContent = st === 'live' ? 'reporting' : WORD[st].tag;
+    } else {
+      p.num.textContent = WORD[st] ? WORD[st].plate : 'no reading';
+      p.num.setAttribute('data-kind', 'word');
+      p.unit.textContent = '';
+      p.tag.textContent = WORD[st] ? WORD[st].tag : 'no value';
+    }
+    // Digits never break, so a numeric payload longer than any plausible reading steps
+    // down to a size that is allowed to wrap — the escape hatch that stops nowrap from
+    // becoming a horizontal overflow.
+    p.num.setAttribute('data-long',
+      (p.num.getAttribute('data-kind') === 'num' && p.num.textContent.length > 7) ? '1' : '0');
+
+    // ---- the band line and the note under the plate
+    if (band) {
+      p.band.textContent = band.label;
+    } else if (st === 'fault') {
+      p.band.textContent = 'below zero — not a reading';
+    } else if (st === 'stale') {
+      p.band.textContent = 'expired, treat as unknown';
+    } else if (st === 'live') {
+      p.band.textContent = ent.measure || '';   // wire text, no case styling on this slot
+    } else {
+      p.band.textContent = '—';
+    }
+
+    var histText = '';
+    if (st !== 'live' && ent.value && ent.value.kind === 'number' && ent.at) {
+      // Shown, but plainly labelled as history. An old figure printed as if current is
+      // the one lie this record must never tell.
+      histText = 'Last figure recorded ' + ent.value.text + ' ' + ent.unit + ', ' + ago(ent.at) +
+        ' — history, not now.';
+    }
+    var noteBits = [];
+    if (st === 'offline') {
+      var seen = ent.availAt ||
+        (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0);
+      noteBits.push('Reported silent ' + ago(seen) + '.');
+    } else if (st === 'waiting') {
+      noteBits.push('Alive, but has not published since this page opened.');
+    } else {
+      noteBits.push('Updated ' + ago(ent.at) + '.');
+    }
+    if (avail === 'unknown' && st !== 'offline') noteBits.push('Availability unstated.');
+    if (ent.templated) noteBits.push('Raw value; template not applied.');
+    p.note.innerHTML = esc(noteBits.join(' ')) +
+      (histText ? ' <span class="hist">' + esc(histText) + '</span>' : '');
+
+    // ---- the table line
+    if (st === 'live' || st === 'stale' || st === 'fault') {
+      r.rd.textContent = ent.value.text;
+      r.rd.className = 'rd';
+      r.ru.textContent = ent.unit;
+    } else {
+      r.rd.textContent = '—';
+      r.rd.className = 'rd dash';
+      r.ru.textContent = '';
+    }
+    r.band.textContent = band ? band.label
+      : (st === 'fault' ? 'not valid' : (st === 'stale' ? 'expired' : '—'));
+    if (band) {
+      r.adv.textContent = band.answer;
+      r.adv.className = 't-adv';
+    } else {
+      r.adv.textContent = WORD[st] ? WORD[st].adv : 'no figure';
+      r.adv.className = 't-adv none';
+    }
+    r.seen.textContent = st === 'offline'
+      ? 'silent ' + ago(ent.availAt ||
+          (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0))
+      : (ent.at ? ago(ent.at) : 'never');
+  }
+
+  // ---------------------------------------------------------------- the summary
+  // Where the record answers the only question a child actually asks.
+  function summarise() {
+    var list = [];
+    entities.forEach(function (e) { if (isPm(e)) list.push(e); });
+
+    var reporting = [], worst = null;
+    list.forEach(function (e) {
+      if (stateOf(e) === 'live' && e.value && e.value.kind === 'number') {
+        reporting.push(e);
+        if (!worst || e.value.n1 > worst.value.n1) worst = e;
+      }
+    });
+
+    var total = list.length;
+    var silent = total - reporting.length;
+    var v = $('verdict'), vs = $('verdict-sub');
+    var band = worst ? bandFor(worst.value.n1) : null;
+
+    if (band && worst) {
+      v.style.color = css(band.v);
+      v.textContent = band.answer;
+      vs.innerHTML = band.care + ' The figure behind that answer is ' +
+        '<span class="n">' + esc(worst.value.text) + ' <span class="lit">' + esc(worst.unit) +
+        '</span></span> at station ' + esc(worst.title) + ', which the United States EPA scale ' +
+        'calls <em>' + esc(band.label.toLowerCase()) + '</em>.<sup class="fn">1</sup>' +
+        (silent > 0
+          ? ' ' + silent + ' of the ' + total + ' stations ' + (silent === 1 ? 'is' : 'are') +
+            ' not reporting, so this is ' + (reporting.length === 1 ? 'one room&rsquo;s' : 'part of the school&rsquo;s') +
+            ' air, not the whole school&rsquo;s.'
+          : '');
+    } else {
+      v.style.color = css('--ink-2');
+      v.textContent = total === 0
+        ? 'We cannot say yet.'
+        : 'We cannot say — no station is sending a figure.';
+      vs.innerHTML = total === 0
+        ? 'No station has announced itself on this broker, so there is nothing to read.'
+        : (total === 1 ? 'The one station on this record is' : 'All ' + total + ' stations are') +
+          ' silent, waiting, or holding a figure that has expired. Every figure printed below is ' +
+          'history and is labelled as such; none of it describes the air right ' +
+          'now.<sup class="fn">2</sup>';
+    }
+
+    // Fig. 1 caption — says the mixed state out loud, in words, every time. A station
+    // that is silent, waiting, or holding an expired figure is never counted as
+    // reporting, and the caption never claims "nothing was measured" for a station that
+    // measured something and then went quiet.
+    var mixed;
+    if (total === 0) {
+      mixed = 'No station is on the record yet.';
+    } else if (reporting.length === 0) {
+      mixed = 'No station is reporting a current figure; ' + (total === 1
+        ? 'the one on the record is marked silent, waiting, or expired, and nothing it last ' +
+          'said is treated as now.'
+        : 'all ' + total + ' are marked silent, waiting, or expired, and nothing they last ' +
+          'said is treated as now.');
+    } else if (silent === 0) {
+      mixed = (total === 1 ? 'The one station on the record is' : 'All ' + total + ' stations are') +
+        ' reporting a current figure.';
+    } else {
+      mixed = reporting.length + ' of ' + total + ' stations ' +
+        (reporting.length === 1 ? 'is' : 'are') + ' reporting a current figure; the other ' +
+        (silent === 1 ? 'one is' : silent + ' are') + ' marked silent, waiting, or expired, ' +
+        'and nothing they last said is treated as now.';
+    }
+    $('cap-1').innerHTML = 'PM2.5 by station, in micrograms per cubic metre ' +
+      '(<span class="lit">&micro;g/m&sup3;</span>), as published. ' + mixed;
+
+    // Table 1 caption.
+    $('cap-2').textContent = total === 0
+      ? 'The record is empty; no station has announced itself.'
+      : 'The full record, one line per station, station order. A line without a figure carries ' +
+        'an em dash: that dash is not a zero, and no zero here stands in for a silent monitor.';
+
+    // Fig. 2 marker and caption.
+    var mark = $('mark');
+    if (worst && band) {
+      mark.hidden = false;
+      mark.style.left = scalePos(worst.value.n1).toFixed(2) + '%';
+      mark.style.setProperty('--band', css(band.v));
+      $('mark-val').textContent = worst.value.text;
+      $('cap-3').innerHTML = 'The marker stands at <span class="lit">' + esc(worst.value.text) +
+        ' ' + esc(worst.unit) + '</span>, the highest figure now reporting, at station ' +
+        esc(worst.title) + '.';
+    } else {
+      mark.hidden = true;
+      $('cap-3').textContent = 'No station is reporting a figure, so the scale carries no marker.';
+    }
+  }
+
+  // Equal-width bands, so the low end of the scale — where a child's day is actually
+  // decided — is not squeezed into a sliver by the open-ended hazardous range.
+  function scalePos(n) {
+    var lo = 0, seg = 100 / BANDS.length;
+    for (var i = 0; i < BANDS.length; i++) {
+      var hi = Number.isFinite(BANDS[i].max) ? BANDS[i].max : 500;
+      if (n <= hi || i === BANDS.length - 1) {
+        var f = (n - lo) / (hi - lo);
+        if (!Number.isFinite(f)) f = 0;
+        f = Math.max(0, Math.min(1, f));
+        return (i + f) * seg;
+      }
+      lo = hi;
+    }
+    return 100;
+  }
+
+  // ---------------------------------------------------------------- layout
+  function layout() {
+    var list = Array.from(entities.values());
+    var any = list.length > 0;
+    plates.hidden = !any;
+    record.hidden = !any;
+    empty.hidden = any;
+    if (!any) {
+      $('empty-msg').textContent = filteredOut.size
+        ? filteredOut.size + ' sensor' + (filteredOut.size === 1 ? ' was' : 's were') +
+          ' announced but held out by the topic prefix “' + activeFilter + '”. Clear that field ' +
+          'in the broker settings and reconnect to print every sensor on this broker.'
+        : emptyBase;
+      summarise();
+      return;
+    }
+    // Stable, human order without rebuilding the DOM: PM2.5 first — those are the lines
+    // this record exists for — then by station name.
+    list
+      .sort(function (a, b) {
+        return (isPm(b) ? 1 : 0) - (isPm(a) ? 1 : 0) ||
+          a.title.localeCompare(b.title) || a.stateTopic.localeCompare(b.stateTopic);
+      })
+      .forEach(function (e) {
+        if (e.plate) plates.appendChild(e.plate.root);
+        if (e.row) rows.appendChild(e.row.root);
+      });
+    summarise();
+  }
+
+  // ---------------------------------------------------------------- the scale strip
+  (function drawScale() {
+    var host = $('seg');
+    BANDS.forEach(function (b) {
+      var el = document.createElement('div');
+      el.innerHTML = '<span style="color:' + css(b.v) + '">' + esc(b.short) + '</span>' +
+        '<em>' + esc(b.r) + '</em>';
+      host.appendChild(el);
+    });
+  })();
+
+  // ---------------------------------------------------------------- the date line
+  function stamp() {
+    var d = new Date();
+    var day = d.toLocaleDateString(undefined,
+      { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    var t = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+    $('stamp').textContent = day + ' · ' + t;
+  }
+
+  // ---------------------------------------------------------------- failure screen
+  // "The whole screen becomes one calm sentence saying what to do."
+  function setFatal(sentence) {
+    $('fatal-text').textContent = sentence;
+    $('fatal').hidden = false;
+  }
+  function clearFatal() { $('fatal').hidden = true; }
+
+  // ---------------------------------------------------------------- connect
+  function describe(err) {
+    var code = err && (err.code !== undefined ? err.code : err.reasonCode);
+    var map = {
+      1: 'the broker rejected the MQTT protocol version',
+      2: 'the broker rejected this client id',
+      3: 'the broker is unavailable',
+      4: 'the username or passphrase is wrong',
+      5: 'this account is not authorised for the broker'
+    };
+    if (map[code]) return { text: map[code], fatal: code === 2 || code === 4 || code === 5 };
+    var m = String((err && err.message) || err || 'unknown error');
+    if (/not authoriz|bad user/i.test(m)) return { text: m, fatal: true };
+    return { text: m, fatal: false };
+  }
+
+  function disconnect() {
+    manualStop = true;
+    if (client) { try { client.end(true); } catch (e) {} client = null; }
+    subs.clear();
+    refreshCounts();
+  }
+
+  function connect(cfg) {
+    // The single chokepoint. Every route to a socket — boot, the settings slip,
+    // a retry — passes through here, so one line makes "a demonstration page never
+    // opens a connection" true of all of them rather than of the ones remembered.
+    // Real and invented readings can therefore never appear on one screen.
+    if (DEMO) return;
+
+    if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
+      setConn('fatal', 'the library did not load');
+      setFatal('This page could not load the MQTT library it reads the monitors with, so put ' +
+               'this machine back on a network that can reach unpkg.com and reload.');
+      return;
+    }
+
+    disconnect();
+    manualStop = false;
+    everConnected = false;
+    activeFilter = typeof cfg.filter === 'string' ? cfg.filter.trim() : '';
+    filteredOut.clear();
+    ['conn', 'auth', 'mixed', 'nodisc', 'suberr', 'parse', 'wildcard', 'subcap', 'filter']
+      .forEach(clearAlert);
+
+    var scheme = cfg.tls ? 'wss' : 'ws';
+    var url = scheme + '://' + cfg.host + ':' + cfg.port;
+    brokerLabel = cfg.host + ':' + cfg.port;
+    $('co-host').textContent = brokerLabel;
+    setConn('connecting');
+
+    // A page served over HTTPS cannot open a plaintext ws:// socket.
+    if (!cfg.tls && location.protocol === 'https:') {
+      setAlert('mixed', 'warn',
+        '<b>Mixed content.</b> This page is served over HTTPS, so the browser blocks the ' +
+        'plaintext <span class="mono">ws://</span> connection. Tick the secure socket in the ' +
+        'broker settings, or open this file straight from disk.');
+    }
+
+    try {
+      client = mqtt.connect(url, {
+        username: cfg.user || undefined,
+        password: cfg.pass || undefined,
+        clientId: 'air-record-' + Math.random().toString(16).slice(2, 10),
+        clean: true,
+        reconnectPeriod: 4000,
+        connectTimeout: 8000,
+        keepalive: 45,
+        resubscribe: true
+      });
+    } catch (e) {
+      setConn('fatal');
+      setFatal('This page could not open a connection to ' + url +
+               ', so press s and check the address it was given.');
+      return;
+    }
+
+    client.on('connect', function () {
+      everConnected = true;
+      setConn('connected');
+      clearFatal();
+      clearAlert('conn');
+      // Bounded discovery patterns — the two shapes HA publishes, plus station
+      // availability. subRaw, not sub: these three are authored here and are the ONLY
+      // wildcards this page may ever subscribe to. sub() refuses every wildcard that
+      // arrives over the wire, and nothing anywhere subscribes to the whole tree.
+      subRaw('homeassistant/+/+/config');     // <component>/<object_id>/config
+      subRaw('homeassistant/+/+/+/config');   // <component>/<node_id>/<object_id>/config
+      subRaw('dbk/+/status');
+      if (discoveryTimer) clearTimeout(discoveryTimer);
+      discoveryTimer = setTimeout(function () {
+        // Silent when the prefix is what emptied the record — noteFilter() already says so.
+        if (entities.size === 0 && filteredOut.size === 0 && connState === 'connected') {
+          setAlert('nodisc', 'info',
+            '<b>Connected, but no announcement arrived.</b> Announcements are retained and ' +
+            'replay the instant this page subscribes, so an empty record usually means nothing ' +
+            'has published to <span class="mono">homeassistant/&hellip;/config</span> on this ' +
+            'broker yet.');
+        }
+      }, 4000);
+      emptyBase = 'Connected. Waiting for a retained announcement to describe a station.';
+      layout();
+    });
+
+    client.on('message', function (topic, payload) {
+      try { onMessage(topic, payload); }
+      catch (e) { /* one bad message must never stop the record */ }
+    });
+
+    client.on('reconnect', function () {
+      if (!manualStop && connState !== 'fatal') setConn('reconnecting');
+    });
+    client.on('offline', function () {
+      if (!manualStop && connState !== 'fatal') setConn('reconnecting', 'broker unreachable, retrying');
+    });
+
+    // A browser never reveals WHY a WebSocket handshake failed, and for a refused port
+    // mqtt.js may close without ever emitting a useful 'error'. Without this branch the
+    // page would sit on a bare "disconnected" and explain nothing.
+    client.on('close', function () {
+      if (manualStop || connState === 'fatal') return;
+      if (!everConnected) {
+        setConn('error');
+        setFatal('Nothing is arriving from the monitors at ' + url +
+                 ', so check that the broker is switched on, that this machine is on the same ' +
+                 'network, and that the port is its WebSocket listener rather than its plain one.');
+      } else {
+        setConn('reconnecting', 'line dropped, retrying');
+        setAlert('conn', 'warn',
+          '<b>The line to the broker dropped.</b> Retrying every four seconds. The figures below ' +
+          'keep their last known state and will age into <em>expired</em>.');
+      }
+    });
+
+    client.on('error', function (err) {
+      var d = describe(err);
+      if (d.fatal) {
+        setConn('fatal');
+        setFatal('The broker at ' + brokerLabel + ' refused this page — ' + d.text +
+                 ' — so press s and enter details it will accept.');
+        manualStop = true;
+        try { client.end(true); } catch (e) {}
+        client = null;
+      } else if (!everConnected) {
+        setConn('error');
+        setFatal('Nothing is arriving from the monitors at ' + url + ' — ' + d.text +
+                 ' — so check that the broker is switched on and reachable from this machine.');
+      } else {
+        setConn('error', 'cannot reach the broker, retrying');
+        setAlert('conn', 'bad',
+          '<b>Cannot reach the broker</b> at <span class="mono">' + esc(url) + '</span> — ' +
+          esc(d.text) + '. Retrying every four seconds.');
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------- settings slip
+  var settings = $('settings'), form = $('form');
+
+  function readForm() {
+    return {
+      host: $('f-host').value.trim(),
+      port: $('f-port').value.trim(),
+      user: $('f-user').value,
+      pass: $('f-pass').value,
+      tls: $('f-tls').checked,
+      filter: $('f-filter').value.trim(),
+      remember: $('f-remember').checked
+    };
+  }
+  function fillForm(v) {
+    $('f-host').value = (v && v.host) || DEFAULT_HOST;
+    $('f-port').value = (v && v.port) || DEFAULT_PORT;
+    $('f-user').value = (v && v.user) || '';
+    $('f-pass').value = (v && v.pass) || '';
+    $('f-tls').checked = v && typeof v.tls === 'boolean' ? v.tls : (location.protocol === 'https:');
+    $('f-filter').value = v && typeof v.filter === 'string' ? v.filter : DEFAULT_FILTER;
+    // Tick it when a passphrase really is on disk — including one saved by an older build
+    // that stored it unconditionally and had no flag.
+    $('f-remember').checked = !!(v && (v.remember || v.pass));
+  }
+  // What goes to disk is not what is in the form: the passphrase is opt-in.
+  function storable(cfg) {
+    var out = { host: cfg.host, port: cfg.port, user: cfg.user, tls: cfg.tls,
+                filter: cfg.filter, remember: !!cfg.remember };
+    if (cfg.remember) out.pass = cfg.pass;
+    return out;
+  }
+  function openSettings() {
+    settings.hidden = false;
+    $('f-host').focus();
+  }
+  function closeSettings() { settings.hidden = true; }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (DEMO) return;                       // connect() would refuse anyway; do not even try
+    var cfg = readForm();
+    if (!cfg.host || !cfg.port) return;
+    entities.forEach(function (e) {
+      if (e.plate) e.plate.root.remove();
+      if (e.row) e.row.root.remove();
+    });
+    entities.clear(); byState.clear(); byAvail.clear(); byUid.clear(); boardStatus.clear();
+    filteredOut.clear();
+    parseErrors = 0;
+    refreshCounts(); layout();
+    var ok = saveStore(storable(cfg));
+    $('store-hint').textContent = !ok
+      ? 'This browser refused to save these settings (a private window?). The connection still ' +
+        'works, but they will need entering again next time.'
+      : cfg.remember
+        ? 'Saved in this browser only, on this device — passphrase included. Nothing is uploaded.'
+        : 'Saved in this browser only, on this device. The passphrase was NOT stored; it will ' +
+          'need typing again next time.';
+    closeSettings();
+    clearFatal();
+    connect(cfg);
+  });
+
+  $('btn-close').addEventListener('click', closeSettings);
+  $('btn-forget').addEventListener('click', function () {
+    clearStore();
+    fillForm(null);
+    $('f-pass').value = '';
+    $('store-hint').textContent = 'Saved settings cleared from this browser.';
+  });
+
+  // "s" opens the settings; nothing else does, and nothing opens them on load.
+  document.addEventListener('keydown', function (ev) {
+    var t = ev.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      if (ev.key === 'Escape') closeSettings();
+      return;
+    }
+    if (ev.key === 'Escape') { closeSettings(); return; }
+    if (DEMO) return;   // no broker to configure, and no way to start one from here
+    if (ev.key === 's' || ev.key === 'S') {
+      ev.preventDefault();
+      if (settings.hidden) openSettings(); else closeSettings();
+    }
+  });
+
+  /* ==========================================================================
+     DEMONSTRATION — opt in from the address bar, from nowhere else.
+
+       ?demo=163.3     every station renders as if it had published that figure
+       ?demo=<band>    good | moderate | sensitive | unhealthy | verybad | hazardous
+       ?demo=cycle     the six bands in turn, four seconds each, looping
+       ?demo=mixed     one station reporting, one expired, one silent — which is
+                       what this fleet actually looks like most of the time
+
+     There is no second renderer here, and that is the point. This block writes the
+     bytes three stations would have published — the retained discovery JSON, the
+     station status, the sensor payloads — and posts them into onMessage(), the
+     same function the broker feeds. Discovery expansion, the wildcard refusal, the
+     unique_id collapse, expiry, banding, the plates, the table, the scale and the
+     verdict all run exactly as they run on the wall. If the layout breaks at 163.3
+     here, it breaks at 163.3 there.
+
+     What it does NOT do is open a socket: connect() returns immediately while DEMO
+     is set. Nothing is written to storage, nothing is read from it, and nothing
+     survives dropping the parameter from the address.
+     ========================================================================== */
+
+  var DEMO_UNIT = 'µg/m³';    // µg/m³ — the wire's own bytes, never case-shifted
+
+  // The six sensors, as the boards announce them. DBK-002 is the fully-instrumented
+  // board and publishes all of them; the other two publish PM2.5 alone.
+  var DEMO_SENSORS = {
+    'pm2_5':             { name: 'PM2.5',             unit: DEMO_UNIT, cls: 'pm25' },
+    'pm1_0':             { name: 'PM1.0',             unit: DEMO_UNIT, cls: 'pm1' },
+    'pm10':              { name: 'PM10',              unit: DEMO_UNIT, cls: 'pm10' },
+    'wi-fi_rssi':        { name: 'Wi-Fi RSSI',        unit: 'dBm',     cls: 'signal_strength' },
+    'uptime':            { name: 'Uptime',            unit: 's',       cls: 'duration' },
+    'air_quality_level': { name: 'Air quality level', unit: '',        cls: '' }
+  };
+  var DEMO_ALL = ['pm2_5', 'pm1_0', 'pm10', 'wi-fi_rssi', 'uptime', 'air_quality_level'];
+  var DEMO_BOARDS = [
+    { id: 'DBK-001', sensors: ['pm2_5'],  rssi: -71, up: 190244 },
+    { id: 'DBK-002', sensors: DEMO_ALL,   rssi: -63, up: 48213 },
+    { id: 'DBK-010', sensors: ['pm2_5'],  rssi: -78, up: 903117 }
+  ];
+
+  var demoIx = 0;
+  var demoEnc = (typeof TextEncoder === 'function') ? new TextEncoder() : null;
+
+  // One decimal, truncated — what an ESPHome PM sensor actually puts on the wire.
+  function demoFix(v) { return (Math.trunc(v * 10) / 10).toFixed(1); }
+
+  // Post a payload as if the broker had delivered it. Uint8Array, because that is
+  // what mqtt.js hands onMessage; the demo must not get a friendlier input than
+  // the real path gets.
+  function demoPost(topic, text) {
+    onMessage(topic, demoEnc ? demoEnc.encode(String(text)) : String(text));
+  }
+
+  // The retained discovery announcement, abbreviated keys and all — including the
+  // detail that every board names its PM sensor "PM2.5", which is exactly why the
+  // page takes station identity from the state topic instead.
+  function demoConfig(board, slug) {
+    var s = DEMO_SENSORS[slug];
+    var cfg = {
+      '~': 'dbk/' + board.id,
+      name: s.name,
+      stat_t: '~/' + slug,
+      avty_t: '~/status',
+      uniq_id: board.id.toLowerCase().replace(/-/g, '') + '_' + slug,
+      exp_aft: 900,
+      dev: {
+        name: board.id,                       // device name IS the board id on these boards
+        ids: [board.id.toLowerCase()],
+        mf: 'Kit4Kids', mdl: 'DBK air monitor', sw: '2026.8.1'
+      }
+    };
+    if (s.unit) cfg.unit_of_meas = s.unit;
+    if (s.cls) cfg.dev_cla = s.cls;
+    if (slug !== 'air_quality_level') cfg.stat_cla = 'measurement';
+    return cfg;
+  }
+
+  // pm1 and pm10 are derived from pm2.5 the way a real board's optical counter
+  // relates them, so the dense versions get numbers that hang together instead of
+  // three unrelated inventions.
+  function demoPayload(board, slug, pm) {
+    if (slug === 'pm2_5') return demoFix(pm);
+    if (slug === 'pm1_0') return demoFix(pm * 0.62);
+    if (slug === 'pm10')  return demoFix(pm * 1.45);
+    if (slug === 'wi-fi_rssi') return String(board.rssi);
+    if (slug === 'uptime') return String(board.up);
+    var b = bandFor(pm);
+    return b ? b.label : 'unknown';
+  }
+
+  // What each board is doing this instant. Ages are in milliseconds behind now, so
+  // the timestamps a reader sees are plausible: a reporting board spoke seconds
+  // ago, an expired one tens of minutes ago, a silent one hours ago.
+  function demoPlan() {
+    if (DEMO.mode === 'mixed') {
+      return [
+        // Reporting, mid-band, and the fully-instrumented board so the dense
+        // layouts have their six sensors to show.
+        { id: 'DBK-002', online: true,  pm: 78.4, readAge: 4e3,      statusAge: 5.4e6 },
+        // Alive, but its last figure is older than its declared 900 s expiry.
+        { id: 'DBK-001', online: true,  pm: 96.1, readAge: 2.52e6,   statusAge: 5.4e6 },
+        // Announced itself offline, and still carries the figure it left behind.
+        { id: 'DBK-010', online: false, pm: 54.2, readAge: 1.152e7,  statusAge: 1.146e7 }
+      ];
+    }
+    var n = DEMO.mode === 'cycle'
+      ? DEMO_BAND_VALUE[DEMO_BAND_ORDER[demoIx % DEMO_BAND_ORDER.length]]
+      : DEMO.n;
+    return [
+      { id: 'DBK-001', online: true, pm: n, readAge: 11e3, statusAge: 5.4e6 },
+      { id: 'DBK-002', online: true, pm: n, readAge: 3e3,  statusAge: 5.4e6 },
+      { id: 'DBK-010', online: true, pm: n, readAge: 7e3,  statusAge: 5.4e6 }
+    ];
+  }
+
+  // The marker's sentence. It names the mode AND the figure being simulated, so a
+  // photograph of the band alone tells a reader what they are looking at.
+  function demoWhat(plan) {
+    function say(pm) {
+      var b = bandFor(pm);
+      return demoFix(pm) + ' ' + DEMO_UNIT + (b ? ' (' + b.label + ')' : '');
+    }
+    if (DEMO.mode === 'mixed') {
+      return 'Invented fleet: DBK-002 reporting ' + say(plan[0].pm) +
+             ', DBK-001 expired, DBK-010 silent.';
+    }
+    if (DEMO.mode === 'cycle') {
+      return 'Cycling the six bands, four seconds each. Every station now showing ' +
+             say(plan[0].pm) + '.';
+    }
+    return 'Every station showing an invented ' + say(plan[0].pm) + '.';
+  }
+
+  // The retained announcements, published once, exactly as they replay on connect.
+  function demoAnnounce() {
+    DEMO_BOARDS.forEach(function (b) {
+      b.sensors.forEach(function (slug) {
+        demoPost(
+          'homeassistant/sensor/' + b.id.toLowerCase().replace(/-/g, '_') + '/' + slug + '/config',
+          JSON.stringify(demoConfig(b, slug))
+        );
+      });
+    });
+  }
+
+  function demoTick() {
+    var plan = demoPlan();
+    var now = Date.now();
+    var byId = {};
+    plan.forEach(function (p) { byId[p.id] = p; });
+
+    plan.forEach(function (p) {
+      var board = null;
+      DEMO_BOARDS.forEach(function (b) { if (b.id === p.id) board = b; });
+      if (!board) return;
+      demoPost('dbk/' + p.id + '/status', p.online ? 'online' : 'offline');
+      board.sensors.forEach(function (slug) {
+        demoPost('dbk/' + p.id + '/' + slug, demoPayload(board, slug, p.pm));
+      });
+    });
+
+    // A payload cannot carry the moment it was sent, so the ages are written onto
+    // the very entity objects the wire path just produced — no copies, no parallel
+    // store. stateOf() then decides live / expired / silent on its own terms, from
+    // the same three fields it uses on the wall.
+    entities.forEach(function (e) {
+      var p = byId[e.board];
+      if (!p) return;
+      e.at = now - p.readAge;
+      e.availAt = now - p.statusAge;
+    });
+    plan.forEach(function (p) {
+      if (boardStatus.has(p.id)) {
+        boardStatus.set(p.id, {
+          raw: p.online ? 'online' : 'offline',
+          at: now - p.statusAge
+        });
+      }
+    });
+
+    entities.forEach(render);
+    summarise();
+    $('demo-what').textContent = demoWhat(plan);
+    if (DEMO.mode === 'cycle') demoIx++;
+  }
+
+  function demoStart() {
+    document.documentElement.setAttribute('data-demo', DEMO.mode);
+    document.body.classList.add('demo');
+    document.title = 'DEMO — ' + document.title;
+    $('demo-band').hidden = false;
+
+    // Nothing about this page is claiming to be connected.
+    setConn('demo', 'demonstration — no broker');
+    $('co-host').textContent = 'nothing — every figure below is invented';
+    $('co-keys').textContent = 'Broker settings are disabled in demonstration mode';
+    $('store-hint').textContent =
+      'Demonstration mode reads no saved setting and writes none. Remove the demo parameter ' +
+      'from the address and reload to return to the monitors.';
+    emptyBase = 'Demonstration mode is setting out its stations.';
+
+    setAlert('demo', 'info',
+      '<b>This page is a demonstration and every figure on it is invented.</b> It was asked for ' +
+      'by <span class="mono">?demo=</span> in the address, it is connected to no broker, and it ' +
+      'describes the air in no room. Remove that parameter from the address and reload to read ' +
+      'the monitors. <span lang="th">หน้านี้เป็นตัวอย่าง ไม่ใช่ค่าอากาศจริง</span>');
+
+    demoAnnounce();
+    demoTick();
+    // Four seconds: the cycle step, and for the fixed modes a republication that
+    // keeps the reporting stations from ageing into "expired" while someone looks
+    // at them — which is what a board publishing every few seconds really does.
+    setInterval(demoTick, 4000);
+  }
+
+  // ---------------------------------------------------------------- boot
+  // No configuration screen on load, ever. Stored settings first; then ?u=&p= from the
+  // address; then anonymous to the lab broker's WebSocket listener.
+  function bootConfig() {
+    var saved = loadStore();
+    if (saved && saved.host && saved.port) return saved;
+
+    var cfg = {
+      host: DEFAULT_HOST, port: DEFAULT_PORT, user: '', pass: '',
+      tls: location.protocol === 'https:', filter: DEFAULT_FILTER, remember: false
+    };
+    try {
+      var q = new URLSearchParams(location.search);
+      if (q.get('h')) cfg.host = q.get('h');
+      if (q.get('port')) cfg.port = q.get('port');
+      if (q.get('u')) cfg.user = q.get('u');
+      if (q.get('p')) cfg.pass = q.get('p');
+      if (q.get('filter') !== null) cfg.filter = q.get('filter');
+    } catch (e) { /* a browser without URLSearchParams still gets the anonymous default */ }
+    return cfg;
+  }
+
+  stamp();
+  var boot = null;
+  if (DEMO) {
+    // A demonstration never touches the stored broker profile — not to read a host,
+    // not to read a passphrase, and above all not to write anything back.
+    fillForm(null);
+    activeFilter = '';
+  } else {
+    boot = bootConfig();
+    fillForm(boot);
+    activeFilter = typeof boot.filter === 'string' ? boot.filter.trim() : '';
+  }
+  refreshCounts();
+  layout();
+
+  $('store-hint').textContent = !storeWorks
+    ? 'This browser blocks local storage, so settings cannot be remembered on this device.'
+    : 'Settings are kept in this browser only, on this device, and the passphrase only if the ' +
+      'box above is ticked.';
+
+  if (DEMO) {
+    demoStart();
+  } else {
+    // A ?demo= that could not be read is reported and then ignored. The page goes on
+    // reading the real monitors, because inventing figures on a health display for a
+    // reader who mistyped a parameter is the one outcome that is never acceptable.
+    if (DEMO_UNREAD) {
+      setAlert('demo', 'bad',
+        '<b>The demonstration parameter was not understood, so nothing is being simulated.</b> ' +
+        '<span class="mono">' + esc(DEMO_UNREAD) + '</span> is not a figure or a band name. ' +
+        'Every figure below is a real reading from a real monitor. Use ' +
+        '<span class="mono">?demo=</span> with a number, with ' +
+        '<span class="mono">good</span>, <span class="mono">moderate</span>, ' +
+        '<span class="mono">sensitive</span>, <span class="mono">unhealthy</span>, ' +
+        '<span class="mono">verybad</span> or <span class="mono">hazardous</span>, or with ' +
+        '<span class="mono">cycle</span> or <span class="mono">mixed</span>.');
+    }
+    connect(boot);
+  }
+
+  // One second is enough to keep "last heard" honest and to age a figure into expired.
+  setInterval(function () {
+    stamp();
+    entities.forEach(render);
+    summarise();
+  }, 1000);
+})();
+</script>
+</body>
+</html>

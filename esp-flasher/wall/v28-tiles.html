@@ -1,0 +1,1487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Air Tiles — live PM2.5</title>
+<style>
+/* =====================================================================
+   v28 — TILES. A Control Center deck of small glass modules over a
+   photograph of the air the sensors are actually measuring.
+
+   LEGIBILITY CONTRACT (the whole reason the numbers below are what they
+   are). Six photographs sit under this page. good.jpg has a pale peach
+   sky near luminance 0.9; hazardous.jpg is a near-black ochre murk. No
+   single text colour survives that range on its own, so the page never
+   asks it to:
+
+     1. A FIXED veil covers every photograph. Its alpha never drops below
+        0.68 anywhere on screen, whatever the band. The photograph is
+        therefore always seen through the same darkening film — its
+        colour still reads, its brightness cannot.
+     2. Every glass module adds its own dark fill (alpha 0.62) ON TOP of
+        that veil. Worst case — the brightest pixel of the dawn sky —
+        composites to a relative luminance of about 0.11.
+     3. Type is sized and coloured against that worst case, not against
+        the average one:
+           --ink  #f4f8fc  ≈ 6.5:1     (all body copy)
+           --ink2 #dde5ee  ≈ 5.0:1     (secondary copy)
+           --ink3 #d6dee8  ≈ 4.7:1     (labels, footers)
+        Every band tint used for a numeral clears 3.5:1 and is only ever
+        applied to text at 24px or larger. Band NAMES are always drawn in
+        --ink inside a tinted chip, never in the tint itself.
+     4. backdrop-filter is a bonus, never the mechanism. The numbers
+        above assume it does not exist, which is exactly the Firefox
+        case; @supports then swaps the fill to alpha 0.94 and contrast
+        only improves.
+     5. A text-shadow rides under every glyph as the last line of defence
+        against a bright detail landing behind a thin panel edge.
+
+   BUGS THAT SHIPPED ONCE AND MUST NOT RETURN:
+     A. Not one CSS case transform exists in this file — grep it. CSS
+        uppercasing maps "µ" to "M", turning µg/m³ into MG/M³: a 1000x
+        unit error produced by a styling rule. Any label that looks
+        capitalised was authored that way in the markup.
+     B. Readings size off their CONTAINER (cqi) and never wrap, so a
+        three-digit hazardous reading cannot break into "163." + "3".
+     C. Board identity is parsed from the state topic. The discovery
+        "name" is "PM2.5" on every board and identifies nothing.
+     D. No subscription may contain '#'. Wire-supplied topics are
+        refused if they contain '#' or '+'.
+   ===================================================================== */
+
+:root{
+  --ink:#f4f8fc;
+  --ink2:#dde5ee;
+  --ink3:#d6dee8;
+
+  /* glass */
+  --fill:rgba(9,13,19,.62);
+  --fill-solid:rgba(12,17,25,.94);
+  --edge:rgba(255,255,255,.11);
+  --sheen:rgba(255,255,255,.20);
+  --radius:clamp(15px,1.5vw,24px);
+
+  /* band tints — text/graphic use only, all ≥3.5:1 on the composited
+     module ground, all only ever used at 24px+ */
+  --bt:#cfd8e3;
+
+  --gap:clamp(.4rem,.72vw,.85rem);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;max-width:100%}
+body{
+  background:#06080c;
+  color:var(--ink);
+  font:clamp(13px,.76vw,17px)/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",
+       ui-sans-serif,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+}
+h1,h2,h3{margin:0;font-weight:600}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+/* ---------------------------------------------------------------- sky */
+.sky{position:fixed;inset:0;z-index:0}
+.ply{
+  position:absolute;inset:0;
+  background-position:center;background-size:cover;background-repeat:no-repeat;
+  opacity:0;
+  transition:opacity 1200ms cubic-bezier(.4,0,.2,1);
+  will-change:opacity;
+}
+/* The fixed film. Its lightest point is alpha .68 — that is the number
+   the whole contrast contract is built on. */
+.veil{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(140% 100% at 50% 44%, rgba(3,5,9,.60) 0%, rgba(3,5,9,.86) 100%),
+    linear-gradient(180deg, rgba(4,6,10,.80) 0%, rgba(4,6,10,.68) 42%, rgba(4,6,10,.84) 100%);
+}
+@media (prefers-reduced-motion:reduce){
+  .ply{transition:none}
+  *{animation:none!important}
+}
+
+/* --------------------------------------------------------------- deck */
+.deck{
+  position:relative;z-index:1;
+  height:100dvh;
+  padding:var(--gap);
+  display:grid;
+  gap:var(--gap);
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-auto-rows:minmax(0,1fr);
+  grid-auto-flow:row dense;
+}
+@media (max-width:899px){
+  .deck{height:auto;min-height:100dvh;grid-auto-rows:minmax(8.5rem,auto)}
+}
+@media (min-width:900px){
+  .deck{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    /* rows share the height evenly, but never shrink below a readable floor —
+       a deck that grows past the viewport spills into ordinary page scroll
+       rather than crushing every module. */
+    grid-auto-rows:minmax(clamp(6.5rem,21dvh,13rem),1fr);
+  }
+}
+@media (min-width:1400px){ .deck{grid-template-columns:repeat(6,minmax(0,1fr))} }
+
+/* -------------------------------------------------------------- glass */
+.tile{
+  position:relative;
+  display:flex;flex-direction:column;
+  min-width:0;min-height:0;
+  overflow:hidden;
+  padding:clamp(.55rem,1vw,1.05rem);
+  border-radius:var(--radius);
+  border:1px solid var(--edge);
+  background:var(--fill);
+  backdrop-filter:blur(26px) saturate(165%) brightness(.74);
+  -webkit-backdrop-filter:blur(26px) saturate(165%) brightness(.74);
+  box-shadow:0 14px 34px rgba(0,0,0,.42), inset 0 1px 0 var(--sheen);
+  color:var(--ink);
+  text-shadow:0 1px 3px rgba(0,0,0,.55);
+  container-type:inline-size;
+}
+/* the 1px top-edge highlight, curved with the corner */
+.tile::after{
+  content:"";position:absolute;left:0;right:0;top:0;height:38%;
+  border-radius:var(--radius) var(--radius) 0 0;
+  background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,0));
+  pointer-events:none;
+}
+/* Firefox and anything else without backdrop-filter gets a near-opaque
+   panel instead of an unreadable transparent one. */
+@supports not (backdrop-filter: blur(1px)){
+  .tile,.sheet-card,.calm{background:var(--fill-solid)}
+}
+
+.tile--hero{grid-column:span 2;grid-row:span 2}
+.tile--wide{grid-column:span 2}
+@media (min-width:1400px){ .tile--wide{grid-column:span 3} }
+
+/* tile label — authored in the case it is displayed in. NO uppercase
+   transform anywhere in this file (see bug A). */
+.tl{
+  font-size:clamp(.62rem,4.6cqi,.78rem);
+  letter-spacing:.09em;
+  color:var(--ink3);
+  font-weight:600;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  flex:none;
+}
+.tf{
+  margin-top:auto;padding-top:.35rem;
+  font-size:clamp(.6rem,4.2cqi,.76rem);
+  color:var(--ink3);
+  line-height:1.35;
+  flex:none;
+  overflow:hidden;
+}
+.tf b{color:var(--ink2);font-weight:600}
+
+/* readings — sized off the CONTAINER, never the viewport (bug B) */
+.big{
+  display:block;
+  font-size:clamp(1.6rem,30cqi,4.6rem);
+  line-height:.94;
+  font-weight:700;
+  letter-spacing:-.035em;
+  white-space:nowrap;
+  color:var(--bt);
+}
+.big[data-long="1"]{font-size:clamp(1.1rem,13cqi,2rem);white-space:normal;overflow-wrap:anywhere}
+.big[data-kind="word"]{font-size:clamp(1.15rem,17cqi,2.4rem);letter-spacing:-.01em;font-weight:650}
+.unit{
+  font-size:clamp(.66rem,5.4cqi,1rem);
+  color:var(--ink2);font-weight:500;white-space:nowrap;
+}
+.row-val{display:flex;align-items:baseline;gap:.35em;min-width:0}
+
+/* chip — band name always in --ink, tint only as fill/border/dot */
+.chip{
+  display:inline-flex;align-items:center;gap:.4em;
+  align-self:flex-start;max-width:100%;
+  padding:.22em .6em;border-radius:999px;
+  background:color-mix(in srgb,var(--bt) 20%,transparent);
+  border:1px solid color-mix(in srgb,var(--bt) 55%,transparent);
+  font-size:clamp(.62rem,4.6cqi,.82rem);
+  font-weight:650;color:var(--ink);
+  min-width:0;
+}
+.chip i{width:.55em;height:.55em;border-radius:50%;background:var(--bt);flex:none}
+.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ------------------------------------------------------------- hero */
+.tile--hero .answer{
+  font-size:clamp(1.15rem,9.5cqi,2.5rem);
+  line-height:1.06;
+  font-weight:700;
+  letter-spacing:-.025em;
+  margin:.3rem 0 .1rem;
+}
+.tile--hero .because{
+  font-size:clamp(.72rem,4.2cqi,1.05rem);
+  color:var(--ink2);
+  line-height:1.35;
+  max-width:34ch;
+}
+.hero-num{display:flex;align-items:baseline;gap:.4em;margin:.45rem 0 .4rem;min-width:0}
+.hero-num .big{font-size:clamp(2rem,22cqi,5.4rem)}
+.hero-num .big[data-kind="word"]{font-size:clamp(1.3rem,11cqi,2.6rem)}
+.hero-num .unit{font-size:clamp(.75rem,4cqi,1.2rem)}
+.hero-foot{
+  margin-top:auto;display:flex;flex-wrap:wrap;gap:.35rem .9rem;align-items:baseline;
+  font-size:clamp(.62rem,3.4cqi,.82rem);color:var(--ink3);padding-top:.4rem;
+}
+.hero-foot b{color:var(--ink2);font-weight:600}
+/* urgency, not decoration: only the top two bands get a breathing edge */
+.tile--hero[data-urgent="1"]{
+  border-color:color-mix(in srgb,var(--bt) 62%,transparent);
+  box-shadow:0 14px 34px rgba(0,0,0,.42),
+             inset 0 1px 0 var(--sheen),
+             0 0 0 1px color-mix(in srgb,var(--bt) 30%,transparent);
+  animation:breathe 4.5s ease-in-out infinite;
+}
+@keyframes breathe{
+  0%,100%{box-shadow:0 14px 34px rgba(0,0,0,.42),inset 0 1px 0 var(--sheen),0 0 0 1px color-mix(in srgb,var(--bt) 26%,transparent)}
+  50%{box-shadow:0 14px 34px rgba(0,0,0,.42),inset 0 1px 0 var(--sheen),0 0 0 5px color-mix(in srgb,var(--bt) 14%,transparent)}
+}
+
+/* ------------------------------------------------------- board tiles */
+/* Two of three boards are normally offline. That has to look like a
+   decision, so an offline module is drawn deliberately: a dashed edge,
+   the word spelled out, and never a number it did not measure. */
+.tile[data-state="offline"]{border-style:dashed;border-color:rgba(255,255,255,.22)}
+.tile[data-state="offline"] .big{color:var(--ink2)}
+.tile[data-state="waiting"] .big{color:var(--ink3)}
+.tile[data-state="stale"] .big,.tile[data-state="fault"] .big{color:var(--ink2)}
+.t-head{display:flex;align-items:center;gap:.4rem;min-width:0;flex:none}
+.t-head .tl{flex:1 1 auto}
+.pip{width:.5em;height:.5em;border-radius:50%;flex:none;background:var(--ink3);opacity:.55}
+.tile[data-state="live"] .pip{background:var(--bt);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--bt) 22%,transparent)}
+.tile[data-state="offline"] .pip{background:transparent;border:1.5px dashed var(--ink3);opacity:.8}
+.body{display:flex;flex-direction:column;justify-content:center;flex:1 1 auto;min-height:0;gap:.28rem;padding:.2rem 0}
+.sub{font-size:clamp(.64rem,4.4cqi,.85rem);color:var(--ink2);line-height:1.3;overflow:hidden}
+
+/* -------------------------------------------------------- fleet tile */
+.fleet-n{display:flex;align-items:baseline;gap:.3em}
+.fleet-n b{font-size:clamp(1.6rem,26cqi,3.4rem);font-weight:700;letter-spacing:-.03em;line-height:1}
+.fleet-n span{font-size:clamp(.66rem,5cqi,.95rem);color:var(--ink2)}
+.fleet-list{display:flex;flex-direction:column;gap:.16rem;margin-top:.3rem;min-width:0}
+.fleet-row{display:flex;align-items:center;gap:.4em;font-size:clamp(.6rem,4.1cqi,.8rem);min-width:0}
+.fleet-row .who{font-weight:650;color:var(--ink);white-space:nowrap}
+.fleet-row .st{margin-left:auto;color:var(--ink3);white-space:nowrap}
+.fleet-row[data-on="1"] .st{color:var(--ink)}
+
+/* -------------------------------------------------------- scale tile */
+.scale{display:flex;gap:.3rem;flex:1 1 auto;min-height:0;margin-top:.4rem}
+.seg{
+  flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:.22rem;justify-content:flex-end;
+  padding:.3rem .35rem;border-radius:10px;
+  border:1px solid transparent;
+}
+.seg i{display:block;height:.42rem;border-radius:3px;background:var(--sc);opacity:.55}
+.seg b{font-size:clamp(.55rem,2.4cqi,.76rem);font-weight:650;color:var(--ink2);line-height:1.15;
+       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg em{font-style:normal;font-size:clamp(.5rem,2.1cqi,.68rem);color:var(--ink3);white-space:nowrap}
+.seg[data-on="1"]{background:color-mix(in srgb,var(--sc) 16%,transparent);
+                  border-color:color-mix(in srgb,var(--sc) 45%,transparent)}
+.seg[data-on="1"] i{opacity:1;height:.5rem}
+.seg[data-on="1"] b{color:var(--ink)}
+
+/* --------------------------------------------------------- link tile */
+.link-line{display:flex;align-items:center;gap:.45em;font-size:clamp(.66rem,4.6cqi,.9rem);min-width:0}
+.link-line .dot{width:.55em;height:.55em;border-radius:50%;background:var(--ink3);flex:none}
+.tile[data-conn="connected"] .link-line .dot{background:#7ee8a6;box-shadow:0 0 0 3px rgba(126,232,166,.2)}
+.tile[data-conn="connecting"] .link-line .dot,
+.tile[data-conn="reconnecting"] .link-line .dot{background:#ffd777;animation:blink 1.2s ease-in-out infinite}
+.tile[data-conn="error"] .link-line .dot,
+.tile[data-conn="fatal"] .link-line .dot{background:#ffa8a8;box-shadow:0 0 0 3px rgba(255,168,168,.18)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.kv{display:flex;justify-content:space-between;gap:.6em;font-size:clamp(.58rem,4cqi,.76rem);color:var(--ink3);min-width:0}
+.kv b{color:var(--ink2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------------------------------------------------------- sky tile */
+.clock{font-size:clamp(1.3rem,22cqi,2.9rem);font-weight:700;letter-spacing:-.03em;line-height:1}
+.place{font-size:clamp(.62rem,4.2cqi,.82rem);color:var(--ink2)}
+
+/* ----------------------------------------------------- calm failure */
+.calm{
+  position:fixed;inset:0;z-index:5;
+  display:flex;align-items:center;justify-content:center;
+  padding:clamp(1.5rem,6vw,5rem);
+  background:rgba(6,9,14,.72);
+  backdrop-filter:blur(30px) saturate(140%) brightness(.7);
+  -webkit-backdrop-filter:blur(30px) saturate(140%) brightness(.7);
+  text-align:center;
+}
+.calm[hidden]{display:none}
+.calm p{
+  margin:0;max-width:24ch;
+  font-size:clamp(1.35rem,4.4vw,3rem);
+  line-height:1.28;font-weight:600;letter-spacing:-.02em;
+  color:var(--ink);text-shadow:0 2px 10px rgba(0,0,0,.6);
+}
+.calm small{display:block;margin-top:1.4rem;font-size:clamp(.7rem,1.2vw,.95rem);
+            font-weight:500;color:var(--ink3);letter-spacing:.04em}
+
+/* --------------------------------------------------------- settings */
+.sheet{
+  position:fixed;inset:0;z-index:6;
+  display:flex;align-items:center;justify-content:center;padding:1.2rem;
+  background:rgba(4,6,10,.6);
+}
+.sheet[hidden]{display:none}
+.sheet-card{
+  width:min(46rem,100%);max-height:88dvh;overflow:hidden;
+  border-radius:var(--radius);border:1px solid var(--edge);
+  background:var(--fill-solid);
+  backdrop-filter:blur(30px) saturate(160%);
+  -webkit-backdrop-filter:blur(30px) saturate(160%);
+  box-shadow:0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 var(--sheen);
+  padding:clamp(1rem,2.4vw,1.7rem);
+}
+.sheet h2{font-size:1.1rem;margin-bottom:.15rem}
+.sheet .note{color:var(--ink3);font-size:.82rem;line-height:1.5;margin:.4rem 0 1rem}
+.form{display:grid;gap:.7rem 1rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));align-items:end}
+.f{display:flex;flex-direction:column;gap:.28rem;min-width:0}
+.f label{font-size:.72rem;letter-spacing:.06em;color:var(--ink3)}
+.f input{
+  background:rgba(0,0,0,.42);color:var(--ink);border:1px solid rgba(255,255,255,.2);
+  border-radius:10px;padding:.55rem .65rem;font:inherit;font-size:.92rem;width:100%;min-width:0;
+}
+.f input:focus{outline:2px solid #8ab4ff;outline-offset:1px}
+.f-check{flex-direction:row;align-items:center;gap:.5rem}
+.f-check label{color:var(--ink2);font-size:.85rem;letter-spacing:0}
+.f-check input{width:auto}
+.acts{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+button{
+  font:inherit;font-weight:650;cursor:pointer;border-radius:10px;padding:.55rem 1.05rem;
+  background:rgba(255,255,255,.92);color:#0b1018;border:1px solid rgba(255,255,255,.5);
+}
+button.ghost{background:rgba(255,255,255,.08);color:var(--ink);border-color:rgba(255,255,255,.25)}
+.sheet .hint{color:var(--ink3);font-size:.78rem;margin-top:.9rem;line-height:1.5}
+.sheet .warn{color:#ffd777}
+</style>
+</head>
+<body>
+
+<div class="sky" aria-hidden="true">
+  <div class="ply" id="ply-a"></div>
+  <div class="ply" id="ply-b"></div>
+  <div class="veil"></div>
+</div>
+
+<main class="deck" id="deck">
+
+  <!-- 1. the verdict. 2x2. -->
+  <section class="tile tile--hero" id="t-verdict" style="order:0">
+    <div class="tl">Should we go outside?</div>
+    <div class="answer" id="v-answer">We don&rsquo;t know yet</div>
+    <div class="because" id="v-because">No board is reporting, so this wall cannot say.
+      Please do not read that as clean air.</div>
+    <div class="hero-num">
+      <span class="big" id="v-num" data-kind="word">&mdash;</span>
+      <span class="unit" id="v-unit"></span>
+    </div>
+    <div class="chip" id="v-chip"><i></i><span id="v-band">no reading</span></div>
+    <div class="hero-foot">
+      <span id="v-src">waiting for a board</span>
+      <span id="v-age"></span>
+    </div>
+  </section>
+
+  <!-- board tiles, extras tiles: created by script -->
+
+  <!-- fleet -->
+  <section class="tile" id="t-fleet" style="order:50">
+    <div class="tl">Boards</div>
+    <div class="body">
+      <div class="fleet-n"><b id="f-n">0</b><span id="f-of">of 0 reporting</span></div>
+      <div class="fleet-list" id="f-list"></div>
+    </div>
+    <div class="tf" id="f-foot">Two of three are normally asleep.</div>
+  </section>
+
+  <!-- EPA scale -->
+  <section class="tile tile--wide" id="t-scale" style="order:80">
+    <div class="tl">US EPA PM2.5 scale &middot; &micro;g/m&sup3;</div>
+    <div class="scale" id="scale"></div>
+  </section>
+
+  <!-- broker -->
+  <section class="tile" id="t-link" data-conn="idle" style="order:90">
+    <div class="tl">Link</div>
+    <div class="body">
+      <div class="link-line"><span class="dot"></span><span id="l-state">starting</span></div>
+      <div class="kv"><span>broker</span><b class="mono" id="l-host">&mdash;</b></div>
+      <div class="kv"><span>sensors</span><b id="l-ents">0</b></div>
+      <div class="kv"><span>topics</span><b id="l-subs">0</b></div>
+    </div>
+    <div class="tf">Press <b>s</b> for settings.</div>
+  </section>
+
+  <!-- the picture -->
+  <section class="tile" id="t-sky" style="order:95">
+    <div class="tl">Right now</div>
+    <div class="body">
+      <div class="clock" id="s-clock">--:--</div>
+      <div class="place">Chiang Mai &middot; Kit4Kids</div>
+    </div>
+    <div class="tf" id="s-note">The picture behind these tiles is the reading.</div>
+  </section>
+
+</main>
+
+<div class="calm" id="calm" hidden>
+  <p id="calm-text">The wall cannot reach the air sensors right now.</p>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-card">
+    <h2>Broker</h2>
+    <p class="note">These tiles read one MQTT broker over WebSocket. Nothing is uploaded
+      anywhere; settings stay in this browser, on this device.</p>
+    <form class="form" id="form" autocomplete="off">
+      <div class="f"><label for="f-host">Host</label>
+        <input id="f-host" spellcheck="false" required></div>
+      <div class="f"><label for="f-port">WebSocket port</label>
+        <input id="f-port" inputmode="numeric" required></div>
+      <div class="f"><label for="f-user">Username</label>
+        <input id="f-user" spellcheck="false"></div>
+      <div class="f"><label for="f-pass">Passphrase</label>
+        <input id="f-pass" type="password" autocomplete="off"></div>
+      <div class="f"><label for="f-filter">Sensor topic starts with</label>
+        <input id="f-filter" spellcheck="false" placeholder="dbk/"></div>
+      <div class="f f-check"><input id="f-tls" type="checkbox">
+        <label for="f-tls">TLS (wss)</label></div>
+      <div class="f f-check"><input id="f-remember" type="checkbox">
+        <label for="f-remember">Remember passphrase</label></div>
+      <div class="f acts">
+        <button type="submit">Connect</button>
+        <button type="button" class="ghost" id="btn-forget">Forget</button>
+        <button type="button" class="ghost" id="btn-close">Close</button>
+      </div>
+    </form>
+    <p class="hint" id="store-hint"></p>
+  </div>
+</div>
+
+<!-- Pinned AND hash-locked: this page can be given a broker passphrase, so a
+     hijacked CDN response must not be able to execute here. -->
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"
+        integrity="sha384-haZiwxTLortiFcYMBEEE1+8ayC+o18YtuwHZv+4WQHoPaLzRjwOV6h7Vva5iLSCZ"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- config
+  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; a starting point, not a secret
+  var DEFAULT_PORT = '1884';            // MQTT-over-WebSocket. A browser cannot speak raw MQTT.
+  var STORE_KEY = 'air-tiles.conn.v1';
+  var MAX_SUBS = 64;                    // a browser must never firehose a broker
+  var DEFAULT_EXPIRE = 900;             // seconds, when discovery declares no expire_after
+  var DEFAULT_FILTER = 'dbk/';
+
+  // US EPA PM2.5 breakpoints. One source of truth for the tiles, the scale
+  // module, the plain-language answer AND the photograph behind everything.
+  var BANDS = [
+    { max: 12.0,     name: 'Good',              r: '0 – 12',      img: 'img/good.jpg',
+      tint: '#7ee8a6', answer: 'Yes — go outside.',
+      because: 'The air is clean today. Play outside as long as you like.' },
+    { max: 35.4,     name: 'Moderate',          r: '12.1 – 35.4', img: 'img/moderate.jpg',
+      tint: '#ffd777', answer: 'Yes — go outside.',
+      because: 'Fine for almost everyone. If you get wheezy, take it easy.' },
+    { max: 55.4,     name: 'Sensitive groups',  r: '35.5 – 55.4', img: 'img/sensitive.jpg',
+      tint: '#ffbe86', answer: 'Yes, but keep it short.',
+      because: 'If you have asthma, or you are very young or very old, stay in or wear a mask.' },
+    { max: 150.4,    name: 'Unhealthy',         r: '55.5 – 150.4', img: 'img/unhealthy.jpg',
+      tint: '#ffa8a8', answer: 'Better to stay inside.',
+      because: 'Short trips only, and wear a mask if you go out. No running around outdoors.' },
+    { max: 250.4,    name: 'Very unhealthy',    r: '150.5 – 250.4', img: 'img/verybad.jpg',
+      tint: '#dcb6ff', answer: 'Stay inside.',
+      because: 'No outdoor play today. Keep the windows shut and the air cleaner running.' },
+    { max: Infinity, name: 'Hazardous',         r: '250.5 +',     img: 'img/hazardous.jpg',
+      tint: '#ffb0b8', answer: 'Stay inside. Do not play outside.',
+      because: 'Keep windows and doors closed. Wear an N95 mask if you truly must go out.' }
+  ];
+
+  // An unknown sky is NOT a clear dawn. No photograph at all — a flat, honest
+  // dark ground, so nothing on this wall can be mistaken for an all-clear.
+  var UNKNOWN_GROUND =
+    'radial-gradient(120% 90% at 50% 30%, #232a33 0%, #12161d 55%, #080b10 100%)';
+
+  // Home Assistant discovery allows abbreviated keys. Expand the ones we read.
+  var ALIASES = {
+    stat_t: 'state_topic', avty_t: 'availability_topic', uniq_id: 'unique_id',
+    unit_of_meas: 'unit_of_measurement', dev_cla: 'device_class', stat_cla: 'state_class',
+    exp_aft: 'expire_after', pl_avail: 'payload_available', pl_not_avail: 'payload_not_available',
+    dev: 'device', val_tpl: 'value_template', avty: 'availability', ic: 'icon'
+  };
+
+  // The side-channel sensors a board publishes outside HA discovery. These are
+  // EXPLICIT topic suffixes — each one is subscribed by its exact full name, so
+  // no wildcard is ever needed to find them.
+  var EXTRA_KEYS = [
+    { key: 'pm1_0',             label: 'PM1.0',       unit: 'µg/m³' },
+    { key: 'pm10',              label: 'PM10',        unit: 'µg/m³' },
+    { key: 'air_quality_level', label: 'Air quality', unit: '' },
+    { key: 'wi-fi_rssi',        label: 'Wi-Fi',       unit: 'dBm' },
+    { key: 'uptime',            label: 'Uptime',      unit: 's' }
+  ];
+
+  // ---------------------------------------------------------------- state
+  var client = null;
+  var entities = new Map();      // discovery topic -> entity
+  var extras   = new Map();      // state topic     -> side-channel entity
+  var byState  = new Map();      // state topic     -> Set(discovery topic)
+  var byAvail  = new Map();      // avail topic     -> Set(discovery topic)
+  var byUid    = new Map();      // unique_id       -> discovery topic
+  var boardStatus = new Map();   // board id        -> { raw, at }
+  var boardsSeen  = new Set();   // every board id this page has heard of
+  var subs = new Set();
+  var filteredOut = new Set();
+  var activeFilter = '';
+  var connState = 'idle';
+  var manualStop = false;
+  var everConnected = false;
+  var firstFailTimer = null;
+  var curGround = null;
+  var plyTop = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var deck = $('deck'), plyA = $('ply-a'), plyB = $('ply-b');
+  var reduceMotion = false;
+  try {
+    reduceMotion = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch (e) {}
+
+  // ---------------------------------------------------------------- helpers
+  // The EPA scale starts at 0. Without a lower bound a faulty sensor reporting
+  // -999 fell into the first band and rendered as a reassuring green "Good".
+  function bandIndexFor(n) {
+    if (!Number.isFinite(n) || n < 0) return -1;
+    for (var i = 0; i < BANDS.length; i++) if (n <= BANDS[i].max) return i;
+    return BANDS.length - 1;
+  }
+
+  function isPm(ent) {
+    return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
+  }
+
+  function ago(ts) {
+    if (!ts) return 'never';
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 2) return 'just now';
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  function fmtUptime(sec) {
+    if (!Number.isFinite(sec) || sec < 0) return null;
+    var s = Math.floor(sec);
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d) return d + 'd ' + h + 'h';
+    if (h) return h + 'h ' + m + 'm';
+    if (m) return m + 'm';
+    return s + 's';
+  }
+
+  // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never NaN.
+  function parseValue(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (s === '') return { kind: 'empty', text: 'no value' };
+    if (/^(unknown|unavailable|none|null|nan|n\/a)$/i.test(s)) {
+      return { kind: 'unknown', text: s.toLowerCase() };
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return { kind: 'text', text: s };
+    // The EPA method truncates the concentration to one decimal BEFORE applying
+    // breakpoints. Truncate ONCE, here, and use that value for both the printed
+    // number and the band — otherwise a tile prints 35.4 while calling it
+    // "Sensitive groups" and the scale module beneath says 35.4 is Moderate.
+    // Truncate, never round: rounding 35.44 up to 35.5 would invent a severity.
+    var n1 = Math.trunc(n * 10) / 10;
+    var text;
+    if (/^[+-]?\d+(\.\d)?$/.test(s)) {
+      text = s.replace(/^\+/, '');          // keep the device's own precision: "0", "0.0"
+    } else {
+      text = n1.toFixed(1);                 // cap runaway precision AT the classified value
+    }
+    return { kind: 'number', n: n, n1: n1, text: text };
+  }
+
+  function boardFromTopic(topic) {
+    var m = /^dbk\/([^/]+)\//i.exec(topic || '');
+    return m ? m[1] : null;
+  }
+
+  var storeWorks = true;
+  function loadStore() {
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); }
+    catch (e) { storeWorks = false; return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (e) {
+      try { localStorage.removeItem(STORE_KEY); } catch (e2) {}
+      return null;
+    }
+  }
+  function saveStore(v) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; }
+    catch (e) { storeWorks = false; return false; }
+  }
+  function clearStore() {
+    try { localStorage.removeItem(STORE_KEY); return true; } catch (e) { return false; }
+  }
+
+  // ---------------------------------------------------------------- calm screen
+  // One sentence, nothing else. A wall that cannot answer must say so plainly
+  // rather than showing a deck of dashes to a room full of children.
+  var calmEl = $('calm'), calmText = $('calm-text');
+  function calm(sentence) {
+    if (sentence) {
+      calmText.textContent = sentence;
+      calmEl.hidden = false;
+      deck.style.visibility = 'hidden';
+    } else {
+      calmEl.hidden = true;
+      deck.style.visibility = '';
+    }
+  }
+
+  // ---------------------------------------------------------------- ground
+  function preload(i) {
+    if (i < 0 || i >= BANDS.length) return;
+    try { var im = new Image(); im.src = BANDS[i].img; } catch (e) {}
+  }
+
+  function swapGround(bgValue) {
+    var incoming = plyTop ? plyA : plyB;
+    var outgoing = plyTop ? plyB : plyA;
+    incoming.style.backgroundImage = bgValue;
+    if (reduceMotion) {
+      incoming.style.transition = 'none';
+      outgoing.style.transition = 'none';
+    }
+    void incoming.offsetWidth;      // flush, so the fade starts from the new image
+    incoming.style.opacity = '1';
+    outgoing.style.opacity = '0';
+    plyTop = !plyTop;
+  }
+
+  // The photograph IS the data: it shows roughly what the air outside looks
+  // like at the worst live reading on the fleet. An unknown fleet gets the flat
+  // unknown ground — never the clear dawn, which would read as an all-clear
+  // nobody measured.
+  function setGround(idx) {
+    var key = (idx === -1 || idx == null) ? 'unknown' : idx;
+    if (key === curGround) return;
+    curGround = key;                          // claim it now, so a slow load cannot re-enter
+    if (key === 'unknown') { swapGround(UNKNOWN_GROUND); return; }
+
+    // Fade only once the bytes are decoded. Fading to an undecoded layer is
+    // exactly how a band change turns into the white flash this must not do.
+    var url = BANDS[key].img;
+    var done = false;
+    var go = function () {
+      if (done) return;
+      done = true;
+      if (curGround === key) swapGround('url("' + url + '")');
+    };
+    var im = new Image();
+    im.onload = go;
+    im.onerror = go;                          // a missing file must not freeze the ground
+    im.src = url;
+    if (im.complete) go();
+    setTimeout(go, 2500);                     // and neither must a stalled one
+    preload(key - 1); preload(key + 1);
+  }
+
+  // ---------------------------------------------------------------- subscribe
+  // subRaw is the ONLY place that talks to the broker and is private to topics
+  // authored in this file. Everything that came off the wire goes through sub(),
+  // which refuses wildcards outright.
+  function subRaw(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    if (subs.has(topic)) return true;
+    if (subs.size >= MAX_SUBS) return false;
+    subs.add(topic);
+    refreshLink();
+    client.subscribe(topic, { qos: 0 }, function (err) {
+      if (err) { subs.delete(topic); refreshLink(); }
+    });
+    return true;
+  }
+  function sub(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    // Absolute guard. '#' is never subscribed by this page, and '+' arriving in
+    // a retained discovery payload is just as dangerous — a config declaring
+    // "+/+/+" delivered the whole fleet in testing. Wire topics must be exact.
+    if (/[#+]/.test(topic)) return false;
+    return subRaw(topic);
+  }
+  function unsub(topic) {
+    if (!topic || !subs.has(topic)) return;
+    if (byState.has(topic) || byAvail.has(topic) || extras.has(topic)) return;
+    subs.delete(topic);
+    refreshLink();
+    if (client) { try { client.unsubscribe(topic); } catch (e) {} }
+  }
+
+  // ---------------------------------------------------------------- discovery
+  function expand(cfg) {
+    var out = {};
+    Object.keys(cfg).forEach(function (k) { out[ALIASES[k] || k] = cfg[k]; });
+    var base = out['~'];
+    if (typeof base === 'string' && base) {
+      ['state_topic', 'availability_topic'].forEach(function (k) {
+        var v = out[k];
+        if (typeof v !== 'string') return;
+        if (v.charAt(0) === '~') out[k] = base + v.slice(1);
+        else if (v.charAt(v.length - 1) === '~') out[k] = v.slice(0, -1) + base;
+      });
+    }
+    if (!out.availability_topic && Array.isArray(out.availability) && out.availability.length) {
+      var a = out.availability[0];
+      if (a && typeof a.topic === 'string') {
+        out.availability_topic = a.topic;
+        if (a.payload_available) out.payload_available = a.payload_available;
+        if (a.payload_not_available) out.payload_not_available = a.payload_not_available;
+      }
+    }
+    return out;
+  }
+
+  function index(map, key, dtopic) {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(dtopic);
+  }
+  // The missing half of index(). Without it a re-published config left the
+  // entity indexed under its OLD state topic, so one board's number showed up
+  // under another board's name.
+  function unindex(map, key, dtopic) {
+    if (!key || !map.has(key)) return;
+    var set = map.get(key);
+    set.delete(dtopic);
+    if (set.size === 0) { map.delete(key); unsub(key); }
+  }
+
+  function removeEntity(dtopic) {
+    var gone = entities.get(dtopic);
+    if (!gone) return false;
+    if (gone.tile) gone.tile.root.remove();
+    entities.delete(dtopic);
+    if (gone.uid && byUid.get(gone.uid) === dtopic) byUid.delete(gone.uid);
+    unindex(byState, gone.stateTopic, dtopic);
+    unindex(byAvail, gone.availTopic, dtopic);
+    return true;
+  }
+
+  function matchesFilter(topic) {
+    return !activeFilter || String(topic).indexOf(activeFilter) === 0;
+  }
+
+  function onDiscovery(dtopic, text) {
+    if (text.trim() === '') {                 // empty retained payload = delete
+      filteredOut.delete(dtopic);
+      if (removeEntity(dtopic)) layout();
+      return;
+    }
+    var cfg;
+    try { cfg = JSON.parse(text); } catch (e) { return; }   // one bad message must not kill the page
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return;
+
+    cfg = expand(cfg);
+    if (typeof cfg.state_topic !== 'string' || !cfg.state_topic) return;
+
+    if (!matchesFilter(cfg.state_topic)) {
+      filteredOut.add(dtopic);
+      if (removeEntity(dtopic)) layout();
+      return;
+    }
+    filteredOut.delete(dtopic);
+
+    var parts = dtopic.split('/');
+    var dev = cfg.device && typeof cfg.device === 'object' ? cfg.device : null;
+    var devName = dev && typeof dev.name === 'string' ? dev.name : '';
+    var measure = typeof cfg.name === 'string' && cfg.name ? cfg.name : (parts[2] || 'sensor');
+    var expire = Number(cfg.expire_after);
+    var uid = typeof cfg.unique_id === 'string' && cfg.unique_id ? cfg.unique_id : '';
+    var board = boardFromTopic(cfg.state_topic);
+    var newAvail = typeof cfg.availability_topic === 'string' ? cfg.availability_topic : '';
+
+    if (uid && byUid.has(uid) && byUid.get(uid) !== dtopic) removeEntity(byUid.get(uid));
+
+    var ent = entities.get(dtopic) ||
+      { kind: 'sensor', key: dtopic, value: null, at: 0, availRaw: null, availAt: 0, tile: null };
+
+    if (ent.stateTopic && ent.stateTopic !== cfg.state_topic) {
+      unindex(byState, ent.stateTopic, dtopic);
+      ent.value = null; ent.at = 0; ent.raw = undefined;
+    }
+    if (ent.availTopic && ent.availTopic !== newAvail) {
+      unindex(byAvail, ent.availTopic, dtopic);
+      ent.availRaw = null; ent.availAt = 0;
+    }
+    if (ent.uid && ent.uid !== uid && byUid.get(ent.uid) === dtopic) byUid.delete(ent.uid);
+
+    // BUG C. The discovery "name" is "PM2.5" on every board, so it identifies
+    // nothing. The board id parsed out of the state topic is the identity, and
+    // it wins over anything the payload claims.
+    ent.title = board || devName || uid || measure;
+    ent.measure = measure;
+    ent.uid = uid;
+    ent.stateTopic = cfg.state_topic;
+    ent.availTopic = newAvail;
+    ent.unit = typeof cfg.unit_of_measurement === 'string' ? cfg.unit_of_measurement : '';
+    ent.deviceClass = typeof cfg.device_class === 'string' ? cfg.device_class : '';
+    ent.expire = Number.isFinite(expire) && expire > 0 ? expire : DEFAULT_EXPIRE;
+    ent.pAvail = typeof cfg.payload_available === 'string' ? cfg.payload_available : 'online';
+    ent.pNot = typeof cfg.payload_not_available === 'string' ? cfg.payload_not_available : 'offline';
+    ent.templated = !!cfg.value_template;
+    ent.board = board;
+
+    // A sensor this page cannot listen to must never take a tile: sub() returns
+    // false for both the wildcard refusal and the MAX_SUBS ceiling, and a tile
+    // stuck in "waiting" for a topic no data can arrive on is a lie.
+    if (!sub(ent.stateTopic)) { if (removeEntity(dtopic)) layout(); return; }
+
+    entities.set(dtopic, ent);
+    if (uid) byUid.set(uid, dtopic);
+    index(byState, ent.stateTopic, dtopic);
+    if (ent.availTopic) { index(byAvail, ent.availTopic, dtopic); sub(ent.availTopic); }
+    if (board) { boardsSeen.add(board); subscribeExtras(board); }
+
+    render(ent);
+    layout();
+  }
+
+  // ------------------------------------------------------------ side channel
+  // DBK boards publish extra sensors outside HA discovery. Each is subscribed
+  // by its exact, fully-written topic — there is no wildcard here and no '#'.
+  function subscribeExtras(board) {
+    if (!board) return;
+    EXTRA_KEYS.forEach(function (spec) {
+      var topic = 'dbk/' + board + '/sensor/' + spec.key + '/state';
+      if (byState.has(topic)) return;        // a discovered entity already owns it
+      if (!extras.has(topic)) {
+        extras.set(topic, {
+          kind: 'extra', key: topic, board: board, spec: spec,
+          title: board, measure: spec.label, unit: spec.unit,
+          deviceClass: '', availTopic: '', availRaw: null, availAt: 0,
+          pAvail: 'online', pNot: 'offline', expire: DEFAULT_EXPIRE,
+          value: null, at: 0, tile: null, shown: false
+        });
+      }
+      sub(topic);
+    });
+  }
+
+  // Only give an extra a tile once the board is actually up (or once a value
+  // has landed). Otherwise two sleeping boards would spray ten empty modules
+  // across the deck.
+  function revealExtras(board) {
+    var changed = false;
+    extras.forEach(function (e) {
+      if (e.board === board && !e.shown) { e.shown = true; render(e); changed = true; }
+    });
+    if (changed) layout();
+  }
+
+  // ---------------------------------------------------------------- messages
+  function onMessage(topic, payload) {
+    var text;
+    try { text = new TextDecoder('utf-8').decode(payload); }
+    catch (e) { text = String(payload); }
+
+    if (/^homeassistant\/.+\/config$/.test(topic)) {
+      try { onDiscovery(topic, text); } catch (e) {}
+      return;
+    }
+
+    var now = Date.now();
+    var touched = new Set();
+
+    // Board availability, even where discovery declared no availability_topic.
+    var b = /^dbk\/([^/]+)\/status$/i.exec(topic);
+    if (b) {
+      var wasOnline = boardStatus.has(b[1]) && boardStatus.get(b[1]).raw === 'online';
+      boardStatus.set(b[1], { raw: text.trim(), at: now });
+      boardsSeen.add(b[1]);
+      subscribeExtras(b[1]);
+      if (text.trim() === 'online') revealExtras(b[1]);
+      else if (wasOnline) layout();
+      entities.forEach(function (e) { if (e.board === b[1]) touched.add(e); });
+      extras.forEach(function (e) { if (e.board === b[1] && e.shown) touched.add(e); });
+      renderFleet();
+    }
+
+    if (byState.has(topic)) {
+      byState.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.raw = text; e.value = parseValue(text); e.at = now;
+        touched.add(e);
+      });
+    }
+    if (byAvail.has(topic)) {
+      byAvail.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.availRaw = text.trim(); e.availAt = now;
+        touched.add(e);
+      });
+    }
+    if (extras.has(topic)) {
+      var x = extras.get(topic);
+      x.raw = text; x.value = parseValue(text); x.at = now;
+      if (!x.shown) { x.shown = true; render(x); layout(); }
+      touched.add(x);
+    }
+
+    touched.forEach(render);
+    if (touched.size) refreshVerdict();
+  }
+
+  // ---------------------------------------------------------------- state
+  function availabilityOf(ent) {
+    if (ent.availTopic && ent.availRaw !== null) {
+      if (ent.availRaw === ent.pNot) return 'offline';
+      if (ent.availRaw === ent.pAvail) return 'online';
+      return 'unknown';
+    }
+    if (ent.board && boardStatus.has(ent.board)) {
+      var raw = boardStatus.get(ent.board).raw;
+      if (raw === ent.pNot || raw === 'offline') return 'offline';
+      if (raw === ent.pAvail || raw === 'online') return 'online';
+    }
+    return 'unknown';
+  }
+
+  function stateOf(ent) {
+    if (availabilityOf(ent) === 'offline') return 'offline';
+    if (!ent.at || !ent.value) return 'waiting';
+    if (ent.value.kind === 'unknown' || ent.value.kind === 'empty') return 'unknown';
+    // A concentration cannot be negative. Checked BEFORE stale and before live,
+    // so a broken sensor is never dressed up as a reading — least of all a green
+    // one. Only applied to PM sensors: -68 is a perfectly good Wi-Fi RSSI.
+    if (ent.value.kind === 'number' && ent.value.n1 < 0 && isPm(ent)) return 'fault';
+    if ((Date.now() - ent.at) / 1000 > ent.expire) return 'stale';
+    return 'live';
+  }
+
+  // ---------------------------------------------------------------- tiles
+  function tintOf(idx) { return idx >= 0 ? BANDS[idx].tint : '#cfd8e3'; }
+
+  function buildTile(ent) {
+    var root = document.createElement('section');
+    root.className = 'tile';
+    root.innerHTML =
+      '<div class="t-head"><span class="pip"></span><span class="tl"></span></div>' +
+      '<div class="body">' +
+        '<div class="row-val"><span class="big"></span><span class="unit"></span></div>' +
+        '<div class="sub"></div>' +
+      '</div>' +
+      '<div class="tf"></div>';
+    var t = {
+      root: root,
+      label: root.querySelector('.tl'),
+      big: root.querySelector('.big'),
+      unit: root.querySelector('.unit'),
+      sub: root.querySelector('.sub'),
+      foot: root.querySelector('.tf')
+    };
+    ent.tile = t;
+    deck.appendChild(root);
+    return t;
+  }
+
+  function render(ent) {
+    var t = ent.tile || buildTile(ent);
+    var st = stateOf(ent);
+    var isSensorPm = ent.kind === 'sensor' && isPm(ent);
+    t.root.setAttribute('data-state', st);
+
+    // Label: the board id for a PM tile (bug C), the measurement for an extra.
+    // Both are wire values and are printed exactly as published — no case
+    // transform can reach them (bug A).
+    t.label.textContent = ent.kind === 'extra'
+      ? ent.spec.label + ' · ' + ent.board
+      : ent.title;
+
+    var bIdx = -1;
+    if (st === 'live' && ent.value && ent.value.kind === 'number' && isSensorPm) {
+      bIdx = bandIndexFor(ent.value.n1);
+    }
+    t.root.style.setProperty('--bt', tintOf(bIdx));
+
+    if (st === 'offline') {
+      // Deliberate, not blank, and never a zero it did not measure.
+      t.big.textContent = 'Asleep';
+      t.big.setAttribute('data-kind', 'word');
+      t.unit.textContent = '';
+      t.sub.textContent = 'this board is not reporting';
+      var seen = ent.availAt ||
+        (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0);
+      var last = ent.value && ent.value.kind === 'number'
+        ? 'last reading ' + ent.value.text + ' ' + ent.unit + ', ' + ago(ent.at)
+        : 'no reading recorded';
+      t.foot.textContent = 'said offline ' + ago(seen) + ' · ' + last;
+    } else if (st === 'waiting') {
+      t.big.textContent = '—';
+      t.big.setAttribute('data-kind', 'word');
+      t.unit.textContent = '';
+      t.sub.textContent = 'waiting for the first reading';
+      t.foot.textContent = 'readings are not retained, so a healthy board still starts blank';
+    } else if (st === 'unknown') {
+      t.big.textContent = ent.value ? ent.value.text : 'unknown';
+      t.big.setAttribute('data-kind', 'word');
+      t.unit.textContent = '';
+      t.sub.textContent = 'the board published no value';
+      t.foot.textContent = 'updated ' + ago(ent.at);
+    } else if (st === 'fault') {
+      t.big.textContent = ent.value.text;
+      t.big.setAttribute('data-kind', 'word');
+      t.unit.textContent = ent.unit;
+      t.sub.textContent = 'sensor fault';
+      t.foot.textContent = 'a concentration below zero is not a reading';
+    } else {
+      // live or stale
+      var human = null;
+      if (ent.kind === 'extra' && ent.spec.key === 'uptime' && ent.value.kind === 'number') {
+        human = fmtUptime(ent.value.n);
+      }
+      t.big.textContent = human || ent.value.text;
+      t.big.setAttribute('data-kind', ent.value.kind === 'number' && !human ? 'num' : 'word');
+      t.unit.textContent = human ? '' : ent.unit;
+      if (bIdx >= 0) {
+        t.sub.textContent = BANDS[bIdx].name;
+      } else if (ent.kind === 'extra' && ent.spec.key === 'wi-fi_rssi' && ent.value.kind === 'number') {
+        t.sub.textContent = ent.value.n > -60 ? 'strong signal'
+                          : ent.value.n > -75 ? 'usable signal' : 'weak signal';
+      } else if (human) {
+        t.sub.textContent = ent.value.text + ' seconds';
+      } else {
+        t.sub.textContent = st === 'stale' ? 'expired' : 'reporting';
+      }
+      t.foot.textContent = st === 'stale'
+        ? 'expired after ' + ent.expire + 's — treat as unknown'
+        : 'updated ' + ago(ent.at);
+    }
+    // Digits must never break mid-number (bug B). A payload longer than any
+    // plausible reading steps down to a scale that is allowed to wrap, so the
+    // nowrap rule cannot turn into a clipped overflow.
+    t.big.setAttribute('data-long', t.big.textContent.length > 7 ? '1' : '0');
+  }
+
+  // ---------------------------------------------------------------- fleet
+  function renderFleet() {
+    var boards = Array.from(boardsSeen).sort();
+    var host = $('f-list');
+    var live = 0;
+    host.textContent = '';
+    boards.forEach(function (b) {
+      var s = boardStatus.has(b) ? boardStatus.get(b).raw : '';
+      var on = s === 'online';
+      if (on) live++;
+      var row = document.createElement('div');
+      row.className = 'fleet-row';
+      row.setAttribute('data-on', on ? '1' : '0');
+      var who = document.createElement('span');
+      who.className = 'who';
+      who.textContent = b;                    // wire value, printed verbatim
+      var st = document.createElement('span');
+      st.className = 'st';
+      st.textContent = on ? 'reporting' : (s === 'offline' ? 'asleep' : 'no word');
+      row.appendChild(who); row.appendChild(st);
+      host.appendChild(row);
+    });
+    $('f-n').textContent = String(live);
+    $('f-of').textContent = 'of ' + boards.length + ' reporting';
+    $('f-foot').textContent = boards.length === 0
+      ? 'no board has announced itself yet'
+      : (live === boards.length
+          ? 'every board is awake'
+          : (boards.length - live) + ' of ' + boards.length +
+            ' are asleep — that is normal here, not a failure');
+    $('t-fleet').style.setProperty('--bt', live > 0 ? '#7ee8a6' : '#cfd8e3');
+    $('t-fleet').setAttribute('data-state', live > 0 ? 'live' : 'waiting');
+  }
+
+  // ---------------------------------------------------------------- verdict
+  function refreshVerdict() {
+    // The wall answers on the WORST live PM2.5 reading on the fleet: the one
+    // board that can see smoke decides for everybody.
+    var worst = null, worstEnt = null;
+    entities.forEach(function (e) {
+      if (!isPm(e)) return;
+      if (stateOf(e) !== 'live') return;
+      if (!e.value || e.value.kind !== 'number') return;
+      if (worst === null || e.value.n1 > worst) { worst = e.value.n1; worstEnt = e; }
+    });
+
+    var hero = $('t-verdict');
+    var idx = worst === null ? -1 : bandIndexFor(worst);
+    hero.style.setProperty('--bt', tintOf(idx));
+    hero.setAttribute('data-urgent', idx >= 4 ? '1' : '0');
+    hero.setAttribute('data-state', idx >= 0 ? 'live' : 'waiting');
+    setGround(idx);
+
+    if (idx < 0) {
+      $('v-answer').textContent = 'We don’t know yet';
+      $('v-because').textContent =
+        'No board is reporting a reading, so this wall cannot tell you. ' +
+        'Please do not read a quiet wall as clean air.';
+      $('v-num').textContent = '—';
+      $('v-num').setAttribute('data-kind', 'word');
+      $('v-num').setAttribute('data-long', '0');
+      $('v-unit').textContent = '';
+      $('v-band').textContent = 'no reading';
+      $('v-src').textContent = boardsSeen.size
+        ? boardsSeen.size + ' board' + (boardsSeen.size === 1 ? '' : 's') + ' known, none reporting'
+        : 'waiting for a board';
+      $('v-age').textContent = '';
+      $('s-note').textContent =
+        'No live reading, so no sky is shown — an unknown sky is not a clear one.';
+      return;
+    }
+
+    var band = BANDS[idx];
+    $('v-answer').textContent = band.answer;
+    $('v-because').textContent = band.because;
+    $('v-num').textContent = worstEnt.value.text;
+    $('v-num').setAttribute('data-kind', 'num');
+    $('v-num').setAttribute('data-long', worstEnt.value.text.length > 7 ? '1' : '0');
+    $('v-unit').textContent = worstEnt.unit;         // wire value, never case-mapped
+    $('v-band').textContent = band.name;
+    $('v-src').textContent = 'worst of ' + boardsSeen.size + ' · ' + worstEnt.title;
+    $('v-age').textContent = 'updated ' + ago(worstEnt.at);
+    $('s-note').textContent =
+      'The photograph behind these tiles is what ' + worstEnt.value.text + ' ' +
+      worstEnt.unit + ' looks like from a ridge outside town.';
+
+    // mark the live band on the scale module
+    var segs = $('scale').children;
+    for (var i = 0; i < segs.length; i++) {
+      segs[i].setAttribute('data-on', i === idx ? '1' : '0');
+    }
+  }
+
+  // ---------------------------------------------------------------- layout
+  // Stable order, no DOM rebuild: CSS `order` drives grid placement, so tiles
+  // never jump when a value arrives.
+  function layout() {
+    var pm = [], other = [];
+    entities.forEach(function (e) { (isPm(e) ? pm : other).push(e); });
+    pm.sort(function (a, b) { return a.title.localeCompare(b.title); });
+    other.sort(function (a, b) { return (a.title + a.measure).localeCompare(b.title + b.measure); });
+    pm.forEach(function (e, i) { if (e.tile) e.tile.root.style.order = String(10 + i); });
+    other.forEach(function (e, i) { if (e.tile) e.tile.root.style.order = String(60 + i); });
+
+    var xs = [];
+    extras.forEach(function (e) { if (e.shown && e.tile) xs.push(e); });
+    xs.sort(function (a, b) {
+      var ai = EXTRA_KEYS.findIndex(function (s) { return s.key === a.spec.key; });
+      var bi = EXTRA_KEYS.findIndex(function (s) { return s.key === b.spec.key; });
+      return a.board.localeCompare(b.board) || ai - bi;
+    });
+    xs.forEach(function (e, i) { e.tile.root.style.order = String(62 + i); });
+
+    renderFleet();
+    refreshVerdict();
+  }
+
+  function tickClock() {
+    var d = new Date();
+    $('s-clock').textContent =
+      String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  // one heartbeat drives every "updated Ns ago" line and every expiry check
+  setInterval(function () {
+    entities.forEach(render);
+    extras.forEach(function (e) { if (e.shown) render(e); });
+    refreshVerdict();
+    tickClock();
+  }, 1000);
+
+  // ---------------------------------------------------------------- link tile
+  var CONN_TEXT = {
+    idle: 'not connected', connecting: 'connecting', connected: 'connected',
+    reconnecting: 'reconnecting', closed: 'disconnected', error: 'cannot reach broker',
+    fatal: 'refused'
+  };
+  function setConn(state, detail) {
+    connState = state;
+    $('t-link').setAttribute('data-conn', state);
+    $('l-state').textContent = detail || CONN_TEXT[state] || state;
+  }
+  function refreshLink() {
+    $('l-ents').textContent = String(entities.size + extras.size);
+    $('l-subs').textContent = String(subs.size);
+  }
+
+  // ---------------------------------------------------------------- connect
+  function describe(err) {
+    var code = err && (err.code !== undefined ? err.code : err.reasonCode);
+    var map = {
+      1: 'the broker rejected the MQTT protocol version',
+      2: 'the broker rejected this client id',
+      3: 'the broker is unavailable',
+      4: 'the username or passphrase is wrong',
+      5: 'this account is not authorised for the broker'
+    };
+    if (map[code]) return { text: map[code], fatal: code === 2 || code === 4 || code === 5 };
+    var m = String((err && err.message) || err || 'unknown error');
+    if (/not authoriz|bad user/i.test(m)) return { text: m, fatal: true };
+    return { text: m, fatal: false };
+  }
+
+  function disconnect() {
+    manualStop = true;
+    if (client) { try { client.end(true); } catch (e) {} client = null; }
+    subs.clear();
+    refreshLink();
+  }
+
+  function connect(cfg) {
+    if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
+      setConn('fatal', 'library missing');
+      calm('This wall could not load the piece of software it needs to read the sensors.');
+      return;
+    }
+
+    disconnect();
+    manualStop = false;
+    everConnected = false;
+    activeFilter = typeof cfg.filter === 'string' ? cfg.filter.trim() : '';
+    filteredOut.clear();
+
+    var scheme = cfg.tls ? 'wss' : 'ws';
+    var url = scheme + '://' + cfg.host + ':' + cfg.port;
+    $('l-host').textContent = cfg.host + ':' + cfg.port;
+    setConn('connecting');
+
+    if (firstFailTimer) clearTimeout(firstFailTimer);
+    firstFailTimer = setTimeout(function () {
+      if (!everConnected && !manualStop) {
+        calm('The wall cannot reach the air sensors right now. It is still trying.');
+      }
+    }, 12000);
+
+    if (!cfg.tls && location.protocol === 'https:') {
+      // A page served over HTTPS cannot open a plaintext ws:// socket.
+      calm('This page is loaded over a secure connection, which blocks the plain ' +
+           'link to the sensors. Press s and switch on TLS.');
+    }
+
+    try {
+      client = mqtt.connect(url, {
+        username: cfg.user || undefined,
+        password: cfg.pass || undefined,
+        clientId: 'air-tiles-' + Math.random().toString(16).slice(2, 10),
+        clean: true,
+        reconnectPeriod: 4000,
+        connectTimeout: 8000,
+        keepalive: 45,
+        resubscribe: true
+      });
+    } catch (e) {
+      setConn('fatal');
+      calm('The wall could not start talking to the sensors.');
+      return;
+    }
+
+    client.on('connect', function () {
+      everConnected = true;
+      if (firstFailTimer) { clearTimeout(firstFailTimer); firstFailTimer = null; }
+      calm(null);
+      setConn('connected');
+      // Bounded discovery wildcards — the two shapes HA publishes, plus board
+      // availability. subRaw, not sub: these three are authored here and are the
+      // only wildcards this page may ever use. None of them contains '#'.
+      subRaw('homeassistant/+/+/config');
+      subRaw('homeassistant/+/+/+/config');
+      subRaw('dbk/+/status');
+      refreshLink();
+    });
+
+    client.on('message', function (topic, payload) {
+      try { onMessage(topic, payload); } catch (e) { /* one bad message never stops the stream */ }
+    });
+
+    client.on('reconnect', function () {
+      if (!manualStop && connState !== 'fatal') setConn('reconnecting');
+    });
+    client.on('offline', function () {
+      if (!manualStop && connState !== 'fatal') setConn('reconnecting', 'broker unreachable');
+    });
+
+    // A browser never reveals WHY a WebSocket handshake failed, and for a
+    // refused port mqtt.js may close without ever emitting a useful 'error'.
+    client.on('close', function () {
+      if (manualStop || connState === 'fatal') return;
+      setConn(everConnected ? 'reconnecting' : 'error',
+              everConnected ? 'connection lost' : 'cannot reach broker');
+    });
+
+    client.on('error', function (err) {
+      var d = describe(err);
+      if (d.fatal) {
+        setConn('fatal');
+        manualStop = true;
+        try { client.end(true); } catch (e) {}
+        client = null;
+        calm('The sensors will not let this wall listen: ' + d.text + '.');
+      } else {
+        setConn('error', 'cannot reach broker');
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------- scale
+  (function scale() {
+    var host = $('scale');
+    BANDS.forEach(function (b) {
+      var el = document.createElement('div');
+      el.className = 'seg';
+      el.setAttribute('data-on', '0');
+      el.style.setProperty('--sc', b.tint);
+      var i = document.createElement('i');
+      var nm = document.createElement('b');
+      nm.textContent = b.name;
+      var rg = document.createElement('em');
+      rg.textContent = b.r;
+      el.appendChild(i); el.appendChild(nm); el.appendChild(rg);
+      host.appendChild(el);
+    });
+  })();
+
+  // ---------------------------------------------------------------- settings
+  var sheet = $('sheet');
+  function openSheet(open) {
+    sheet.hidden = !open;
+    if (open) setTimeout(function () { $('f-host').focus(); }, 0);
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && !sheet.hidden) { openSheet(false); return; }
+    if (sheet.hidden && (ev.key === 's' || ev.key === 'S') &&
+        !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+      ev.preventDefault();
+      openSheet(true);
+    }
+  });
+  sheet.addEventListener('click', function (ev) { if (ev.target === sheet) openSheet(false); });
+  $('btn-close').addEventListener('click', function () { openSheet(false); });
+
+  function readForm() {
+    return {
+      host: $('f-host').value.trim(),
+      port: $('f-port').value.trim(),
+      user: $('f-user').value,
+      pass: $('f-pass').value,
+      tls: $('f-tls').checked,
+      filter: $('f-filter').value.trim(),
+      remember: $('f-remember').checked
+    };
+  }
+  function fillForm(v) {
+    $('f-host').value = (v && v.host) || DEFAULT_HOST;
+    $('f-port').value = (v && v.port) || DEFAULT_PORT;
+    $('f-user').value = (v && v.user) || '';
+    $('f-pass').value = (v && v.pass) || '';
+    $('f-tls').checked = !!(v && v.tls);
+    $('f-filter').value = v && typeof v.filter === 'string' ? v.filter : DEFAULT_FILTER;
+    $('f-remember').checked = !!(v && (v.remember || v.pass));
+  }
+  // What goes to disk is not what is in the form: the passphrase is opt-in.
+  function storable(cfg) {
+    var out = { host: cfg.host, port: cfg.port, user: cfg.user, tls: cfg.tls,
+                filter: cfg.filter, remember: !!cfg.remember };
+    if (cfg.remember) out.pass = cfg.pass;
+    return out;
+  }
+
+  $('form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var cfg = readForm();
+    if (!cfg.host || !cfg.port) return;
+    entities.forEach(function (e) { if (e.tile) e.tile.root.remove(); });
+    extras.forEach(function (e) { if (e.tile) e.tile.root.remove(); });
+    entities.clear(); extras.clear();
+    byState.clear(); byAvail.clear(); byUid.clear();
+    boardStatus.clear(); boardsSeen.clear(); filteredOut.clear();
+    refreshLink(); layout();
+    var ok = saveStore(storable(cfg));
+    $('store-hint').textContent = !ok
+      ? 'This browser refused to save settings (private window?). The connection still works.'
+      : cfg.remember
+        ? 'Saved in this browser only, on this device — passphrase included.'
+        : 'Saved in this browser only. The passphrase was not stored.';
+    openSheet(false);
+    connect(cfg);
+  });
+
+  $('btn-forget').addEventListener('click', function () {
+    clearStore();
+    fillForm(null);
+    $('f-pass').value = '';
+    disconnect();
+    setConn('idle');
+    $('store-hint').textContent = 'Saved settings cleared from this browser.';
+  });
+
+  // ---------------------------------------------------------------- boot
+  // No configuration UI on load, ever. Three sources, in order: this browser's
+  // saved settings, then credentials handed in on the URL, then an anonymous
+  // connection to the default broker.
+  var saved = loadStore();
+  var qs = null;
+  try { qs = new URLSearchParams(location.search); } catch (e) {}
+  var qUser = qs && qs.get('u'), qPass = qs && qs.get('p');
+  var qHost = qs && qs.get('h'), qPort = qs && qs.get('port');
+
+  fillForm(saved);
+  if (qHost) $('f-host').value = qHost;
+  if (qPort) $('f-port').value = qPort;
+  if (qUser !== null && qUser !== undefined) $('f-user').value = qUser;
+  if (qPass !== null && qPass !== undefined) $('f-pass').value = qPass;
+
+  // Do not leave a passphrase sitting in the address bar of a wall display.
+  if ((qUser || qPass) && window.history && history.replaceState) {
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+  }
+
+  $('store-hint').textContent = storeWorks
+    ? (saved ? 'Loaded from this browser’s local storage.' : 'Nothing is stored yet.')
+    : 'This browser blocks local storage, so settings cannot be remembered here.';
+
+  setGround(-1);          // the unknown ground is what a cold page shows
+  refreshLink();
+  renderFleet();
+  refreshVerdict();
+  tickClock();
+
+  var boot = readForm();
+  if (!boot.host) boot.host = DEFAULT_HOST;
+  if (!boot.port) boot.port = DEFAULT_PORT;
+  connect(boot);
+})();
+</script>
+</body>
+</html>

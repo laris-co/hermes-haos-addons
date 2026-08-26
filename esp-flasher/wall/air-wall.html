@@ -1,0 +1,1559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Air Wall</title>
+<style>
+/* ==========================================================================
+   Paper and ink. One typeface, one size ramp, one weight pair, hairline rules.
+   There is no colour in this stylesheet except --alarm, and --alarm is used
+   in exactly one place: the band word of a row reading 35.5 or above.
+   Colour means danger here because nothing else is ever coloured.
+   ========================================================================== */
+:root{
+  --paper:#faf9f6;
+  --ink:#14130f;      /* primary text                */
+  --ink-2:#4a4844;    /* secondary — notes, units    */
+  /* Tertiary carries the column heads, the EPA legend and every note, so it has to
+     clear AA on paper, not merely look quiet. #8a877f measured 3.41:1 and failed. */
+  --ink-3:#6f6c64;    /* tertiary  — labels, foot ≈4.6:1 on --paper */
+  --hair:#dedbd2;     /* row rules                   */
+  --rule:#2a2823;     /* the one strong rule         */
+  --alarm:#b8241a;    /* THE only colour             */
+
+  /* ONE size ramp. Two sizes 0.3px apart are not a hierarchy step, they are the same
+     size declared twice — every near-duplicate below was merged into these four. */
+  --t-cap:.68rem;     /* column heads, field labels, masthead */
+  --t-note:.78rem;    /* units, notes, age, footnotes         */
+  --t-ui:.95rem;      /* inputs and buttons                   */
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#0d0d0c;
+    --ink:#eeece5;
+    --ink-2:#a8a49a;
+    --ink-3:#8d8a80;  /* ≈5.6:1 on the dark paper */
+    --hair:#26251f;
+    --rule:#5a5850;
+    --alarm:#ff6a52;
+  }
+}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font:400 16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  /* Digits must line up down the column. Set once, inherited by everything. */
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+  padding:clamp(1.75rem,5vw,4.5rem) clamp(1.1rem,4vw,3.5rem) clamp(2rem,5vw,4rem);
+}
+/* NOTE: there is deliberately NO text-transform in this file. CSS uppercasing maps
+   "µ" to "M", which silently turns µg/m³ into mg/m³ — a 1000x unit error produced by
+   a styling rule. Every capital on this page was typed as a capital. Anything that
+   came off the wire (unit, sensor name, payload) is written with textContent and
+   rendered exactly as published. */
+
+/* Exactly one of these three is visible at any moment, so the document has one
+   scrollbar and nothing nests inside another scroller. */
+.view{max-width:1040px;margin:0 auto;container-type:inline-size}
+
+/* ---------------------------------------------------------------- masthead */
+/* Also the touch escape hatch: press and hold it, or tap it three times, to reach
+   settings. A wall tablet has no "s" key. Nothing is drawn for this — the default
+   view stays free of chrome — so the affordance must not select or long-press-menu. */
+.masthead{
+  margin:0 0 clamp(2.25rem,6cqi,4.5rem);
+  font-size:var(--t-cap);font-weight:600;letter-spacing:.17em;color:var(--ink-3);
+  touch-action:manipulation;-webkit-touch-callout:none;
+  -webkit-user-select:none;user-select:none;
+}
+
+/* ---------------------------------------------------------------- the answer */
+/* Nightingale: this line answers "should we go outside?" before any number is read.
+   Sized off the container (cqi), never the viewport — see the note on .num. */
+.verdict{
+  margin:0;font-weight:600;line-height:1.05;letter-spacing:-.02em;
+  font-size:clamp(1.5rem,5.4cqi,3.3rem);
+  max-width:24ch;text-wrap:balance;
+}
+/* Body copy, so it takes the body size — a ramp step 0.4px away from another one is not a
+   step, it is the same size declared twice. */
+.subline{margin:1rem 0 0;color:var(--ink-2);max-width:56ch}
+.subline:empty{display:none}
+
+/* ---------------------------------------------------------------- the table */
+table{
+  width:100%;border-collapse:collapse;table-layout:fixed;
+  margin-top:clamp(2.25rem,6.5cqi,5rem);
+}
+/* The column grid, at every width. These used to live only inside the phone media
+   query, so above 600px table-layout:fixed fell back to five equal fifths — which
+   left AGE 74% empty and the reading column too narrow to hold its own hero number:
+   a six-character reading printed straight through the band word beside it. */
+col.c-board{width:24%}col.c-read{width:28%}col.c-band{width:24%}
+col.c-trend{width:12%}col.c-age{width:12%}
+th{
+  text-align:left;vertical-align:bottom;
+  font-size:var(--t-cap);font-weight:600;letter-spacing:.17em;color:var(--ink-3);
+  padding:0 .8rem .75rem 0;
+  border-bottom:1px solid var(--rule);
+}
+th .unit-lit{letter-spacing:.02em;font-weight:400}   /* µg/m³ stays exactly as typed */
+th.right{text-align:right;padding-right:0}
+tbody td{
+  padding:1.2rem .8rem 1.2rem 0;
+  border-top:1px solid var(--hair);
+  vertical-align:top;
+}
+/* Vignelli: a row is a line, not a composition. The number, the band word and the age
+   sit on ONE baseline; only the board cell, whose two spans stack, hangs from the top. */
+tbody td:nth-child(2),tbody td:nth-child(3),tbody td.age{vertical-align:baseline}
+tbody tr:first-child td{border-top:0}
+tbody td:last-child{padding-right:0}
+
+/* Cooper: a board that is not reporting recedes — opacity, never a badge. It applies to
+   the strong elements of the row only: the notes are already --ink-3 at .78rem, and a
+   .6 multiplier on top of that measured 1.95:1, below even the non-text floor. */
+tbody tr[data-state="stale"],
+tbody tr[data-state="unknown"],
+tbody tr[data-state="waiting"]{--recede:.72}
+tbody tr[data-state="offline"]{--recede:.6}
+tbody td .board,tbody td .num,tbody td .bandw,tbody td.age{opacity:var(--recede,1)}
+
+.board{display:block;font-size:clamp(.95rem,1.7cqi,1.15rem);font-weight:600;overflow-wrap:anywhere}
+.measure{display:block;margin-top:.22rem;font-size:var(--t-note);color:var(--ink-3);overflow-wrap:anywhere}
+tr[data-lead="1"] .board{font-size:clamp(1.05rem,2.1cqi,1.45rem)}
+
+/* Bug B, never again: the hero number used to be sized in vw while its space came
+   from a layout column. Widen the page, narrow the column, and "163.3" broke into
+   "163." + "3" — failing in exactly the hazardous range it exists to warn about.
+   cqi is 1% of THIS TABLE's own width, and every column below is a fixed percentage
+   of that same width, so the type and the space it lives in cannot drift apart.
+   nowrap on top: a word may break, a number may not. */
+.num{
+  display:block;white-space:nowrap;
+  font-size:clamp(1.02rem,2.6cqi,1.85rem);
+  line-height:1.05;letter-spacing:-.02em;
+}
+tr[data-lead="1"] .num{
+  font-size:clamp(1.5rem,6.6cqi,4.4rem);
+  line-height:.92;letter-spacing:-.035em;font-weight:600;
+}
+/* Escape hatch for a payload wider than its cell: step down to a size that IS allowed to
+   wrap, so nowrap can never turn into an overflow. Set by JS from a MEASUREMENT of the
+   painted text, not from a character count — see the note at r.num.scrollWidth. */
+.num[data-long="1"]{font-size:clamp(.95rem,1.9cqi,1.25rem);white-space:normal;overflow-wrap:anywhere}
+tr[data-lead="1"] .num[data-long="1"]{font-size:clamp(1.1rem,3.4cqi,2.1rem);white-space:normal;overflow-wrap:anywhere}
+/* Neurath: the unit is a footnote, not the headline. */
+.unit{display:block;margin-top:.3rem;font-size:var(--t-note);color:var(--ink-3);overflow-wrap:anywhere}
+.unit:empty{display:none}
+
+.bandw{display:block;font-size:clamp(.95rem,1.7cqi,1.15rem);overflow-wrap:anywhere}
+tr[data-lead="1"] .bandw{font-size:clamp(1.05rem,2.4cqi,1.6rem);font-weight:600;letter-spacing:-.02em}
+/* THE colour rule. Set by JS as data-alarm="1" only when the classified reading is
+   at or above 35.5 µg/m³ — US EPA "Unhealthy for sensitive groups". Nothing else on
+   this page is ever coloured. */
+.bandw[data-alarm="1"]{color:var(--alarm)}
+.note{display:block;margin-top:.28rem;font-size:var(--t-note);color:var(--ink-3);overflow-wrap:anywhere}
+.note:empty{display:none}
+
+/* A sparkline is word-sized and the same size in every row, or it is not comparable:
+   one fixed viewBox stretched into two different boxes made the lead row's slope read
+   1.6x flatter than the rows below it — on the row the design says matters most. */
+.spark{display:block;width:100%;max-width:76px;height:20px;color:var(--ink-2)}
+.arrow{display:block;font-size:1rem;color:var(--ink-2);line-height:1.4}
+
+.age{text-align:right;font-size:var(--t-note);color:var(--ink-2);white-space:nowrap}
+
+/* Under a phone width the trend column is the first thing that stops earning its
+   ink. One rule, every row, no special cases. */
+@media (max-width:600px){
+  col.c-trend,th.trend,td.trend{display:none}
+  col.c-board{width:32%}col.c-read{width:28%}col.c-band{width:26%}col.c-age{width:14%}
+}
+
+/* ---------------------------------------------------------------- foot */
+.foot{
+  margin-top:clamp(2.5rem,7cqi,5rem);padding-top:1.1rem;
+  border-top:1px solid var(--hair);
+  color:var(--ink-3);font-size:var(--t-note);line-height:1.75;
+}
+.foot p{margin:0 0 .35rem;max-width:88ch}
+.foot p:last-child{margin-bottom:0}
+.foot b{color:var(--ink-2);font-weight:600}
+
+/* ---------------------------------------------------------------- failure */
+/* Rams: when this cannot do its job it says so with the whole screen, in one
+   sentence, and offers the one thing that fixes it. Not a form in a corner. */
+.curtain{
+  display:flex;flex-direction:column;justify-content:center;
+  min-height:min(72vh,44rem);
+}
+.curtain-line{
+  margin:0;font-weight:600;line-height:1.15;letter-spacing:-.02em;
+  font-size:clamp(1.35rem,4.4cqi,2.7rem);max-width:26ch;text-wrap:balance;
+}
+.curtain-sub{margin:1.4rem 0 0;color:var(--ink-2);max-width:52ch;font-size:clamp(.9rem,1.5cqi,1.05rem)}
+.curtain-acts{margin:2.2rem 0 0}
+
+/* ---------------------------------------------------------------- settings */
+.set h2{margin:0 0 2rem;font-size:clamp(1.2rem,3cqi,1.8rem);font-weight:600;letter-spacing:-.02em}
+.form{display:grid;gap:1.6rem 2.5rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));max-width:44rem}
+.f{display:flex;flex-direction:column;gap:.4rem;min-width:0}
+.f label{font-size:var(--t-cap);font-weight:600;letter-spacing:.17em;color:var(--ink-3)}
+.f input{
+  font:inherit;font-size:var(--t-ui);color:var(--ink);background:transparent;
+  border:0;border-bottom:1px solid var(--rule);border-radius:0;
+  padding:.3rem 0;min-width:0;width:100%;
+}
+.f input:focus{outline:0;border-bottom-width:2px;padding-bottom:calc(.3rem - 1px)}
+.f-check{flex-direction:row;align-items:center;gap:.6rem}
+.f-check label{letter-spacing:0;font-size:var(--t-ui);font-weight:400;color:var(--ink-2)}
+.f-check input{width:auto;accent-color:var(--ink)}
+.acts{margin-top:2.4rem;display:flex;gap:2rem;align-items:center;flex-wrap:wrap}
+button{
+  font:inherit;font-size:var(--t-ui);color:var(--ink);background:transparent;
+  border:0;border-bottom:1px solid var(--rule);border-radius:0;
+  padding:.15rem 0;cursor:pointer;
+}
+button:hover{border-bottom-width:2px}
+button.quiet{color:var(--ink-3)}
+.set .foot{margin-top:3rem}
+</style>
+</head>
+<body>
+
+<!-- ============================ THE WALL ============================ -->
+<main class="view sheet" id="sheet">
+  <p class="masthead">AIR WALL</p>
+
+  <div aria-live="polite">
+    <h1 class="verdict" id="verdict">Waiting for the first reading.</h1>
+    <p class="subline" id="subline"></p>
+  </div>
+
+  <table id="table" hidden>
+    <colgroup>
+      <col class="c-board"><col class="c-read"><col class="c-band"><col class="c-trend"><col class="c-age">
+    </colgroup>
+    <thead>
+      <tr>
+        <th scope="col">BOARD</th>
+        <th scope="col">READING <span class="unit-lit">&micro;g/m&sup3;</span></th>
+        <th scope="col">BAND</th>
+        <th scope="col" class="trend">TREND</th>
+        <th scope="col" class="right">AGE</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <!-- Two lines: what the bands mean, and how to reach settings. Notices are not down here —
+       they belong to the answer, so they are appended to the aria-live subline above. (An
+       empty notices paragraph used to sit here that nothing ever wrote to: dead markup, paid
+       for in stray margin.) -->
+  <footer class="foot">
+    <p id="epa"></p>
+    <p id="status"></p>
+  </footer>
+</main>
+
+<!-- ============================ FAILURE ============================ -->
+<section class="view curtain" id="curtain" hidden>
+  <p class="curtain-line" id="curtain-line"></p>
+  <p class="curtain-sub" id="curtain-sub"></p>
+  <p class="curtain-acts"><button type="button" id="curtain-open">Change the broker</button></p>
+</section>
+
+<!-- ============================ SETTINGS ============================ -->
+<!-- Reachable by pressing "s", and on a tablet by holding the masthead or tapping it
+     three times. No button, no gear, no panel in the default view. -->
+<section class="view set" id="settings" hidden>
+  <h2>Broker</h2>
+  <form class="form" id="form" autocomplete="off">
+    <div class="f">
+      <label for="f-host">HOST</label>
+      <input id="f-host" name="host" spellcheck="false" required>
+    </div>
+    <div class="f">
+      <label for="f-port">WEBSOCKET PORT</label>
+      <input id="f-port" name="port" inputmode="numeric" required>
+    </div>
+    <div class="f">
+      <label for="f-user">USERNAME</label>
+      <input id="f-user" name="user" spellcheck="false">
+    </div>
+    <div class="f">
+      <label for="f-pass">PASSPHRASE</label>
+      <input id="f-pass" name="pass" type="password" autocomplete="off">
+    </div>
+    <div class="f">
+      <label for="f-filter">TOPIC STARTS WITH</label>
+      <input id="f-filter" name="filter" spellcheck="false" placeholder="blank shows every sensor">
+    </div>
+    <div class="f f-check">
+      <input id="f-tls" name="tls" type="checkbox">
+      <label for="f-tls">Secure WebSocket (wss)</label>
+    </div>
+    <div class="f f-check">
+      <input id="f-remember" name="remember" type="checkbox">
+      <label for="f-remember">Remember the passphrase on this device</label>
+    </div>
+    <div class="f"></div>
+    <div class="f acts">
+      <button type="submit">Connect</button>
+      <button type="button" class="quiet" id="btn-forget">Forget</button>
+      <button type="button" class="quiet" id="btn-cancel">Cancel</button>
+    </div>
+  </form>
+  <footer class="foot">
+    <p id="diag"></p>
+    <p id="store-hint"></p>
+    <p>These fields show what this wall is running right now, so pressing Connect without
+      changing anything changes nothing. Settings stay in this browser, on this device, and are
+      sent nowhere but to the broker named above. Opening this page never writes anything;
+      only Connect does, and the passphrase is written only if you tick the box. A passphrase
+      passed in the address as <b>?p=</b> is used but never saved &mdash; the address is the
+      store. Press <b>Escape</b> to go back.</p>
+  </footer>
+</section>
+
+<!-- Pinned AND hash-locked. This page can carry a broker passphrase, so a compromised or
+     hijacked CDN response must not be able to execute here: version pinning alone does not
+     stop unpkg serving different bytes. sha384 computed from the exact 369,231-byte bundle:
+       openssl dgst -sha384 -binary mqtt.min.js | openssl base64 -A
+     If the hash ever fails to match, the browser refuses the script and the "library did not
+     load" branch takes the whole screen and says so. -->
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"
+        integrity="sha384-haZiwxTLortiFcYMBEEE1+8ayC+o18YtuwHZv+4WQHoPaLzRjwOV6h7Vva5iLSCZ"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- config
+  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_PORT = '1884';            // the broker's MQTT-over-WebSocket listener. A browser
+                                        // cannot open a raw TCP MQTT socket; pointing at one
+                                        // fails in a way that looks exactly like bad credentials.
+  // ONE-TIME SETUP, and there is no way around it: this broker refuses anonymous clients, and
+  // no credential is ever written into this file. Opening it with nothing stored shows the
+  // failure curtain, correctly. Point the wall tablet once at
+  //     air-wall.html?u=<user>&p=<passphrase>
+  // (the address is then the store, and nothing lands on disk), or press s / hold the masthead
+  // and type them in once. After either, it comes up unattended on every later load.
+  var STORE_KEY = 'air-wall.conn.v1';
+  var MAX_SUBS = 64;                    // hard ceiling; a browser must never firehose a broker
+  var DEFAULT_EXPIRE = 900;             // seconds, when discovery does not declare expire_after
+  var DEFAULT_FILTER = 'dbk/';          // scope the wall to the Kit4Kids boards; blank = everything
+  var HIST = 24;                        // ring buffer depth per entity, for the trend column
+  var RETAINED_FLUSH = 2500;            // ms after connect in which a retained message is the
+                                        // broker's backlog rather than a live publish. Inside
+                                        // this window a retained message has no knowable age.
+  var ALARM_AT = 35.5;                  // µg/m³ — US EPA "Unhealthy for sensitive groups".
+                                        // The single threshold at which this page uses colour.
+
+  // US EPA PM2.5 AQI breakpoints, micrograms per cubic metre.
+  // One table drives the band word, the plain-language answer, and the printed footnote.
+  var BANDS = [
+    { max: 12.0,     label: 'Good',                            short: 'Good',
+      note: 'air is fine',                 r: '0 – 12.0',
+      answer: 'Air is good right now.' },
+    { max: 35.4,     label: 'Moderate',                        short: 'Moderate',
+      note: 'fine for most people',        r: '12.1 – 35.4',
+      answer: 'Air is okay right now.' },
+    { max: 55.4,     label: 'Unhealthy for sensitive groups',  short: 'Unhealthy for sensitive groups',
+      note: 'children and asthma, care',   r: '35.5 – 55.4',
+      answer: 'Sensitive groups should take care.' },
+    { max: 150.4,    label: 'Unhealthy',                       short: 'Unhealthy',
+      note: 'limit time outside',          r: '55.5 – 150.4',
+      answer: 'Unhealthy — limit time outside.' },
+    { max: 250.4,    label: 'Very unhealthy',                  short: 'Very unhealthy',
+      note: 'stay indoors',                r: '150.5 – 250.4',
+      answer: 'Very unhealthy — stay indoors.' },
+    { max: Infinity, label: 'Hazardous',                       short: 'Hazardous',
+      note: 'stay indoors, windows shut',  r: '250.5 +',
+      answer: 'Hazardous — stay indoors.' }
+  ];
+
+  // Home Assistant discovery allows abbreviated keys. Expand the ones we read.
+  var ALIASES = {
+    stat_t: 'state_topic', avty_t: 'availability_topic', uniq_id: 'unique_id',
+    unit_of_meas: 'unit_of_measurement', dev_cla: 'device_class', stat_cla: 'state_class',
+    exp_aft: 'expire_after', pl_avail: 'payload_available', pl_not_avail: 'payload_not_available',
+    dev: 'device', val_tpl: 'value_template', avty: 'availability', ic: 'icon'
+  };
+
+  // ---------------------------------------------------------------- state
+  var client = null;
+  var entities = new Map();      // discovery topic -> entity
+  var byState = new Map();       // state topic     -> Set(discovery topic)
+  var byAvail = new Map();       // avail topic     -> Set(discovery topic)
+  var byUid = new Map();         // unique_id       -> discovery topic (HA collapses these)
+  var boardStatus = new Map();   // board id        -> { raw, at }
+  var subs = new Set();
+  var filteredOut = new Set();
+  var nonAir = new Set();        // discovered, but not a concentration — counted, never a row
+  var refusedWild = new Set();   // every wildcard a discovery payload asked for, not just the last
+  var notices = new Map();
+  var activeFilter = '';
+  var parseErrors = 0;
+  var connState = 'idle';
+  var connectedAt = 0;           // when the current session came up, so a retained backlog
+                                 // can be told apart from a live publish
+  var manualStop = false;
+  var everConnected = false;
+  var discoveryTimer = null;
+  var lastOrder = '';
+  var currentCfg = null;
+  var baseView = 'sheet';
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var $ = function (id) { return document.getElementById(id); };
+  var sheetEl = $('sheet'), curtainEl = $('curtain'), setEl = $('settings');
+  var tableEl = $('table'), rowsEl = $('rows');
+
+  // ---------------------------------------------------------------- helpers
+  // The EPA scale starts at 0. Without a lower bound every negative value fell into the first
+  // band, so a faulty sensor reporting -999 rendered as a reassuring "Good — air is fine".
+  function bandFor(n) {
+    if (!Number.isFinite(n) || n < 0) return null;
+    for (var i = 0; i < BANDS.length; i++) if (n <= BANDS[i].max) return BANDS[i];
+    return BANDS[BANDS.length - 1];
+  }
+
+  function isPm(ent) {
+    return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
+  }
+
+  // This is a wall for one question, so only a thing measured in air can take a row. Uptime,
+  // Wi-Fi signal and a text "air quality level" are not readings: five of eight rows on the
+  // real board were diagnostics, each repeating "no US EPA band for this measurement" under a
+  // column headed µg/m³. They are still counted, and the footer says how many are hidden.
+  function isAir(ent) {
+    var dc = String(ent.deviceClass || '').toLowerCase();
+    if (dc === 'pm25' || dc === 'pm10' || dc === 'pm1') return true;
+    var u = String(ent.unit || '').replace(/\s+/g, '').toLowerCase();
+    // µ (U+00B5) and μ (U+03BC) both appear on the wire; so do ascii spellings.
+    if (u === 'µg/m³' || u === 'μg/m³' || u === 'ug/m3' ||
+        u === 'µg/m3' || u === 'μg/m3') return true;
+    return /pm ?(1|2\.?5|10)\b/i.test(ent.measure || ent.title || '');
+  }
+
+  function ago(ts) {
+    if (!ts) return 'never';
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 2) return 'just now';
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
+  function parseValue(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (s === '') return { kind: 'empty', text: 'no value' };
+    if (/^(unknown|unavailable|none|null|nan|n\/a)$/i.test(s)) {
+      return { kind: 'unknown', text: s.toLowerCase() };
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return { kind: 'text', text: s };
+    // The EPA method truncates the concentration to one decimal BEFORE applying breakpoints.
+    // Truncate ONCE, here, and use that one value for both the printed number and the band —
+    // otherwise the row prints 35.4 while calling it "Unhealthy for sensitive groups" and
+    // taking the alarm colour, while the printed breakpoints below say 35.4 is Moderate.
+    // Truncate, never round: rounding 35.44 up to 35.5 would invent a severity — and here it
+    // would invent the colour too.
+    var n1 = Math.trunc(n * 10) / 10;
+    var text;
+    if (/^[+-]?\d+(\.\d)?$/.test(s)) {
+      text = s.replace(/^\+/, '');            // keep the device's own precision: "0", "0.0"
+    } else {
+      text = n1.toFixed(1);                   // cap runaway precision AT the classified value
+    }
+    return { kind: 'number', n: n, n1: n1, text: text };
+  }
+
+  function boardFromTopic(topic) {
+    var m = /^dbk\/([^/]+)\//i.exec(topic || '');
+    return m ? m[1] : null;
+  }
+
+  // Row identity when nothing else names the device. Structural, not name-based: falling back
+  // to the discovery "name" is Bug C again — three boards all titled "PM2.5". Any state topic
+  // has a segment that identifies its publisher; take that rather than special-casing "dbk/".
+  function idFromTopic(topic) {
+    var parts = String(topic || '').split('/').filter(Boolean);
+    if (parts.length >= 3) return parts[1];                 // ns/<who>/…/leaf
+    if (parts.length === 2) return parts[0];
+    return parts[0] || '';
+  }
+
+  var storeWorks = true;
+  // Two different failures used to land in one catch: a browser that blocks storage, and a
+  // corrupt stored value. The second was misreported as the first, and the bad entry was left
+  // in place to fail again on every load.
+  function loadStore() {
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); }
+    catch (e) { storeWorks = false; return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (e) {
+      try { localStorage.removeItem(STORE_KEY); } catch (e2) {}
+      return null;
+    }
+  }
+  function saveStore(v) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; }
+    catch (e) { storeWorks = false; return false; }
+  }
+  function clearStore() {
+    try { localStorage.removeItem(STORE_KEY); return true; } catch (e) { return false; }
+  }
+
+  // Credentials are never in this file. They come from this browser's storage, or from the
+  // address bar so a wall tablet can be pointed once and forgotten. Query wins over storage,
+  // field by field, and is deliberately NOT written to disk: the address is the store.
+  function fromQuery() {
+    var q = {};
+    try {
+      var p = new URLSearchParams(location.search);
+      if (p.has('h')) q.host = p.get('h').trim();
+      if (p.has('host')) q.host = p.get('host').trim();
+      if (p.has('port')) q.port = p.get('port').trim();
+      if (p.has('u')) q.user = p.get('u');
+      if (p.has('p')) q.pass = p.get('p');
+      if (p.has('f')) q.filter = p.get('f');
+      if (p.has('tls')) q.tls = /^(1|true|yes|on)$/i.test(p.get('tls'));
+    } catch (e) {}
+    return q;
+  }
+
+  function notice(id, text) {
+    if (text) notices.set(id, text); else notices.delete(id);
+  }
+
+  // (There is no HTML-escaping helper here on purpose: every value off the wire reaches the
+  // DOM through textContent, so one never has to exist. An unused one is a trap for the next
+  // reader, who would take its presence as evidence that something is built from a string.)
+
+  // ---------------------------------------------------------------- subscribe
+  // subRaw is the ONLY place that talks to the broker, and it is private to this file's own
+  // authored topics. Everything that came off the wire goes through sub(), which refuses
+  // wildcards. Keeping the two apart is the whole point: the three discovery wildcards below
+  // are ours and bounded, a wildcard in a retained payload is someone else's and unbounded.
+  function subRaw(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    if (subs.has(topic)) return true;
+    if (subs.size >= MAX_SUBS) {
+      notice('subcap', 'Subscription ceiling reached (' + MAX_SUBS + '). Further sensors are ' +
+        'ignored so this page cannot flood the broker.');
+      return false;
+    }
+    subs.add(topic);
+    client.subscribe(topic, { qos: 0 }, function (err) {
+      if (err) {
+        subs.delete(topic);
+        notice('suberr', 'The broker rejected a subscription to ' + topic + ' — ' +
+          (err.message || String(err)) + '. Its access list may not allow this topic.');
+      }
+    });
+    return true;
+  }
+
+  function sub(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    // Absolute guard: a wildcard on a fleet broker costs roughly 109 GB/day. '+' is every bit
+    // as dangerous as the multi-level wildcard — a retained config declaring state_topic
+    // "+/+/+" delivered ten out of ten unrelated fleet topics in testing. A topic that came
+    // off the wire must name one exact topic.
+    if (/[#+]/.test(topic)) {
+      // Every refusal, not only the most recent: a broker carrying two hostile retained
+      // configs used to report one of them and stay silent about the other.
+      refusedWild.add(topic);
+      notice('wildcard', 'Refused ' + refusedWild.size + ' wildcard subscription' +
+        (refusedWild.size === 1 ? '' : 's') + ' asked for by discovery payloads (' +
+        Array.from(refusedWild).join(', ') + '). Topics that arrive over the wire must name ' +
+        'one exact topic.');
+      return false;
+    }
+    return subRaw(topic);
+  }
+
+  // Release a topic nothing is listening for any more, so the counter and the MAX_SUBS
+  // ceiling stay honest across re-configuration.
+  function unsub(topic) {
+    if (!topic || !subs.has(topic)) return;
+    if (byState.has(topic) || byAvail.has(topic)) return;   // still wanted by the other index
+    subs.delete(topic);
+    if (client) { try { client.unsubscribe(topic); } catch (e) {} }
+  }
+
+  // ---------------------------------------------------------------- discovery
+  function expand(cfg) {
+    var out = {};
+    Object.keys(cfg).forEach(function (k) { out[ALIASES[k] || k] = cfg[k]; });
+    // "~" is a base-topic abbreviation: "~/state" and "prefix/~" expand against it.
+    var base = out['~'];
+    if (typeof base === 'string' && base) {
+      ['state_topic', 'availability_topic'].forEach(function (k) {
+        var v = out[k];
+        if (typeof v !== 'string') return;
+        if (v.charAt(0) === '~') out[k] = base + v.slice(1);
+        else if (v.charAt(v.length - 1) === '~') out[k] = v.slice(0, -1) + base;
+      });
+    }
+    // availability: [{topic, ...}] — take the first entry we can use
+    if (!out.availability_topic && Array.isArray(out.availability) && out.availability.length) {
+      var a = out.availability[0];
+      if (a && typeof a.topic === 'string') {
+        out.availability_topic = a.topic;
+        if (a.payload_available) out.payload_available = a.payload_available;
+        if (a.payload_not_available) out.payload_not_available = a.payload_not_available;
+      }
+    }
+    return out;
+  }
+
+  function index(map, key, dtopic) {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(dtopic);
+  }
+
+  // The missing half of index(). Without it a re-published config left the entity indexed
+  // under its OLD state topic, so a row footed "dbk/DBK-999/pm2_5" happily displayed a
+  // reading that arrived on the abandoned dbk/DBK-001/pm2_5 — one board's number under
+  // another board's name.
+  function unindex(map, key, dtopic) {
+    if (!key || !map.has(key)) return;
+    var set = map.get(key);
+    set.delete(dtopic);
+    if (set.size === 0) { map.delete(key); unsub(key); }
+  }
+
+  function removeEntity(dtopic) {
+    var gone = entities.get(dtopic);
+    if (!gone) return false;
+    if (gone.row) gone.row.tr.remove();
+    entities.delete(dtopic);
+    if (gone.uid && byUid.get(gone.uid) === dtopic) byUid.delete(gone.uid);
+    unindex(byState, gone.stateTopic, dtopic);
+    unindex(byAvail, gone.availTopic, dtopic);
+    return true;
+  }
+
+  function matchesFilter(topic) {
+    return !activeFilter || String(topic).indexOf(activeFilter) === 0;
+  }
+
+  function noteFilter() {
+    if (!activeFilter || filteredOut.size === 0) { notice('filter', null); return; }
+    notice('filter', filteredOut.size + ' sensor' + (filteredOut.size === 1 ? '' : 's') +
+      ' on this broker are hidden: this wall is scoped to topics starting with "' +
+      activeFilter + '".');
+  }
+
+  function noteNonAir() {
+    if (nonAir.size === 0) { notice('nonair', null); return; }
+    notice('nonair', nonAir.size + ' other sensor' + (nonAir.size === 1 ? '' : 's') +
+      ' on these boards ' + (nonAir.size === 1 ? 'is' : 'are') + ' not shown: this wall shows ' +
+      'what is measured in the air, not how the board itself is doing.');
+  }
+
+  function onDiscovery(dtopic, text) {
+    // An empty retained payload is HA's "delete this entity".
+    if (text.trim() === '') {
+      filteredOut.delete(dtopic);
+      nonAir.delete(dtopic);
+      removeEntity(dtopic);
+      noteFilter();
+      noteNonAir();
+      return;
+    }
+
+    var cfg;
+    try {
+      cfg = JSON.parse(text);
+    } catch (e) {
+      // One bad retained message must not kill the page.
+      parseErrors++;
+      notice('parse', parseErrors + ' malformed discovery payload' +
+        (parseErrors === 1 ? '' : 's') + ' ignored. Everything else still works.');
+      return;
+    }
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) { parseErrors++; return; }
+
+    cfg = expand(cfg);
+    if (typeof cfg.state_topic !== 'string' || !cfg.state_topic) return;  // nothing to show
+
+    // Scope the wall. Anything outside the filter is dropped BEFORE it takes a row, a
+    // subscription, or a slot under the MAX_SUBS ceiling — and it is counted, so the page can
+    // say so out loud rather than looking mysteriously empty.
+    if (!matchesFilter(cfg.state_topic)) {
+      filteredOut.add(dtopic);
+      nonAir.delete(dtopic);
+      removeEntity(dtopic);
+      noteFilter();
+      noteNonAir();
+      return;
+    }
+    filteredOut.delete(dtopic);
+    noteFilter();
+
+    var parts = dtopic.split('/');
+    var dev = cfg.device && typeof cfg.device === 'object' ? cfg.device : null;
+    var devName = dev && typeof dev.name === 'string' ? dev.name : '';
+    var measure = typeof cfg.name === 'string' && cfg.name ? cfg.name : (parts[2] || 'sensor');
+    var expire = Number(cfg.expire_after);
+    var uid = typeof cfg.unique_id === 'string' && cfg.unique_id ? cfg.unique_id : '';
+    var board = boardFromTopic(cfg.state_topic);
+    var newAvail = typeof cfg.availability_topic === 'string' ? cfg.availability_topic : '';
+    var unit = typeof cfg.unit_of_measurement === 'string' ? cfg.unit_of_measurement : '';
+    var deviceClass = typeof cfg.device_class === 'string' ? cfg.device_class : '';
+
+    // Scope the wall by what it is a wall FOR. Dropped before it takes a row, a subscription,
+    // or a slot under the ceiling — and counted, so the footer can say so out loud.
+    if (!isAir({ deviceClass: deviceClass, unit: unit, measure: measure, title: '' })) {
+      nonAir.add(dtopic);
+      removeEntity(dtopic);
+      noteNonAir();
+      return;
+    }
+    nonAir.delete(dtopic);
+    noteNonAir();
+
+    // HA collapses two discovery topics carrying one unique_id into a single entity; keyed on
+    // the discovery topic alone this page drew the same sensor twice. Newest config wins.
+    if (uid && byUid.has(uid) && byUid.get(uid) !== dtopic) removeEntity(byUid.get(uid));
+
+    var ent = entities.get(dtopic) ||
+      { key: dtopic, value: null, at: 0, retained: false, availRaw: null, availAt: 0,
+        availRetained: false, row: null, hist: [] };
+
+    // Drop the OLD index entries before writing the new ones, or the entity stays reachable
+    // from a topic it no longer claims — and drop what it measured there with them, history
+    // included. A value read from dbk/DBK-001 must not survive under a row now named DBK-999.
+    if (ent.stateTopic && ent.stateTopic !== cfg.state_topic) {
+      unindex(byState, ent.stateTopic, dtopic);
+      ent.value = null; ent.at = 0; ent.retained = false; ent.raw = undefined; ent.hist = [];
+    }
+    if (ent.availTopic && ent.availTopic !== newAvail) {
+      unindex(byAvail, ent.availTopic, dtopic);
+      ent.availRaw = null; ent.availAt = 0; ent.availRetained = false;
+    }
+    if (ent.uid && ent.uid !== uid && byUid.get(ent.uid) === dtopic) byUid.delete(ent.uid);
+
+    // Bug C: titling every row by the discovery "name" made three boards all read "PM2.5".
+    // The board id is parsable from the state topic and IS the identity; what it measures is
+    // the subtitle.
+    // The last fallback is structural, never cfg.name: a sensor outside "dbk/" with no device
+    // name and no unique_id would otherwise be titled by what it measures, which is Bug C.
+    var who = board || devName || uid || idFromTopic(cfg.state_topic);
+    ent.title = who || measure;
+    ent.measure = who ? measure : '';
+    ent.uid = uid;
+    ent.stateTopic = cfg.state_topic;
+    ent.availTopic = newAvail;
+    ent.unit = unit;
+    ent.deviceClass = deviceClass;
+    ent.expire = Number.isFinite(expire) && expire > 0 ? expire : DEFAULT_EXPIRE;
+    ent.pAvail = typeof cfg.payload_available === 'string' ? cfg.payload_available : 'online';
+    ent.pNot = typeof cfg.payload_not_available === 'string' ? cfg.payload_not_available : 'offline';
+    ent.templated = !!cfg.value_template;
+    ent.board = board;
+
+    // A sensor this page cannot listen to must never occupy a row. sub() returns false on both
+    // the wildcard refusal and the MAX_SUBS ceiling; ignoring it left a permanent row stuck in
+    // "waiting" for a topic no data will ever arrive on.
+    if (!sub(ent.stateTopic)) { removeEntity(dtopic); return; }
+
+    entities.set(dtopic, ent);
+    if (uid) byUid.set(uid, dtopic);
+    index(byState, ent.stateTopic, dtopic);
+    if (ent.availTopic) { index(byAvail, ent.availTopic, dtopic); sub(ent.availTopic); }
+
+    notice('nodisc', null);
+  }
+
+  // ---------------------------------------------------------------- messages
+  // `backlog` is the difference between "this arrived now" and "the broker had this lying about
+  // since before this page existed". A retained message carries no publish time, so for the
+  // backlog the arrival time is NOT the age — see the age column in render(), which refuses to
+  // print one. A retained publish that lands later is a live event and is timed normally, which
+  // is why the flag is a window and not simply packet.retain.
+  function onMessage(topic, payload, packet) {
+    var text;
+    try { text = new TextDecoder('utf-8').decode(payload); }
+    catch (e) { text = String(payload); }
+    var now = Date.now();
+    var retained = !!(packet && packet.retain) &&
+      (!connectedAt || now - connectedAt < RETAINED_FLUSH);
+
+    if (/^homeassistant\/.+\/config$/.test(topic)) {
+      try { onDiscovery(topic, text); }
+      catch (e) {
+        parseErrors++;
+        notice('parse', 'A discovery payload could not be applied: ' + (e.message || ''));
+      }
+      return;
+    }
+
+    // Board availability, even where discovery declared no availability_topic.
+    var b = /^dbk\/([^/]+)\/status$/i.exec(topic);
+    if (b) boardStatus.set(b[1], { raw: text.trim(), at: now, retained: retained });
+
+    if (byState.has(topic)) {
+      byState.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.raw = text; e.value = parseValue(text); e.at = now; e.retained = retained;
+        // Trend history is only ever what this session actually observed. Nothing is
+        // back-filled, nothing is interpolated: a row with no history shows an empty cell.
+        if (e.value.kind === 'number') {
+          e.hist.push(e.value.n1);
+          if (e.hist.length > HIST) e.hist.shift();
+        }
+      });
+    }
+    if (byAvail.has(topic)) {
+      byAvail.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.availRaw = text.trim(); e.availAt = now; e.availRetained = retained;
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------- entity state
+  function availabilityOf(ent) {
+    if (ent.availTopic && ent.availRaw !== null) {
+      if (ent.availRaw === ent.pNot) return 'offline';
+      if (ent.availRaw === ent.pAvail) return 'online';
+      return 'unknown';
+    }
+    if (ent.board && boardStatus.has(ent.board)) {
+      var raw = boardStatus.get(ent.board).raw;
+      if (raw === ent.pNot || raw === 'offline') return 'offline';
+      if (raw === ent.pAvail || raw === 'online') return 'online';
+    }
+    return 'unknown';
+  }
+
+  function stateOf(ent) {
+    if (availabilityOf(ent) === 'offline') return 'offline';
+    if (!ent.at || !ent.value) return 'waiting';
+    if (ent.value.kind === 'unknown' || ent.value.kind === 'empty') return 'unknown';
+    // A concentration cannot be negative. Checked BEFORE stale and before live so a broken
+    // sensor is never dressed up as a reading. Only applied to PM sensors: -3.2 is a
+    // perfectly good temperature.
+    if (ent.value.kind === 'number' && ent.value.n1 < 0 && isPm(ent)) return 'fault';
+    if ((Date.now() - ent.at) / 1000 > ent.expire) return 'stale';
+    return 'live';
+  }
+
+  // Severity groups. One comparator orders the whole wall; a sensor discovered a second from
+  // now slots in with no special case anywhere. Worst live reading first, offline last.
+  function group(ent, st) {
+    if (st === 'live' && ent.value && ent.value.kind === 'number') return isPm(ent) ? 0 : 1;
+    if (st === 'live') return 1;
+    if (st === 'fault') return 2;
+    if (st === 'stale') return 3;
+    if (st === 'waiting' || st === 'unknown') return 4;
+    return 5;                                   // offline
+  }
+
+  function cmp(a, b) {
+    var ga = group(a, stateOf(a)), gb = group(b, stateOf(b));
+    if (ga !== gb) return ga - gb;
+    if (ga === 0) {                             // highest concentration leads
+      var d = b.value.n1 - a.value.n1;
+      if (d) return d;
+    }
+    return String(a.title).localeCompare(String(b.title)) ||
+           String(a.stateTopic).localeCompare(String(b.stateTopic));
+  }
+
+  // ---------------------------------------------------------------- rows
+  function build(ent) {
+    var tr = document.createElement('tr');
+
+    var tdBoard = document.createElement('td');
+    var board = document.createElement('span'); board.className = 'board';
+    var measure = document.createElement('span'); measure.className = 'measure';
+    tdBoard.appendChild(board); tdBoard.appendChild(measure);
+
+    var tdRead = document.createElement('td');
+    var num = document.createElement('span'); num.className = 'num';
+    var unit = document.createElement('span'); unit.className = 'unit';
+    tdRead.appendChild(num); tdRead.appendChild(unit);
+
+    var tdBand = document.createElement('td');
+    var bandw = document.createElement('span'); bandw.className = 'bandw';
+    var note = document.createElement('span'); note.className = 'note';
+    tdBand.appendChild(bandw); tdBand.appendChild(note);
+
+    var tdTrend = document.createElement('td'); tdTrend.className = 'trend';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 64 20');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('class', 'spark');
+    svg.setAttribute('aria-hidden', 'true');
+    var poly = document.createElementNS(NS, 'polyline');
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', 'currentColor');
+    poly.setAttribute('stroke-width', '1.5');
+    poly.setAttribute('stroke-linejoin', 'round');
+    poly.setAttribute('stroke-linecap', 'round');
+    poly.setAttribute('vector-effect', 'non-scaling-stroke');
+    svg.appendChild(poly);
+    var arrow = document.createElement('span'); arrow.className = 'arrow';
+    tdTrend.appendChild(svg); tdTrend.appendChild(arrow);
+
+    var tdAge = document.createElement('td'); tdAge.className = 'age';
+
+    tr.appendChild(tdBoard); tr.appendChild(tdRead); tr.appendChild(tdBand);
+    tr.appendChild(tdTrend); tr.appendChild(tdAge);
+    rowsEl.appendChild(tr);
+
+    ent.row = { tr: tr, board: board, measure: measure, num: num, unit: unit,
+                bandw: bandw, note: note, svg: svg, poly: poly, arrow: arrow, age: tdAge,
+                sig: '' };
+    return ent.row;
+  }
+
+  // Normalised against the scale the wall is about, not against each row's own extremes.
+  // Per-row extremes drew a Good sensor jittering 8.1–8.3 as a full-height zigzag, right
+  // beside absolute numbers — the shape said "alarming", the number said "fine". Zero is the
+  // floor, and the ceiling is the alarm threshold until a reading passes it.
+  function points(hist) {
+    var n = hist.length, hi = ALARM_AT, i;
+    for (i = 0; i < n; i++) if (hist[i] > hi) hi = hist[i];
+    var out = [];
+    for (i = 0; i < n; i++) {
+      var x = (i / (n - 1)) * 64;
+      // Inset by the stroke so the line never clips against the cell edge. A flat series
+      // draws a flat line — which is the honest picture of flat.
+      var v = hist[i] > 0 ? (hist[i] < hi ? hist[i] : hi) : 0;
+      var y = 18.5 - (v / hi) * 17;
+      out.push(x.toFixed(1) + ',' + y.toFixed(1));
+    }
+    return out.join(' ');
+  }
+
+  function drawTrend(r, ent, st) {
+    var h = ent.hist;
+    // `hidden` is an HTMLElement property; on an SVG element it silently does nothing and the
+    // sparkline stays on screen. Both of these are switched with inline display instead.
+    // Never fabricate history. Fewer than two observed samples means no trend at all, and the
+    // cell stays empty rather than drawing a zero or a flat line that was never measured.
+    if (st === 'offline' || st === 'waiting' || h.length < 2) {
+      r.svg.style.display = 'none'; r.arrow.style.display = 'none';
+      r.arrow.textContent = ''; r.sig = '';
+      return;
+    }
+    if (h.length < 3) {
+      var d = h[h.length - 1] - h[0];
+      r.svg.style.display = 'none';
+      r.arrow.style.display = '';
+      r.arrow.textContent = d > 0 ? '↑' : (d < 0 ? '↓' : '→');
+      r.sig = '';
+      return;
+    }
+    r.arrow.style.display = 'none';
+    r.svg.style.display = '';
+    var sig = h.length + ':' + h[0] + ':' + h[h.length - 1] + ':' + h[h.length - 2];
+    if (sig !== r.sig) { r.sig = sig; r.poly.setAttribute('points', points(h)); }
+  }
+
+  function render(ent, isLead) {
+    var r = ent.row || build(ent);
+    var st = stateOf(ent);
+    r.tr.setAttribute('data-state', st);
+    r.tr.setAttribute('data-lead', isLead ? '1' : '0');
+
+    // Board id and what it measures. Both may come off the wire, so both go in as textContent
+    // and are never transformed.
+    r.board.textContent = ent.title;
+    r.measure.textContent = ent.measure || '';
+
+    var band = null;
+    // Classify on n1 — the same one-decimal value the row prints — so the number, its band
+    // word and the printed breakpoints can never contradict each other.
+    if (st === 'live' && ent.value && ent.value.kind === 'number' && isPm(ent)) {
+      band = bandFor(ent.value.n1);
+    }
+
+    var word = '', note = '';
+    if (st === 'offline') {
+      r.num.textContent = '—';
+      r.unit.textContent = '';
+      word = 'Offline';
+      // No age clause on a retained value. The broker handed it over at connect time and it
+      // carries no publish time, so "just now" would be this page's own uptime dressed up as
+      // the board's — a board dead for weeks reading fresh. Say the number, not a made-up when.
+      note = ent.value && ent.value.kind === 'number'
+        ? 'last reading ' + ent.value.text + ' ' + ent.unit +
+          (ent.retained ? ', time unknown' : ', ' + ago(ent.at))
+        : 'no reading recorded';
+    } else if (st === 'waiting') {
+      r.num.textContent = '—';
+      r.unit.textContent = '';
+      word = 'Waiting';
+      note = 'readings are published live, not retained';
+    } else if (st === 'unknown') {
+      r.num.textContent = ent.value ? ent.value.text : 'unknown';   // verbatim off the wire
+      r.unit.textContent = '';
+      word = 'No reading';
+      note = 'the board published no value';
+    } else if (st === 'fault') {
+      r.num.textContent = ent.value.text;                           // show what it actually said
+      r.unit.textContent = ent.unit;
+      word = 'Sensor fault';
+      note = 'a concentration below zero is not a reading';
+    } else if (st === 'stale') {
+      r.num.textContent = ent.value.text;
+      r.unit.textContent = ent.unit;
+      word = 'Stale';
+      note = 'expired after ' + ent.expire + 's — treat as unknown';
+    } else {
+      r.num.textContent = ent.value.text;
+      r.unit.textContent = ent.unit;
+      if (band) {
+        word = band.label;
+        note = isLead ? band.note : '';
+      } else {
+        // A live sensor the EPA PM2.5 scale does not cover. Say so, always — otherwise a
+        // PM1.0 row reading 41.6 sits uncoloured beside a coloured PM2.5 row reading 163.3,
+        // and the absence of colour reads as a verdict of "safe" that nobody made.
+        word = 'Not rated';
+        note = 'no US EPA band for this measurement';
+      }
+    }
+    if (ent.templated && st !== 'offline' && st !== 'waiting') {
+      note = note ? note + ' · raw value, template not applied' : 'raw value, template not applied';
+    }
+
+    // Digits never break, so a payload wider than its cell steps down to a size that may wrap.
+    // MEASURED, not counted: the old guard fired at 7 characters while 6 already overflowed —
+    // "1000.0" printed through the word "Hazardous" beside it. Character width depends on the
+    // font, the value and the column, so ask the layout instead of guessing. The attribute is
+    // reset first so the measurement is taken at the size the row would actually paint at;
+    // both writes happen in one task, so nothing flickers. clientWidth is 0 before first
+    // layout (the table starts hidden) — fall back to length only for that one frame.
+    r.num.setAttribute('data-long', '0');
+    var tooWide = r.num.clientWidth
+      ? r.num.scrollWidth > r.num.clientWidth
+      : r.num.textContent.length > 5;
+    if (tooWide) r.num.setAttribute('data-long', '1');
+
+    r.bandw.textContent = word;
+    // THE colour rule, and the only one. Everything else on this page is ink and grey.
+    r.bandw.setAttribute('data-alarm',
+      (band && ent.value.n1 >= ALARM_AT) ? '1' : '0');
+    r.note.textContent = note;
+
+    drawTrend(r, ent, st);
+
+    // AGE is time since the message arrived, and that is only the same as time since it was
+    // published when the message was live. A retained one — every last-will "offline", every
+    // retained reading on a dead board — was sitting on the broker before this page existed.
+    // The page does not know that number, so it does not print one.
+    if (st === 'offline') {
+      var bs = ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board) : null;
+      var seen = ent.availAt ? { at: ent.availAt, retained: ent.availRetained } : bs;
+      r.age.textContent = (seen && seen.at && !seen.retained) ? ago(seen.at) : '—';
+    } else if (!ent.at) {
+      r.age.textContent = 'never';
+    } else {
+      r.age.textContent = ent.retained ? '—' : ago(ent.at);
+    }
+  }
+
+  // ---------------------------------------------------------------- the answer
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  // Every state gets its own sentence. The old catch-all said "Waiting for the first reading."
+  // for a reading that had arrived and then expired, or one rejected as impossible — with a
+  // hazardous number still printed in the table underneath. A wall that has stopped knowing
+  // must not read as a wall that is merely early: it errs toward calm exactly when it should not.
+  function answer(list) {
+    var worst = null, lastStale = null;
+    var live = 0, off = 0, stale = 0, fault = 0, waiting = 0, novalue = 0;
+    var i, e, st;
+    for (i = 0; i < list.length; i++) {
+      e = list[i]; st = stateOf(e);
+      if (st === 'live') {
+        live++;
+        if (isPm(e) && e.value && e.value.kind === 'number' &&
+            (!worst || e.value.n1 > worst.value.n1)) worst = e;
+      } else if (st === 'offline') {
+        off++;
+      } else if (st === 'stale') {
+        stale++;
+        if (isPm(e) && e.value && e.value.kind === 'number' &&
+            (!lastStale || e.at > lastStale.at)) lastStale = e;
+      } else if (st === 'fault') {
+        fault++;
+      } else if (st === 'unknown') {
+        novalue++;
+      } else {
+        waiting++;
+      }
+    }
+
+    var head, sub = [];
+    if (worst) {
+      head = bandFor(worst.value.n1).answer;
+      sub.push('Highest reading ' + worst.value.text +
+        (worst.unit ? ' ' + worst.unit : '') + ', on ' + worst.title + '.');
+    } else if (list.length === 0) {
+      head = connState === 'connected' ? 'Nothing is reporting yet.' : 'Waiting for the first reading.';
+    } else if (off === list.length) {
+      head = 'Every board is offline.';
+    } else if (fault > 0) {
+      // A sensor asserting something impossible is worse news than one saying nothing.
+      head = 'A sensor is reporting an impossible value.';
+    } else if (stale > 0) {
+      head = 'Readings have stopped.';
+      if (lastStale) {
+        sub.push('Last was ' + lastStale.value.text +
+          (lastStale.unit ? ' ' + lastStale.unit : '') + ' on ' + lastStale.title +
+          (lastStale.retained ? '.' : ', ' + ago(lastStale.at) + '.'));
+      }
+    } else if (live > 0) {
+      head = 'No PM2.5 reading right now.';
+    } else {
+      head = 'Waiting for the first reading.';
+    }
+
+    if (list.length) {
+      var bits = [];
+      if (live) bits.push(live + ' reporting');
+      if (stale) bits.push(stale + ' stopped');
+      if (fault) bits.push(fault + ' faulty');
+      if (novalue) bits.push(novalue + ' with no value');
+      if (waiting) bits.push(waiting + ' waiting');
+      if (off) bits.push(off + ' offline');
+      sub.push(plural(list.length, 'sensor', 'sensors') + ': ' + bits.join(', ') + '.');
+    }
+    notices.forEach(function (t) { sub.push(t); });
+
+    // This block is aria-live. Assigning textContent replaces the text node even when the
+    // string is identical, and paint() runs once a second — assistive tech that announces on
+    // mutation would repeat the verdict forever. Write only on an actual change.
+    var subText = sub.join(' ');
+    if ($('verdict').textContent !== head) $('verdict').textContent = head;
+    if ($('subline').textContent !== subText) $('subline').textContent = subText;
+  }
+
+  // ---------------------------------------------------------------- paint
+  var CONN_TEXT = {
+    idle: 'not connected', connecting: 'connecting', connected: 'connected',
+    reconnecting: 'reconnecting', closed: 'disconnected', error: 'cannot reach the broker',
+    fatal: 'connection refused'
+  };
+
+  function paint() {
+    var list = Array.from(entities.values()).sort(cmp);
+
+    // Reorder only when the order actually changed, so a wall that is not moving does not
+    // rebuild its own DOM once a second.
+    var sig = list.map(function (e) { return e.key; }).join('');
+    if (sig !== lastOrder) {
+      lastOrder = sig;
+      list.forEach(function (e) { if (e.row) rowsEl.appendChild(e.row.tr); });
+    }
+
+    // Tschichold, one rule: the top of a severity-sorted wall is the worst thing on it, so the
+    // lead row is simply row one — promoted only when it is tier 0, which group() already
+    // defines as a live numeric PM2.5. Asking "is it a live number?" instead put a Wi-Fi signal
+    // or an uptime counter at 68px under a column headed µg/m³, while the verdict beside it
+    // said there was no reading. The hero and the verdict now answer to the same test.
+    var first = list[0];
+    var lead = (first && group(first, stateOf(first)) === 0) ? first : null;
+
+    list.forEach(function (e) { render(e, e === lead); });
+
+    tableEl.hidden = list.length === 0;
+    answer(list);
+
+    // The wall says how to reach settings and nothing else. A broker address, a WebSocket port
+    // and a subscription count are the product talking about its own plumbing to an audience of
+    // children and parents; they are diagnostics, so they live where diagnostics are read —
+    // inside settings. Connection trouble already has its own channel: the notices above.
+    var foot = 'Press s — or press and hold the title — for settings.';
+    if ($('status').textContent !== foot) $('status').textContent = foot;
+
+    var where = currentCfg ? currentCfg.host + ':' + currentCfg.port : '—';
+    var diag = where + ' · ' + (CONN_TEXT[connState] || connState) + ' · ' +
+      plural(subs.size, 'topic', 'topics') + ' subscribed.';
+    if ($('diag').textContent !== diag) $('diag').textContent = diag;
+  }
+
+  function paintEpa() {
+    $('epa').textContent = 'Bands are the US EPA PM2.5 breakpoints, in µg/m³: ' +
+      BANDS.map(function (b) { return b.short + ' ' + b.r; }).join(' · ') +
+      '. Colour appears at ' + ALARM_AT + ' and above, and nowhere else on this page.';
+  }
+
+  // ---------------------------------------------------------------- views
+  function view(name) {
+    sheetEl.hidden = name !== 'sheet';
+    curtainEl.hidden = name !== 'curtain';
+    setEl.hidden = name !== 'settings';
+    if (name !== 'settings') baseView = name;
+  }
+
+  function fail(line, sub) {
+    $('curtain-line').textContent = line;
+    $('curtain-sub').textContent = sub;
+    if (setEl.hidden) view('curtain'); else baseView = 'curtain';
+  }
+
+  function recovered() {
+    if (baseView === 'curtain') { if (setEl.hidden) view('sheet'); else baseView = 'sheet'; }
+  }
+
+  // ---------------------------------------------------------------- connect
+  function describe(err) {
+    var code = err && (err.code !== undefined ? err.code : err.reasonCode);
+    var map = {
+      1: 'the broker rejected the MQTT protocol version',
+      2: 'the broker rejected this client id',
+      3: 'the broker is unavailable',
+      4: 'the username or passphrase is wrong',
+      5: 'this account is not authorised for the broker'
+    };
+    if (map[code]) return { text: map[code], fatal: code === 2 || code === 4 || code === 5 };
+    var m = String((err && err.message) || err || 'unknown error');
+    if (/not authoriz|bad user/i.test(m)) return { text: m, fatal: true };
+    return { text: m, fatal: false };
+  }
+
+  function disconnect() {
+    manualStop = true;
+    if (client) { try { client.end(true); } catch (e) {} client = null; }
+    subs.clear();
+  }
+
+  function connect(cfg) {
+    currentCfg = cfg;
+
+    if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
+      connState = 'fatal';
+      fail('This wall cannot start: its MQTT library did not load.',
+        'The page needs unpkg.com/mqtt@5.15.2 and refuses any copy of it whose fingerprint ' +
+        'does not match. Check the network, or serve a verified local copy beside this file.');
+      paint();
+      return;
+    }
+
+    disconnect();
+    manualStop = false;
+    everConnected = false;
+    connectedAt = 0;
+    activeFilter = typeof cfg.filter === 'string' ? cfg.filter.trim() : '';
+    filteredOut.clear();
+    nonAir.clear();
+    refusedWild.clear();
+    notices.clear();
+
+    var scheme = cfg.tls ? 'wss' : 'ws';
+    var url = scheme + '://' + cfg.host + ':' + cfg.port;
+    connState = 'connecting';
+    paint();
+
+    // A page served over HTTPS cannot open a plaintext ws:// socket.
+    var mixed = !cfg.tls && location.protocol === 'https:';
+
+    try {
+      client = mqtt.connect(url, {
+        username: cfg.user || undefined,     // absent means an anonymous connect attempt
+        password: cfg.pass || undefined,
+        clientId: 'air-wall-' + Math.random().toString(16).slice(2, 10),
+        clean: true,
+        reconnectPeriod: 4000,
+        connectTimeout: 8000,
+        keepalive: 45,
+        resubscribe: true
+      });
+    } catch (e) {
+      connState = 'fatal';
+      fail('This wall cannot open a connection to ' + url + '.', e.message || String(e));
+      paint();
+      return;
+    }
+
+    client.on('connect', function () {
+      connectedAt = Date.now();          // before any message can arrive
+      everConnected = true;
+      connState = 'connected';
+      recovered();
+      // The drop notice is a claim about right now, so it must not outlive the drop. Nothing
+      // cleared it, so a wall that had reconnected went on saying "the connection dropped and
+      // is retrying" underneath a footer that said "connected", for the rest of the session.
+      notice('drop', null);
+      // Bounded discovery wildcards — two shapes HA publishes, plus board availability.
+      // subRaw, not sub: these three are authored here and are the ONLY wildcards this page
+      // may ever subscribe to. sub() refuses every wildcard that arrives over the wire.
+      subRaw('homeassistant/+/+/config');     // <component>/<object_id>/config
+      subRaw('homeassistant/+/+/+/config');   // <component>/<node_id>/<object_id>/config
+      subRaw('dbk/+/status');
+      if (discoveryTimer) clearTimeout(discoveryTimer);
+      discoveryTimer = setTimeout(function () {
+        // Silent when the filter, or the air-only scope, is what emptied the wall — those
+        // notices already explain it, and "nothing has published" would be a lie.
+        if (entities.size === 0 && filteredOut.size === 0 && nonAir.size === 0 &&
+            connState === 'connected') {
+          notice('nodisc', 'Connected, but nothing has published a retained sensor description ' +
+            'to homeassistant/…/config on this broker.');
+        }
+        paint();
+      }, 4000);
+      paint();
+    });
+
+    client.on('message', function (topic, payload, packet) {
+      try { onMessage(topic, payload, packet); }
+      catch (e) { /* one bad message must never stop the stream */ }
+    });
+
+    client.on('reconnect', function () {
+      if (!manualStop && connState !== 'fatal') { connState = 'reconnecting'; paint(); }
+    });
+    client.on('offline', function () {
+      if (!manualStop && connState !== 'fatal') { connState = 'reconnecting'; paint(); }
+    });
+
+    // A browser never reveals WHY a WebSocket handshake failed, and for a refused port
+    // mqtt.js may close without ever emitting a useful 'error'. Without this branch the page
+    // would sit on a bare "disconnected" and explain nothing.
+    client.on('close', function () {
+      if (manualStop || connState === 'fatal') return;
+      if (!everConnected) {
+        connState = 'error';
+        fail('This wall cannot reach the broker at ' + url + '.',
+          (mixed
+            ? 'This page is served over HTTPS, so the browser blocks a plaintext connection. ' +
+              'Press s and tick Secure WebSocket, or open the file straight from disk. '
+            : '') +
+          'A browser is never told why a WebSocket handshake fails, so check the address, ' +
+          'and that the broker really has a WebSocket listener on that port. It keeps trying ' +
+          'every 4 seconds. Press s — or press and hold the title — to change the address.');
+      } else {
+        // Once it has worked, a drop does not take the screen: the readings stay up and age
+        // honestly into stale.
+        connState = 'reconnecting';
+        notice('drop', 'The broker connection dropped and is retrying every 4 seconds. ' +
+          'Readings below keep their last known state and will age into stale.');
+      }
+      paint();
+    });
+
+    client.on('error', function (err) {
+      var d = describe(err);
+      if (d.fatal) {
+        connState = 'fatal';
+        manualStop = true;
+        try { client.end(true); } catch (e) {}
+        client = null;
+        fail('The broker refused this connection: ' + d.text + '.',
+          'It has stopped retrying, because retrying cannot fix this. This broker does not ' +
+          'accept anonymous clients and no credential is kept in this file, so it needs the ' +
+          'wall account once: press s — or press and hold the title — and type it in, or open ' +
+          'this page with ?u= and ?p= in the address. Whoever set the wall up has it — it is ' +
+          'the same MQTT account the boards publish with.');
+      } else {
+        connState = 'error';
+        if (!everConnected) {
+          fail('This wall cannot reach the broker at ' + url + '.',
+            d.text + '. It keeps trying every 4 seconds. Press s — or press and hold the ' +
+            'title — to change the address.');
+        } else {
+          notice('drop', 'Cannot reach the broker: ' + d.text + '. Retrying every 4 seconds.');
+        }
+      }
+      paint();
+    });
+  }
+
+  // ---------------------------------------------------------------- settings
+  var form = $('form');
+  function readForm() {
+    return {
+      host: $('f-host').value.trim(),
+      port: $('f-port').value.trim(),
+      user: $('f-user').value,
+      pass: $('f-pass').value,
+      tls: $('f-tls').checked,
+      filter: $('f-filter').value.trim(),
+      remember: $('f-remember').checked
+    };
+  }
+  // The form always shows what is actually running, so that opening settings and pressing
+  // Connect — the most obvious thing a curious person does — cannot change anything.
+  function fillForm(v) {
+    $('f-host').value = (v && v.host) || DEFAULT_HOST;
+    $('f-port').value = (v && v.port) || DEFAULT_PORT;
+    $('f-user').value = (v && v.user) || '';
+    $('f-pass').value = (v && v.pass) || '';
+    $('f-tls').checked = !!(v && v.tls);
+    $('f-filter').value = v && typeof v.filter === 'string' ? v.filter : DEFAULT_FILTER;
+    // An explicit `remember` wins. It has to: a passphrase that came from the address is shown
+    // here so Connect keeps working, but ticking the box for it would write to disk the one
+    // credential this page promises never to save.
+    $('f-remember').checked = v && typeof v.remember === 'boolean'
+      ? v.remember : !!(v && v.pass);
+  }
+  // What goes to disk is not what is in the form: the passphrase is opt-in.
+  function storable(cfg) {
+    var out = { host: cfg.host, port: cfg.port, user: cfg.user, tls: cfg.tls,
+                filter: cfg.filter, remember: !!cfg.remember };
+    if (cfg.remember) out.pass = cfg.pass;
+    return out;
+  }
+
+  function wipe() {
+    entities.forEach(function (e) { if (e.row) e.row.tr.remove(); });
+    entities.clear(); byState.clear(); byAvail.clear(); byUid.clear(); boardStatus.clear();
+    filteredOut.clear(); nonAir.clear(); refusedWild.clear(); notices.clear();
+    parseErrors = 0; lastOrder = '';
+  }
+
+  function openSettings() {
+    if (!setEl.hidden) return;
+    view('settings');
+    $('f-host').focus();
+  }
+  function closeSettings() {
+    if (setEl.hidden) return;
+    view(baseView);
+  }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var cfg = readForm();
+    if (!cfg.host || !cfg.port) return;
+    wipe();
+    var ok = saveStore(storable(cfg));
+    $('store-hint').textContent = !ok
+      ? 'This browser refused to save settings. The connection still works, but these will ' +
+        'have to be entered again next time.'
+      : cfg.remember
+        ? 'Saved on this device, passphrase included.'
+        : 'Saved on this device. The passphrase was not written to disk.';
+    view('sheet');
+    connect(cfg);
+  });
+
+  $('btn-cancel').addEventListener('click', closeSettings);
+  $('curtain-open').addEventListener('click', openSettings);
+
+  $('btn-forget').addEventListener('click', function () {
+    clearStore();
+    fillForm(null);
+    $('store-hint').textContent = 'Saved settings cleared. Reconnecting to the default broker.';
+    wipe();
+    view('sheet');
+    connect({ host: DEFAULT_HOST, port: DEFAULT_PORT, user: '', pass: '',
+              tls: false, filter: DEFAULT_FILTER });
+  });
+
+  // The touch way in. The hardware this page is written for is a wall tablet — it says so
+  // three lines above — and a wall tablet has no "s" key, so on a working wall the settings
+  // were unreachable by the only input the device has. Press and hold the masthead, or tap it
+  // three times. Nothing is drawn for either: the default view stays free of chrome, which is
+  // the actual directive; "keyboard only" was the letter of it, on hardware it does not fit.
+  var mastEl = document.querySelector('.masthead');
+  var HOLD_MS = 1500, TAP_WINDOW = 600;
+  var holdTimer = null, tapTimer = null, taps = 0;
+
+  function endHold() {
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+  }
+  if (mastEl) {
+    mastEl.addEventListener('pointerdown', function () {
+      endHold();
+      holdTimer = setTimeout(function () { holdTimer = null; taps = 0; openSettings(); }, HOLD_MS);
+    });
+    mastEl.addEventListener('pointerup', function () {
+      if (!holdTimer) return;                    // the hold already fired; this is its release
+      endHold();
+      taps++;
+      if (tapTimer) clearTimeout(tapTimer);
+      tapTimer = setTimeout(function () { taps = 0; }, TAP_WINDOW);
+      if (taps >= 3) { taps = 0; openSettings(); }
+    });
+    mastEl.addEventListener('pointercancel', endHold);
+    mastEl.addEventListener('pointerleave', endHold);
+    // A long press on touch fires the browser's own text-selection UI otherwise.
+    mastEl.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+  }
+
+  // The whole settings surface, reachable by one key, one long press, and nothing else.
+  document.addEventListener('keydown', function (ev) {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    var t = ev.target, tag = t && t.tagName;
+    var typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+      (t && t.isContentEditable);
+    if (ev.key === 'Escape') { closeSettings(); return; }
+    if (typing) return;
+    if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); openSettings(); }
+  });
+
+  // ---------------------------------------------------------------- boot
+  paintEpa();
+
+  var saved = loadStore() || {};
+  var q = fromQuery();
+
+  // ONE effective config, built once, used by both the connection and the form. They used to be
+  // built separately: the query string reached connect() and never reached the form, so opening
+  // settings on a wall that was working showed the DEFAULTS, and pressing Connect while editing
+  // nothing tore down a live connection and wrote the defaults to disk — where they survived
+  // reload. Pointing a tablet with ?u=&p= is exactly what the failure curtain recommends, and
+  // one curious press of "s" used to brick it. Connect must be able to be a no-op.
+  var bootCfg = {
+    host: q.host || saved.host || DEFAULT_HOST,
+    port: q.port || saved.port || DEFAULT_PORT,
+    user: q.user !== undefined ? q.user : (saved.user || ''),
+    pass: q.pass !== undefined ? q.pass : (saved.pass || ''),
+    tls: q.tls !== undefined ? q.tls : !!saved.tls,
+    filter: q.filter !== undefined ? q.filter
+      : (typeof saved.filter === 'string' ? saved.filter : DEFAULT_FILTER),
+    // Only a passphrase that was already on disk may stay there. One from the address is shown
+    // and used, never saved — even for someone who once ticked the box for a different one:
+    // the address is the store.
+    remember: !!saved.remember && q.pass === undefined
+  };
+  fillForm(bootCfg);
+  if (!storeWorks) {
+    $('store-hint').textContent =
+      'This browser blocks local storage, so nothing can be remembered here. Put the details ' +
+      'in the address instead.';
+  } else {
+    $('store-hint').textContent = saved.host
+      ? 'Loaded from this browser, on this device.'
+      : 'Nothing is stored yet.';
+  }
+
+  // Connect immediately, every time, with the same object the form is showing. Address bar wins,
+  // then this browser's storage, then the default. There is no state in which this page sits
+  // waiting to be configured.
+  connect(bootCfg);
+
+  setInterval(paint, 1000);
+})();
+</script>
+</body>
+</html>

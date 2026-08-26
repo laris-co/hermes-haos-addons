@@ -21,5 +21,8 @@ COPY panel.js /usr/share/esp-flasher/panel.js
 # file with no absolute paths, so it costs nothing in the image and needs no
 # sub_filter rewriting to survive the ingress mount.
 COPY preview.html /usr/share/esp-flasher/preview.html
+# The wall displays: twenty-plus designs plus the band photography they swap between.
+# Copied, not proxied — they are ours, self-contained, and carry no absolute paths.
+COPY wall/ /usr/share/esp-flasher/wall/
 
 CMD ["nginx", "-g", "daemon off;"]

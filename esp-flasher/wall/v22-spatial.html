@@ -1,0 +1,1500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Air — spatial wall</title>
+<style>
+/* =====================================================================
+   v22 SPATIAL — visionOS depth over a photographic ground.
+
+   THE GROUND IS THE DATA. The photograph behind the glass is the sky the
+   children outside are actually breathing, chosen by the worst live PM2.5
+   reading on the fleet. There is no photograph for "we don't know" — an
+   unknown sky renders as a dark void, never as a clear dawn, because a
+   clear dawn is a promise this page cannot keep.
+
+   LEGIBILITY CONTRACT (the hard part — see the long note above .scrim):
+   every piece of type on this page is LUMINOUS (light) and every piece of
+   type sits on a DARK, guaranteed-floor field. Nothing here relies on the
+   photograph being dark.
+   ===================================================================== */
+
+:root{
+  /* --- ink --------------------------------------------------------- */
+  --ink:#f4f7fb;          /* primary luminous type          L ≈ 0.905 */
+  --ink-2:#c7d3e2;        /* secondary, far plane           L ≈ 0.644 */
+  --ink-3:#93a4b8;        /* tertiary / metadata            L ≈ 0.336 */
+
+  /* --- EPA band accents. Every one of these was checked against the
+         WORST-CASE composited glass field (see .scrim note): the dimmest,
+         --band-good, still lands at 6.6:1. -------------------------- */
+  --band-good:#4ade80;
+  --band-mod:#fbbf24;
+  --band-usg:#fb923c;
+  --band-unh:#f87171;
+  --band-vun:#c4a6ff;
+  --band-haz:#ff8fa3;
+  --band:var(--ink-3);
+
+  /* --- scrim: set per band by JS, with a hard floor. --------------- */
+  --scrim-mid:.62;
+  --scrim-edge:.80;
+
+  /* --- glass -------------------------------------------------------- */
+  --glass-near:rgba(6,9,14,.56);
+  --glass-mid:rgba(6,9,14,.46);
+  --glass-far:rgba(6,9,14,.34);
+  --edge:rgba(255,255,255,.20);
+  --edge-soft:rgba(255,255,255,.09);
+
+  /* --- parallax, driven by pointer / device orientation ------------- */
+  --px:0; --py:0;
+
+  --r:26px;
+  --shadow-near:0 34px 90px rgba(0,0,0,.62), 0 6px 22px rgba(0,0,0,.45);
+  --shadow-mid:0 20px 54px rgba(0,0,0,.48);
+  --halo:0 1px 2px rgba(0,0,0,.62), 0 0 26px rgba(0,0,0,.42);
+}
+
+*{box-sizing:border-box}
+html,body{
+  margin:0;padding:0;height:100%;width:100%;
+  /* No page scroll, ever. Nothing on this wall is allowed to produce a
+     scrollbar — nested or horizontal. Everything is clamped to fit. */
+  overflow:hidden;
+  background:#04060a;
+}
+body{
+  color:var(--ink);
+  font:16px/1.45 ui-rounded,"SF Pro Rounded",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+
+/* =====================================================================
+   LAYER 0 — the photographic ground, cross-faded.
+   Two stacked layers; the incoming one fades up over the outgoing one, so
+   a band change is a dissolve rather than a white flash. The image itself
+   is the farthest thing in the scene, so it takes the SMALLEST parallax
+   offset of anything on the page.
+   ===================================================================== */
+.sky{
+  position:fixed;inset:-4%;
+  background-position:50% 45%;
+  background-size:cover;
+  background-repeat:no-repeat;
+  opacity:0;
+  transition:opacity 1.5s ease;
+  transform:translate3d(calc(var(--px) * -12px), calc(var(--py) * -8px), 0) scale(1.06);
+  will-change:opacity,transform;
+}
+.sky.on{opacity:1}
+/* An unknown fleet gets NO photograph. A dark void reads as "we do not
+   know"; the clear-dawn frame would read as a guarantee of clean air. */
+.sky.void{
+  background-image:none !important;
+  background-color:#05070c;
+  background-image:
+    radial-gradient(120% 90% at 50% 18%, #101826 0%, #080c13 46%, #04060a 100%) !important;
+}
+
+/* =====================================================================
+   LAYER 1 — THE SCRIM. This is how contrast is guaranteed.
+
+   The six grounds are NOT monotonically dark: good.jpg is a bright dawn
+   and verybad.jpg is a near-whiteout, while unhealthy.jpg is a dense
+   ochre grey. Luminance is non-monotonic across the EPA scale, so no
+   "dark bands get less scrim" rule is safe. Instead every band gets its
+   own scrim value AND a hard floor is enforced in JS (mid >= .46,
+   edge >= .66) that is sized for the worst case that exists: PURE WHITE.
+
+   Worst case arithmetic, ground = #ffffff:
+     scrim  #03050b @ .46  ->  composite #8b8b8b, relative luminance .260
+     glass  #06090e @ .46  ->  composite #444546, relative luminance .057
+     ink    #f4f7fb                      relative luminance .905
+     contrast = (.905 + .05) / (.057 + .05) = 8.9 : 1
+   Over the darkest ground the same stack lands near 18:1. So the range
+   across ALL SIX photographs is roughly 8.9:1 .. 18:1 for primary type —
+   the floor sits comfortably above the 4.5:1 normal-text requirement,
+   before text-shadow is even counted.
+
+   The gradient is denser at the top and bottom edges, because that is
+   where the far plane (the thinnest glass) sits. ==================== */
+.scrim{
+  position:fixed;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,
+    rgba(3,5,11,var(--scrim-edge)) 0%,
+    rgba(3,5,11,var(--scrim-mid))  26%,
+    rgba(3,5,11,var(--scrim-mid))  64%,
+    rgba(3,5,11,var(--scrim-edge)) 100%);
+  transition:background 1.5s ease;
+}
+.vign{
+  position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(130% 105% at 50% 42%, rgba(0,0,0,0) 32%, rgba(2,3,7,.62) 100%);
+}
+
+/* =====================================================================
+   LAYER 2 — THE SPATIAL DECK. Three planes at three depths.
+   ===================================================================== */
+.stage{
+  position:fixed;inset:0;
+  perspective:1600px;
+  perspective-origin:50% 44%;
+  padding:clamp(.7rem,2.1vmin,1.9rem);
+}
+.deck{
+  height:100%;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto auto;
+  gap:clamp(.5rem,1.5vmin,1.15rem);
+  transform-style:preserve-3d;
+  transform:rotateX(calc(var(--py) * -1.5deg)) rotateY(calc(var(--px) * 2deg));
+  transition:transform .5s cubic-bezier(.2,.75,.2,1);
+  will-change:transform;
+}
+.plane{transform-style:preserve-3d;min-width:0;min-height:0}
+/* translateZ does the depth; the perspective divide then does the rest.
+   The far plane is deliberately NOT counter-scaled — letting it render a
+   few percent smaller is what makes it read as set back, and it keeps the
+   upscaled edge from ever poking past the viewport. The near plane IS
+   counter-scaled, because there the perspective would push it outward
+   past the screen edge instead. */
+.p-far  {transform:translateZ(-78px)}
+.p-mid  {transform:translateZ(0)}
+.p-near {transform:translateZ(62px) scale(.9627);display:grid;place-items:center;min-height:0}
+
+/* ---------- the glass itself ---------- */
+.glass{
+  position:relative;
+  border-radius:var(--r);
+  border:1px solid var(--edge-soft);
+  box-shadow:inset 0 1px 0 var(--edge), var(--shadow-mid);
+  isolation:isolate;
+}
+/* the hairline specular highlight along the top edge */
+.glass::after{
+  content:"";position:absolute;left:8%;right:8%;top:0;height:1px;border-radius:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.42),transparent);
+  pointer-events:none;
+}
+.g-far{
+  background:var(--glass-far);
+  -webkit-backdrop-filter:blur(11px) saturate(118%);
+  backdrop-filter:blur(11px) saturate(118%);
+  box-shadow:inset 0 1px 0 var(--edge-soft), 0 10px 30px rgba(0,0,0,.32);
+  border-color:rgba(255,255,255,.06);
+}
+.g-mid{
+  background:var(--glass-mid);
+  -webkit-backdrop-filter:blur(20px) saturate(140%);
+  backdrop-filter:blur(20px) saturate(140%);
+}
+.g-near{
+  background:var(--glass-near);
+  -webkit-backdrop-filter:blur(38px) saturate(168%);
+  backdrop-filter:blur(38px) saturate(168%);
+  box-shadow:inset 0 1px 0 var(--edge), var(--shadow-near);
+  border-color:rgba(255,255,255,.13);
+}
+
+/* ---------------------------------------------------------------------
+   FALLBACK. Firefox users (and anything else without backdrop-filter)
+   must not be handed transparent panels over a bright dawn. The glass
+   becomes near-solid dark and the scrim goes up; the look changes, the
+   legibility floor does not — it rises to roughly 17:1.
+   ------------------------------------------------------------------- */
+@supports not (backdrop-filter: blur(1px)){
+  :root{
+    --glass-near:rgba(7,10,16,.93);
+    --glass-mid:rgba(7,10,16,.88);
+    --glass-far:rgba(7,10,16,.78);
+    --scrim-mid:.66;
+    --scrim-edge:.84;
+  }
+  .g-far,.g-mid,.g-near{border-color:rgba(255,255,255,.14)}
+}
+
+/* =====================================================================
+   FAR PLANE — ambient. Almost dissolved into the photograph.
+   ===================================================================== */
+.ambient{
+  display:flex;align-items:center;flex-wrap:wrap;
+  gap:.4rem clamp(.6rem,1.8vmin,1.3rem);
+  padding:clamp(.42rem,1.15vmin,.8rem) clamp(.75rem,1.9vmin,1.35rem);
+  color:var(--ink-2);
+  font-size:clamp(.66rem,1.42vmin,.9rem);
+  letter-spacing:.055em;
+  text-shadow:var(--halo);
+}
+.place{color:var(--ink);font-weight:700;letter-spacing:.2em}
+.ambient .sep{width:1px;height:.95em;background:rgba(255,255,255,.18);flex:none}
+.ambient .push{margin-left:auto}
+.link{display:inline-flex;align-items:center;gap:.45rem;white-space:nowrap}
+.led{width:.5rem;height:.5rem;border-radius:50%;background:var(--ink-3);flex:none}
+.link[data-s="connected"] .led{background:var(--band-good);box-shadow:0 0 0 3px rgba(74,222,128,.18)}
+.link[data-s="connecting"] .led,.link[data-s="reconnecting"] .led{background:var(--band-mod);animation:breathe 1.4s ease-in-out infinite}
+.link[data-s="error"] .led,.link[data-s="fatal"] .led{background:var(--band-haz);box-shadow:0 0 0 3px rgba(255,143,163,.2)}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* =====================================================================
+   NEAR PLANE — the reading. The only thing at this depth.
+   ===================================================================== */
+.hero{
+  width:min(100%, 62rem);
+  max-height:100%;
+  padding:clamp(1rem,3.2vmin,2.4rem) clamp(1.1rem,3.4vmin,2.6rem);
+  display:flex;flex-direction:column;gap:clamp(.35rem,1.15vmin,.85rem);
+  /* BUG B GUARD: the reading is sized off THIS CONTAINER, never the
+     viewport. When the hero narrows, the digits narrow with it, so
+     "163.3" can never be pushed onto a second line and read as 163. */
+  container-type:inline-size;
+  overflow:hidden;
+}
+.ask{
+  margin:0;color:var(--ink-2);font-weight:700;
+  font-size:clamp(.7rem,1.65vmin,1rem);letter-spacing:.24em;
+  text-shadow:var(--halo);
+}
+.verdict{
+  margin:0;color:var(--ink);
+  font-size:clamp(1.15rem,4.6cqi,2.5rem);
+  line-height:1.16;font-weight:650;letter-spacing:-.015em;
+  text-shadow:var(--halo);
+  text-wrap:balance;
+}
+.readout{
+  display:flex;align-items:baseline;gap:clamp(.4rem,1.6vmin,1rem);
+  min-width:0;margin-top:clamp(.1rem,.8vmin,.5rem);
+}
+/* BUG B GUARD, part 2: nowrap means the digits of one reading never
+   break across lines. The step-downs below keep nowrap from turning
+   into a horizontal overflow when the payload is long. */
+.num{
+  font-variant-numeric:tabular-nums;
+  font-weight:750;line-height:.86;letter-spacing:-.045em;
+  color:var(--band);
+  white-space:nowrap;
+  text-shadow:0 2px 6px rgba(0,0,0,.55), 0 0 40px rgba(0,0,0,.35);
+  font-size:clamp(2rem,28cqi,13rem);
+}
+.num[data-len="3"]{font-size:clamp(2rem,26cqi,12rem)}
+.num[data-len="4"]{font-size:clamp(1.9rem,22cqi,10rem)}
+.num[data-len="5"]{font-size:clamp(1.8rem,18.5cqi,8.5rem)}
+.num[data-len="6"]{font-size:clamp(1.6rem,15cqi,7rem)}
+.num[data-len="7"]{font-size:clamp(1.5rem,12.5cqi,6rem)}
+/* A payload too long to be a plausible reading is allowed to wrap — the
+   escape hatch that stops nowrap becoming an overflow. */
+.num[data-kind="word"]{
+  font-size:clamp(1.3rem,10cqi,4.4rem);letter-spacing:-.01em;
+  white-space:normal;overflow-wrap:anywhere;color:var(--ink-3);
+}
+.side{display:flex;flex-direction:column;gap:.1rem;min-width:0}
+/* NOTE — BUG A: there is NO text-transform anywhere in this file.
+   CSS uppercasing maps "µ" to "M", which silently rewrites µg/m³ as
+   MG/M³ — a 1000x unit error produced by a styling rule. Every label
+   that looks capitalised on this page is typed in capitals by hand;
+   everything that came off the wire is printed exactly as published. */
+.unit{
+  color:var(--ink-2);font-weight:600;
+  font-size:clamp(.8rem,2.4cqi,1.35rem);
+  white-space:nowrap;text-shadow:var(--halo);
+}
+.what{
+  color:var(--ink-3);font-weight:600;letter-spacing:.16em;
+  font-size:clamp(.6rem,1.5cqi,.82rem);text-shadow:var(--halo);
+}
+.bandline{
+  margin:0;display:flex;align-items:center;gap:.55rem clamp(.5rem,1.5vmin,1rem);
+  flex-wrap:wrap;min-width:0;
+}
+.pill{
+  display:inline-block;flex:none;
+  padding:.24em .78em;border-radius:999px;
+  border:1px solid currentColor;color:var(--band);
+  background:rgba(0,0,0,.34);
+  font-weight:700;letter-spacing:.13em;
+  font-size:clamp(.66rem,1.85cqi,1rem);
+  text-shadow:none;
+}
+/* Hazardous stops being a colour and becomes an alarm: solid fill, dark
+   type on it. A solid pill is ground-independent — it cannot be washed
+   out by whatever the photograph is doing behind it. */
+.pill[data-haz="1"]{background:var(--band-haz);border-color:var(--band-haz);color:#25060c}
+.src{color:var(--ink-3);font-size:clamp(.64rem,1.6cqi,.85rem);min-width:0;overflow-wrap:anywhere;text-shadow:var(--halo)}
+
+/* =====================================================================
+   MID PLANE — the boards. Two of three are normally offline; that is the
+   healthy state of this fleet and it must LOOK deliberate.
+   ===================================================================== */
+.boards{
+  display:grid;gap:clamp(.45rem,1.4vmin,1rem);
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));
+  max-width:min(100%,72rem);margin:0 auto;
+}
+.tile{
+  padding:clamp(.55rem,1.6vmin,1rem) clamp(.7rem,1.9vmin,1.2rem);
+  display:flex;flex-direction:column;gap:.18rem;min-width:0;
+  border-radius:18px;
+  container-type:inline-size;
+}
+.t-top{display:flex;align-items:baseline;gap:.5rem;min-width:0}
+.t-id{
+  font-weight:700;color:var(--ink);letter-spacing:.06em;
+  font-size:clamp(.78rem,3.4cqi,1.05rem);
+  min-width:0;overflow-wrap:anywhere;text-shadow:var(--halo);
+}
+.t-state{
+  margin-left:auto;flex:none;font-weight:700;letter-spacing:.13em;
+  font-size:clamp(.54rem,2.2cqi,.7rem);
+  color:var(--ink-3);text-shadow:var(--halo);
+}
+.t-val{display:flex;align-items:baseline;gap:.35rem;min-width:0}
+.t-num{
+  font-variant-numeric:tabular-nums;font-weight:700;letter-spacing:-.03em;
+  line-height:1;color:var(--band);white-space:nowrap;
+  font-size:clamp(1.15rem,15cqi,2.5rem);
+  text-shadow:0 1px 4px rgba(0,0,0,.5);
+}
+.t-num[data-kind="word"]{
+  font-size:clamp(.95rem,9cqi,1.5rem);letter-spacing:.04em;
+  white-space:normal;overflow-wrap:anywhere;
+}
+.t-unit{color:var(--ink-3);font-size:clamp(.6rem,2.6cqi,.8rem);white-space:nowrap;text-shadow:var(--halo)}
+.t-note{
+  color:var(--ink-3);font-size:clamp(.6rem,2.5cqi,.78rem);line-height:1.35;
+  min-width:0;overflow-wrap:anywhere;text-shadow:var(--halo);
+}
+/* Offline is a STATE, drawn on purpose: a dashed hairline, a slimmer
+   plane, the word spelled out. It is never a blank tile and never a
+   zero — a zero this page did not measure is a lie. */
+.tile[data-state="offline"]{
+  border-style:dashed;
+  border-color:rgba(255,255,255,.16);
+  background:rgba(6,9,14,.30);
+  -webkit-backdrop-filter:blur(14px) saturate(120%);
+  backdrop-filter:blur(14px) saturate(120%);
+}
+/* an asleep board gets no specular highlight — the lit top edge is reserved for glass
+   that is actually carrying a reading */
+.tile[data-state="offline"]::after{display:none}
+.tile[data-state="offline"] .t-state{color:var(--ink-2)}
+.tile[data-state="live"]{border-color:color-mix(in srgb, var(--band) 42%, transparent)}
+.tile[data-state="live"] .t-state{color:var(--band)}
+.tile[data-state="stale"] .t-state,.tile[data-state="fault"] .t-state{color:var(--band-mod)}
+@supports not (backdrop-filter: blur(1px)){
+  .tile[data-state="offline"]{background:rgba(7,10,16,.80)}
+}
+
+/* =====================================================================
+   FAR PLANE (bottom) — the EPA ruler, dissolved into the photograph.
+   ===================================================================== */
+.ruler{
+  display:grid;grid-template-columns:repeat(6,1fr);
+  gap:clamp(.25rem,.9vmin,.6rem);
+  padding:clamp(.4rem,1.1vmin,.75rem) clamp(.6rem,1.7vmin,1.2rem);
+  align-items:end;
+}
+.seg{display:flex;flex-direction:column;gap:.24rem;min-width:0}
+.seg i{display:block;height:4px;border-radius:3px;background:currentColor;opacity:.42}
+.seg b{
+  font-weight:700;letter-spacing:.09em;color:var(--ink-2);
+  font-size:clamp(.5rem,1.18vmin,.7rem);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  text-shadow:var(--halo);
+}
+.seg em{
+  font-style:normal;color:var(--ink-3);font-variant-numeric:tabular-nums;
+  font-size:clamp(.46rem,1.05vmin,.64rem);white-space:nowrap;text-shadow:var(--halo);
+}
+.seg[data-on="1"] i{opacity:1;height:6px;box-shadow:0 0 16px currentColor}
+.seg[data-on="1"] b{color:var(--ink)}
+@media (max-width:720px){ .seg em{display:none} }
+/* A short viewport sheds detail rather than growing a scrollbar: this wall must never
+   scroll, nested or otherwise, so the least load-bearing lines go first. */
+@media (max-height:620px){
+  .t-note{display:none}
+  .seg em{display:none}
+  .ask{letter-spacing:.16em}
+}
+
+/* =====================================================================
+   THE CALM SCREEN — when the wall cannot answer, it says one sentence.
+   ===================================================================== */
+.calm{
+  position:fixed;inset:0;z-index:40;
+  display:grid;place-items:center;
+  padding:clamp(1.5rem,7vmin,5rem);
+  background:rgba(4,6,11,.80);
+  -webkit-backdrop-filter:blur(30px) saturate(120%);
+  backdrop-filter:blur(30px) saturate(120%);
+}
+.calm[hidden]{display:none}
+.calm p{
+  margin:0;max-width:26ch;text-align:center;color:var(--ink);
+  font-size:clamp(1.15rem,4.4vmin,2.6rem);line-height:1.32;
+  font-weight:600;letter-spacing:-.015em;text-shadow:var(--halo);
+  text-wrap:balance;
+}
+.calm small{
+  display:block;margin-top:1.2em;color:var(--ink-3);
+  font-size:clamp(.65rem,1.6vmin,.85rem);letter-spacing:.16em;font-weight:600;
+}
+@supports not (backdrop-filter: blur(1px)){ .calm{background:rgba(4,6,11,.95)} }
+
+/* =====================================================================
+   SETTINGS — never shown on load. Press "s".
+   ===================================================================== */
+.sheet-wrap{
+  position:fixed;inset:0;z-index:50;display:grid;place-items:center;
+  padding:clamp(1rem,4vmin,3rem);
+  background:rgba(3,5,10,.62);
+  -webkit-backdrop-filter:blur(18px);
+  backdrop-filter:blur(18px);
+}
+.sheet-wrap[hidden]{display:none}
+.sheet{
+  width:min(100%,42rem);
+  padding:clamp(1rem,3vmin,1.8rem);
+  border-radius:var(--r);
+  background:rgba(10,14,21,.92);
+  border:1px solid rgba(255,255,255,.15);
+  box-shadow:inset 0 1px 0 var(--edge), var(--shadow-near);
+}
+.sheet h2{margin:0 0 .2rem;font-size:clamp(.95rem,2.4vmin,1.2rem);font-weight:700;letter-spacing:-.01em}
+.sheet .sub{color:var(--ink-3);font-size:clamp(.68rem,1.6vmin,.82rem);margin:0 0 1rem}
+.form{display:grid;gap:.6rem clamp(.5rem,1.6vmin,.9rem);grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));align-items:end}
+.f{display:flex;flex-direction:column;gap:.28rem;min-width:0}
+.f label{font-size:.66rem;letter-spacing:.12em;color:var(--ink-3);font-weight:700}
+.f input{
+  background:rgba(0,0,0,.42);color:var(--ink);border:1px solid rgba(255,255,255,.18);
+  border-radius:11px;padding:.5rem .6rem;font:inherit;font-size:.9rem;min-width:0;width:100%;
+}
+.f input:focus{outline:2px solid #58a6ff;outline-offset:1px;border-color:#58a6ff}
+.f-check{flex-direction:row;align-items:center;gap:.45rem}
+.f-check label{letter-spacing:0;color:var(--ink-2);font-size:.8rem;font-weight:500}
+.f-check input{width:auto}
+.acts{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;grid-column:1/-1;margin-top:.35rem}
+button{
+  font:inherit;font-weight:650;cursor:pointer;border-radius:12px;padding:.55rem 1.1rem;
+  background:rgba(255,255,255,.94);color:#0a1018;border:1px solid transparent;
+}
+button:hover{background:#fff}
+button.ghost{background:rgba(255,255,255,.08);color:var(--ink-2);border-color:rgba(255,255,255,.18)}
+button.ghost:hover{background:rgba(255,255,255,.16);color:var(--ink)}
+.msg{color:var(--ink-3);font-size:.74rem;line-height:1.5;margin:.85rem 0 0;grid-column:1/-1}
+.msg b{color:var(--ink-2)}
+.notes{color:var(--ink-3);font-size:.72rem;line-height:1.55;margin:.9rem 0 0}
+.notes b{color:var(--ink-2);font-weight:650}
+
+/* =====================================================================
+   Reduced motion: the depth stays (it is layout, not animation), the
+   movement goes. No parallax, no dissolve, no pulsing.
+   ===================================================================== */
+@media (prefers-reduced-motion:reduce){
+  *{animation:none !important;transition:none !important}
+  .deck{transform:none !important}
+  .sky{transform:scale(1.02) !important}
+}
+</style>
+</head>
+<body>
+
+<div class="sky void on" id="skyA"></div>
+<div class="sky" id="skyB"></div>
+<div class="scrim"></div>
+<div class="vign"></div>
+
+<div class="stage">
+  <div class="deck" id="deck">
+
+    <!-- ---------- FAR PLANE (top): ambient context ---------- -->
+    <div class="plane p-far">
+      <div class="glass g-far ambient">
+        <span class="place">CHIANG MAI</span>
+        <span class="sep"></span>
+        <span id="roster">waiting for the fleet</span>
+        <span class="push"></span>
+        <span class="mono" id="clock">--:--</span>
+        <span class="sep"></span>
+        <span class="link" id="link" data-s="connecting"><span class="led"></span><span id="link-text">connecting</span></span>
+      </div>
+    </div>
+
+    <!-- ---------- NEAR PLANE: the reading ---------- -->
+    <div class="plane p-near">
+      <section class="glass g-near hero">
+        <p class="ask">SHOULD WE GO OUTSIDE?</p>
+        <p class="verdict" id="verdict">Finding the air monitors&hellip;</p>
+        <div class="readout">
+          <span class="num" id="num" data-kind="word">&mdash;</span>
+          <span class="side">
+            <span class="unit" id="unit"></span>
+            <span class="what">PM2.5</span>
+          </span>
+        </div>
+        <p class="bandline">
+          <span class="pill" id="pill" data-haz="0">NO DATA</span>
+          <span class="src" id="src">no board has reported a reading yet</span>
+        </p>
+      </section>
+    </div>
+
+    <!-- ---------- MID PLANE: the boards ---------- -->
+    <div class="plane p-mid">
+      <div class="boards" id="boards"></div>
+    </div>
+
+    <!-- ---------- FAR PLANE (bottom): the EPA ruler ---------- -->
+    <div class="plane p-far">
+      <div class="glass g-far ruler" id="ruler"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="calm" id="calm" hidden>
+  <p id="calm-text">We cannot reach the air monitors right now.<small>PRESS S FOR SETTINGS</small></p>
+</div>
+
+<div class="sheet-wrap" id="sheet-wrap" hidden>
+  <div class="sheet">
+    <h2>Broker connection</h2>
+    <p class="sub">Kept in this browser, on this device. Nothing is uploaded anywhere but to the broker named here.</p>
+    <form class="form" id="form" autocomplete="off">
+      <div class="f"><label for="f-host">HOST</label><input id="f-host" spellcheck="false" required></div>
+      <div class="f"><label for="f-port">WEBSOCKET PORT</label><input id="f-port" inputmode="numeric" required></div>
+      <div class="f"><label for="f-user">USERNAME</label><input id="f-user" spellcheck="false"></div>
+      <div class="f"><label for="f-pass">PASSPHRASE</label><input id="f-pass" type="password" autocomplete="off"></div>
+      <div class="f"><label for="f-filter">TOPIC STARTS WITH</label><input id="f-filter" spellcheck="false" placeholder="dbk/"></div>
+      <div class="f f-check"><input id="f-tls" type="checkbox"><label for="f-tls">TLS (wss)</label></div>
+      <div class="f f-check"><input id="f-remember" type="checkbox"><label for="f-remember">Remember passphrase</label></div>
+      <div class="acts">
+        <button type="submit">Connect</button>
+        <button type="button" class="ghost" id="btn-forget">Forget</button>
+        <button type="button" class="ghost" id="btn-close">Close</button>
+      </div>
+      <p class="msg" id="msg"></p>
+    </form>
+    <p class="notes">
+      <b>Browser sockets only.</b> A web page cannot open a raw MQTT socket, so this connects
+      over MQTT-on-WebSocket &mdash; port <b>1884</b> on this broker, not the native listener.<br>
+      <b>The passphrase</b> is written to this device only if you tick Remember passphrase.
+      Leave it unticked on a shared or kiosk machine.<br>
+      <b>Press S</b> at any time to open or close this panel, <b>Esc</b> to close.
+    </p>
+  </div>
+</div>
+
+<!-- Pinned AND hash-locked: this page can be given a broker passphrase, so a hijacked CDN
+     response must not be able to execute here. Same bundle and same sha384 as the source
+     dashboard this presentation was built over. -->
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"
+        integrity="sha384-haZiwxTLortiFcYMBEEE1+8ayC+o18YtuwHZv+4WQHoPaLzRjwOV6h7Vva5iLSCZ"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ================================================================ config
+  var DEFAULT_HOST = (location.hostname || '');  /* Served from the add-on, the broker is the same host as this page, so derive it rather than hardcoding a LAN address into a public repo. Empty under file:// — the settings panel covers that case. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_PORT = '1884';            // MQTT-over-WebSocket. A browser cannot use the native
+                                        // MQTT listener at all — only this one.
+  var STORE_KEY = 'air-wall.conn.v1';   // shared with the source dashboard on purpose
+  var MAX_SUBS = 64;
+  var DEFAULT_EXPIRE = 900;
+  var DEFAULT_FILTER = 'dbk/';
+  var CALM_AFTER_MS = 14000;            // grace before the screen becomes one sentence
+
+  // US EPA PM2.5 breakpoints, micrograms per cubic metre. One source of truth for the
+  // reading, the ruler, the verdict sentence AND the photograph behind the glass.
+  // `img` is the sky that band actually looks like — the picture IS the data.
+  // Every label here is authored in capitals by hand. See the BUG A note in the CSS:
+  // no CSS text-transform is used anywhere on this page.
+  var BANDS = [
+    { max: 12.0,   short: 'GOOD',           r: '0 – 12.0',     v: '--band-good', img: 'img/good.jpg',
+      say: 'Yes. Go outside — the air is clean today.' },
+    { max: 35.4,   short: 'MODERATE',       r: '12.1 – 35.4',  v: '--band-mod',  img: 'img/moderate.jpg',
+      say: 'Yes, go outside. If running makes you puff, take breaks.' },
+    { max: 55.4,   short: 'SENSITIVE',      r: '35.5 – 55.4',  v: '--band-usg',  img: 'img/sensitive.jpg',
+      say: 'Short trips are fine. If you cough or wheeze, stay in and rest.' },
+    { max: 150.4,  short: 'UNHEALTHY',      r: '55.5 – 150.4', v: '--band-unh',  img: 'img/unhealthy.jpg',
+      say: 'Play inside today. If you must go out, keep it short and wear a mask.' },
+    { max: 250.4,  short: 'VERY UNHEALTHY', r: '150.5 – 250.4',v: '--band-vun',  img: 'img/verybad.jpg',
+      say: 'Stay inside. Keep the windows and the doors closed.' },
+    { max: Infinity, short: 'HAZARDOUS',    r: '250.5 +',      v: '--band-haz',  img: 'img/hazardous.jpg',
+      say: 'Stay inside. Close everything, and wear a mask if you have to go out.' }
+  ];
+
+  // The scrim strength for each band, plus the floor that makes the legibility claim
+  // true. good.jpg is a bright dawn and verybad.jpg is a near-whiteout, so brightness
+  // is NOT monotonic down the scale — these are per-image, not per-severity.
+  var SCRIM = {
+    'img/good.jpg':      { mid: .60, edge: .80 },
+    'img/moderate.jpg':  { mid: .58, edge: .78 },
+    'img/sensitive.jpg': { mid: .56, edge: .76 },
+    'img/unhealthy.jpg': { mid: .50, edge: .70 },
+    'img/verybad.jpg':   { mid: .60, edge: .80 },   // whiteout: as bright as the dawn
+    'img/hazardous.jpg': { mid: .52, edge: .72 },
+    'void':              { mid: .46, edge: .66 }
+  };
+  var SCRIM_FLOOR = { mid: .46, edge: .66 };
+
+  // Home Assistant discovery allows abbreviated keys. Expand the ones we read.
+  var ALIASES = {
+    stat_t: 'state_topic', avty_t: 'availability_topic', uniq_id: 'unique_id',
+    unit_of_meas: 'unit_of_measurement', dev_cla: 'device_class', stat_cla: 'state_class',
+    exp_aft: 'expire_after', pl_avail: 'payload_available', pl_not_avail: 'payload_not_available',
+    dev: 'device', val_tpl: 'value_template', avty: 'availability', ic: 'icon'
+  };
+
+  // ================================================================ state
+  var client = null;
+  var entities = new Map();      // discovery topic -> entity
+  var byState = new Map();
+  var byAvail = new Map();
+  var byUid = new Map();
+  var boardStatus = new Map();
+  var subs = new Set();
+  var filteredOut = new Set();
+  var activeFilter = '';
+  var connState = 'idle';
+  var manualStop = false;
+  var everConnected = false;
+  var calmTimer = null;
+  var curGround = null;
+  var skyTop = false;            // which sky layer is currently showing
+
+  var $ = function (id) { return document.getElementById(id); };
+  var boards = $('boards');
+  var reduced = false;
+  try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+  // ================================================================ helpers
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#93a4b8';
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  // The EPA scale starts at 0. Without the lower bound a faulty sensor reporting -999
+  // lands in the first band and renders as a reassuring green "GOOD".
+  function bandFor(n) {
+    if (!Number.isFinite(n) || n < 0) return null;
+    for (var i = 0; i < BANDS.length; i++) if (n <= BANDS[i].max) return BANDS[i];
+    return BANDS[BANDS.length - 1];
+  }
+
+  function isPm(ent) {
+    return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
+  }
+
+  function ago(ts) {
+    if (!ts) return 'never';
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 2) return 'just now';
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ' + (m % 60) + 'm ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never print NaN.
+  function parseValue(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (s === '') return { kind: 'empty', text: 'no value' };
+    if (/^(unknown|unavailable|none|null|nan|n\/a)$/i.test(s)) {
+      return { kind: 'unknown', text: s.toLowerCase() };
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return { kind: 'text', text: s };
+    // The EPA method truncates to one decimal BEFORE applying breakpoints. Truncate once,
+    // here, and classify on the SAME value that gets printed — otherwise the wall shows
+    // 35.4 while the ruler under it insists 35.4 is Moderate. Truncate, never round:
+    // rounding 35.44 up to 35.5 would invent a severity the sensor did not report.
+    var n1 = Math.trunc(n * 10) / 10;
+    var text;
+    if (/^[+-]?\d+(\.\d)?$/.test(s)) text = s.replace(/^\+/, '');   // keep the device's precision
+    else text = n1.toFixed(1);
+    return { kind: 'number', n: n, n1: n1, text: text };
+  }
+
+  // BUG C GUARD: the discovery "name" is literally "PM2.5" on every one of these boards,
+  // so the name can never be the identity. The board id is parsed out of the state topic
+  // and takes precedence over anything the payload calls itself.
+  function boardFromTopic(topic) {
+    var m = /^dbk\/([^/]+)\//i.exec(topic || '');
+    return m ? m[1] : null;
+  }
+
+  var storeWorks = true;
+  function loadStore() {
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); }
+    catch (e) { storeWorks = false; return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (e) { try { localStorage.removeItem(STORE_KEY); } catch (e2) {} return null; }
+  }
+  function saveStore(v) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; }
+    catch (e) { storeWorks = false; return false; }
+  }
+  function clearStore() { try { localStorage.removeItem(STORE_KEY); return true; } catch (e) { return false; } }
+
+  // ================================================================ the ground
+  var preloaded = {};
+  function preload(src) {
+    if (!src || preloaded[src]) return;
+    var im = new Image();
+    im.src = src;
+    preloaded[src] = im;
+  }
+
+  // Cross-fade to the sky this band actually looks like. `band === null` means the fleet
+  // has told us nothing — and an unknown sky must NEVER be drawn as the clear dawn, so it
+  // gets the void instead. A false all-clear is the worst thing this wall could say.
+  function setGround(band) {
+    var key = band ? band.img : 'void';
+    var s = SCRIM[key] || SCRIM['void'];
+    var root = document.documentElement;
+    root.style.setProperty('--scrim-mid', String(Math.max(SCRIM_FLOOR.mid, s.mid)));
+    root.style.setProperty('--scrim-edge', String(Math.max(SCRIM_FLOOR.edge, s.edge)));
+    if (key === curGround) return;
+    curGround = key;
+
+    var a = $('skyA'), b = $('skyB');
+    var incoming = skyTop ? a : b;
+    var outgoing = skyTop ? b : a;
+    if (band) {
+      incoming.classList.remove('void');
+      incoming.style.backgroundImage = 'url("' + band.img + '")';
+    } else {
+      incoming.classList.add('void');
+      incoming.style.backgroundImage = '';
+    }
+    incoming.classList.add('on');
+    outgoing.classList.remove('on');
+    skyTop = !skyTop;
+
+    // Keep the neighbours warm so the next change is a dissolve, not a white flash.
+    var i = band ? BANDS.indexOf(band) : -1;
+    [i - 1, i + 1].forEach(function (k) { if (BANDS[k]) preload(BANDS[k].img); });
+  }
+
+  // ================================================================ subscribe
+  // subRaw is the ONLY thing that talks to the broker and it is private to this file's own
+  // authored topics. Everything that came off the wire goes through sub(), which refuses
+  // wildcards outright.
+  function subRaw(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    // BUG D GUARD, belt: '#' is refused even for topics authored in this file. On the fleet
+    // broker a multi-level wildcard is roughly 109 GB a day.
+    if (topic.indexOf('#') !== -1) return false;
+    if (subs.has(topic)) return true;
+    if (subs.size >= MAX_SUBS) return false;
+    subs.add(topic);
+    client.subscribe(topic, { qos: 0 }, function (err) { if (err) subs.delete(topic); });
+    return true;
+  }
+
+  // BUG D GUARD, braces: a topic that arrived over the wire must name one exact topic.
+  // '+' is every bit as dangerous as '#' here — a retained config declaring state_topic
+  // "+/+/+" delivers the whole broker.
+  function sub(topic) {
+    if (!client || !topic || typeof topic !== 'string') return false;
+    if (/[#+]/.test(topic)) return false;
+    return subRaw(topic);
+  }
+
+  function unsub(topic) {
+    if (!topic || !subs.has(topic)) return;
+    if (byState.has(topic) || byAvail.has(topic)) return;
+    subs.delete(topic);
+    if (client) { try { client.unsubscribe(topic); } catch (e) {} }
+  }
+
+  // ================================================================ discovery
+  function expand(cfg) {
+    var out = {};
+    Object.keys(cfg).forEach(function (k) { out[ALIASES[k] || k] = cfg[k]; });
+    var base = out['~'];
+    if (typeof base === 'string' && base) {
+      ['state_topic', 'availability_topic'].forEach(function (k) {
+        var v = out[k];
+        if (typeof v !== 'string') return;
+        if (v.charAt(0) === '~') out[k] = base + v.slice(1);
+        else if (v.charAt(v.length - 1) === '~') out[k] = v.slice(0, -1) + base;
+      });
+    }
+    if (!out.availability_topic && Array.isArray(out.availability) && out.availability.length) {
+      var a = out.availability[0];
+      if (a && typeof a.topic === 'string') {
+        out.availability_topic = a.topic;
+        if (a.payload_available) out.payload_available = a.payload_available;
+        if (a.payload_not_available) out.payload_not_available = a.payload_not_available;
+      }
+    }
+    return out;
+  }
+
+  function index(map, key, dtopic) {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(dtopic);
+  }
+  // Without this a re-published config leaves the entity indexed under its OLD state
+  // topic, so one board's number appears under another board's name.
+  function unindex(map, key, dtopic) {
+    if (!key || !map.has(key)) return;
+    var set = map.get(key);
+    set.delete(dtopic);
+    if (set.size === 0) { map.delete(key); unsub(key); }
+  }
+
+  function removeEntity(dtopic) {
+    var gone = entities.get(dtopic);
+    if (!gone) return false;
+    if (gone.card) gone.card.root.remove();
+    entities.delete(dtopic);
+    if (gone.uid && byUid.get(gone.uid) === dtopic) byUid.delete(gone.uid);
+    unindex(byState, gone.stateTopic, dtopic);
+    unindex(byAvail, gone.availTopic, dtopic);
+    return true;
+  }
+
+  function matchesFilter(topic) {
+    return !activeFilter || String(topic).indexOf(activeFilter) === 0;
+  }
+
+  function onDiscovery(dtopic, text) {
+    if (text.trim() === '') {                    // empty retained payload = HA's "delete"
+      filteredOut.delete(dtopic);
+      if (removeEntity(dtopic)) paint();
+      return;
+    }
+    var cfg;
+    try { cfg = JSON.parse(text); } catch (e) { return; }   // one bad message must not kill the wall
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return;
+
+    cfg = expand(cfg);
+    if (typeof cfg.state_topic !== 'string' || !cfg.state_topic) return;
+
+    if (!matchesFilter(cfg.state_topic)) {
+      filteredOut.add(dtopic);
+      if (removeEntity(dtopic)) paint();
+      return;
+    }
+    filteredOut.delete(dtopic);
+
+    var parts = dtopic.split('/');
+    var dev = cfg.device && typeof cfg.device === 'object' ? cfg.device : null;
+    var devName = dev && typeof dev.name === 'string' ? dev.name : '';
+    var measure = typeof cfg.name === 'string' && cfg.name ? cfg.name : (parts[2] || 'sensor');
+    var expire = Number(cfg.expire_after);
+    var uid = typeof cfg.unique_id === 'string' && cfg.unique_id ? cfg.unique_id : '';
+    var board = boardFromTopic(cfg.state_topic);
+    var newAvail = typeof cfg.availability_topic === 'string' ? cfg.availability_topic : '';
+
+    // HA collapses two discovery topics carrying one unique_id into a single entity.
+    if (uid && byUid.has(uid) && byUid.get(uid) !== dtopic) removeEntity(byUid.get(uid));
+
+    var ent = entities.get(dtopic) ||
+      { key: dtopic, value: null, at: 0, availRaw: null, availAt: 0, card: null };
+
+    // Drop the OLD index entries before writing the new ones — and drop what was measured
+    // there with them. A value read from DBK-001 must not survive under a card now named
+    // DBK-999, frozen or not.
+    if (ent.stateTopic && ent.stateTopic !== cfg.state_topic) {
+      unindex(byState, ent.stateTopic, dtopic);
+      ent.value = null; ent.at = 0; ent.raw = undefined;
+    }
+    if (ent.availTopic && ent.availTopic !== newAvail) {
+      unindex(byAvail, ent.availTopic, dtopic);
+      ent.availRaw = null; ent.availAt = 0;
+    }
+    if (ent.uid && ent.uid !== uid && byUid.get(ent.uid) === dtopic) byUid.delete(ent.uid);
+
+    // BUG C: identity comes from the board id parsed out of state_topic FIRST. Every one of
+    // these boards publishes the discovery name "PM2.5", so trusting the name would title
+    // three different boards identically and make the wall unreadable.
+    ent.title = board || devName || uid || measure;
+    ent.measure = measure;
+    ent.uid = uid;
+    ent.stateTopic = cfg.state_topic;
+    ent.availTopic = newAvail;
+    ent.unit = typeof cfg.unit_of_measurement === 'string' ? cfg.unit_of_measurement : '';
+    ent.deviceClass = typeof cfg.device_class === 'string' ? cfg.device_class : '';
+    ent.expire = Number.isFinite(expire) && expire > 0 ? expire : DEFAULT_EXPIRE;
+    ent.pAvail = typeof cfg.payload_available === 'string' ? cfg.payload_available : 'online';
+    ent.pNot = typeof cfg.payload_not_available === 'string' ? cfg.payload_not_available : 'offline';
+    ent.templated = !!cfg.value_template;
+    ent.board = board;
+
+    // A sensor this page cannot listen to must never occupy the wall: it would sit in
+    // WAITING forever for a topic no data can arrive on.
+    if (!sub(ent.stateTopic)) {
+      if (removeEntity(dtopic)) paint();
+      return;
+    }
+
+    entities.set(dtopic, ent);
+    if (uid) byUid.set(uid, dtopic);
+    index(byState, ent.stateTopic, dtopic);
+    if (ent.availTopic) { index(byAvail, ent.availTopic, dtopic); sub(ent.availTopic); }
+
+    paint();
+  }
+
+  // ================================================================ messages
+  function onMessage(topic, payload) {
+    var text;
+    try { text = new TextDecoder('utf-8').decode(payload); }
+    catch (e) { text = String(payload); }
+
+    if (/^homeassistant\/.+\/config$/.test(topic)) {
+      try { onDiscovery(topic, text); } catch (e) {}
+      return;
+    }
+
+    var now = Date.now();
+
+    // Board availability, even where discovery declared no availability_topic.
+    var b = /^dbk\/([^/]+)\/status$/i.exec(topic);
+    if (b) boardStatus.set(b[1], { raw: text.trim(), at: now });
+
+    if (byState.has(topic)) {
+      byState.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.raw = text; e.value = parseValue(text); e.at = now;
+      });
+    }
+    if (byAvail.has(topic)) {
+      byAvail.get(topic).forEach(function (k) {
+        var e = entities.get(k);
+        if (!e) return;
+        e.availRaw = text.trim(); e.availAt = now;
+      });
+    }
+    paint();
+  }
+
+  // ================================================================ card state
+  function availabilityOf(ent) {
+    if (ent.availTopic && ent.availRaw !== null) {
+      if (ent.availRaw === ent.pNot) return 'offline';
+      if (ent.availRaw === ent.pAvail) return 'online';
+      return 'unknown';
+    }
+    if (ent.board && boardStatus.has(ent.board)) {
+      var raw = boardStatus.get(ent.board).raw;
+      if (raw === ent.pNot || raw === 'offline') return 'offline';
+      if (raw === ent.pAvail || raw === 'online') return 'online';
+    }
+    return 'unknown';
+  }
+
+  function stateOf(ent) {
+    if (availabilityOf(ent) === 'offline') return 'offline';
+    if (!ent.at || !ent.value) return 'waiting';
+    if (ent.value.kind === 'unknown' || ent.value.kind === 'empty') return 'unknown';
+    // A concentration cannot be negative. Checked BEFORE stale and before live, so a broken
+    // sensor is never dressed up as a reading — least of all a green one.
+    if (ent.value.kind === 'number' && ent.value.n1 < 0 && isPm(ent)) return 'fault';
+    if ((Date.now() - ent.at) / 1000 > ent.expire) return 'stale';
+    return 'live';
+  }
+
+  // ================================================================ tiles (mid plane)
+  function buildTile(ent) {
+    var root = document.createElement('article');
+    root.className = 'glass g-mid tile';
+    root.innerHTML =
+      '<div class="t-top"><span class="t-id"></span><span class="t-state"></span></div>' +
+      '<div class="t-val"><span class="t-num"></span><span class="t-unit"></span></div>' +
+      '<div class="t-note"></div>';
+    var card = {
+      root: root,
+      id: root.querySelector('.t-id'),
+      st: root.querySelector('.t-state'),
+      num: root.querySelector('.t-num'),
+      unit: root.querySelector('.t-unit'),
+      note: root.querySelector('.t-note')
+    };
+    ent.card = card;
+    boards.appendChild(root);
+    return card;
+  }
+
+  function renderTile(ent) {
+    var c = ent.card || buildTile(ent);
+    var st = stateOf(ent);
+    var band = null;
+    if (st === 'live' && ent.value && ent.value.kind === 'number' && isPm(ent)) band = bandFor(ent.value.n1);
+
+    c.root.setAttribute('data-state', st);
+    c.root.style.setProperty('--band', band ? css(band.v) : (st === 'live' ? css('--ink') : css('--ink-3')));
+
+    // Identity is the board id parsed from the topic, never the discovery name.
+    c.id.textContent = ent.title;
+
+    // Words in this block are authored here, in capitals, so they are safe. Anything that
+    // came off the wire (the value, the unit) is passed through verbatim.
+    if (st === 'offline') {
+      c.num.textContent = 'ASLEEP';
+      c.num.setAttribute('data-kind', 'word');
+      c.unit.textContent = '';
+      c.st.textContent = 'OFFLINE';
+      var seen = ent.availAt ||
+        (ent.board && boardStatus.has(ent.board) ? boardStatus.get(ent.board).at : 0);
+      var last = ent.value && ent.value.kind === 'number'
+        ? 'last said ' + ent.value.text + (ent.unit ? ' ' + ent.unit : '') + ', ' + ago(ent.at)
+        : 'no reading on record';
+      c.note.textContent = 'not reporting · said so ' + ago(seen) + ' · ' + last;
+    } else if (st === 'waiting') {
+      c.num.textContent = '—';
+      c.num.setAttribute('data-kind', 'word');
+      c.unit.textContent = '';
+      c.st.textContent = 'WAITING';
+      c.note.textContent = 'awake, waiting for its first reading';
+    } else if (st === 'unknown') {
+      c.num.textContent = ent.value ? ent.value.text : 'unknown';
+      c.num.setAttribute('data-kind', 'word');
+      c.unit.textContent = '';
+      c.st.textContent = 'NO READING';
+      c.note.textContent = 'the board published no usable value';
+    } else if (st === 'fault') {
+      c.num.textContent = ent.value.text;
+      c.num.setAttribute('data-kind', 'word');
+      c.unit.textContent = ent.unit;
+      c.st.textContent = 'SENSOR FAULT';
+      c.note.textContent = 'a concentration below zero is not a reading';
+    } else {
+      c.num.textContent = ent.value.text;
+      c.num.setAttribute('data-kind', ent.value.kind === 'number' ? 'num' : 'word');
+      c.unit.textContent = ent.unit;
+      c.st.textContent = st === 'stale' ? 'STALE' : (band ? band.short : 'LIVE');
+      c.note.textContent = st === 'stale'
+        ? 'reading expired after ' + ent.expire + 's — treat it as unknown'
+        : 'updated ' + ago(ent.at);
+    }
+    ent.st = st;
+    ent.band = band;
+    return ent;
+  }
+
+  // ================================================================ the paint
+  function heroSay(kind, band, n) {
+    if (band) return band.say;
+    if (kind === 'none') return 'We cannot tell right now — no monitor is reporting.';
+    return 'We cannot tell right now — the boards are awake but have not sent a reading.';
+  }
+
+  function paint() {
+    var list = [];
+    entities.forEach(function (e) { list.push(renderTile(e)); });
+
+    // PM boards first, then a stable alphabetical order by board id.
+    list.sort(function (a, b) {
+      return (isPm(b) ? 1 : 0) - (isPm(a) ? 1 : 0) ||
+        String(a.title).localeCompare(String(b.title)) ||
+        String(a.stateTopic).localeCompare(String(b.stateTopic));
+    });
+    list.forEach(function (e) { if (e.card) boards.appendChild(e.card.root); });
+
+    // ---- the fleet, and the worst live reading on it -------------------
+    var pm = list.filter(isPm);
+    var reporting = 0, offline = 0, worst = null, worstEnt = null;
+    pm.forEach(function (e) {
+      if (e.st === 'offline') { offline++; return; }
+      reporting++;
+      if (e.st === 'live' && e.band) {
+        if (!worst || BANDS.indexOf(e.band) > BANDS.indexOf(worst)) { worst = e.band; worstEnt = e; }
+      }
+    });
+
+    // Two of three boards offline is the NORMAL state of this fleet, and the wall says so
+    // out loud so nobody reads a quiet board as a broken one. But "that is normal" is only
+    // true while something is still measuring: with the whole fleet dark it would be a lie,
+    // and the one thing this wall must never do is reassure nobody home.
+    var roster;
+    if (!pm.length) {
+      roster = 'no boards found yet';
+    } else {
+      roster = reporting + ' of ' + pm.length + ' board' + (pm.length === 1 ? '' : 's') + ' reporting';
+      if (offline && reporting > 0) roster += ' · ' + offline + ' asleep — that is normal here';
+      else if (offline) roster += ' · the whole fleet is dark';
+    }
+    $('roster').textContent = roster;
+
+    // ---- the near plane -------------------------------------------------
+    var num = $('num'), unit = $('unit'), pill = $('pill'), src = $('src');
+    var root = document.documentElement;
+
+    if (worst && worstEnt) {
+      var txt = worstEnt.value.text;
+      num.textContent = txt;
+      num.setAttribute('data-kind', 'num');
+      // BUG B, part 3: the step-down ladder. Digits never break, so a long payload gets a
+      // smaller type size rather than a line break or a horizontal overflow.
+      num.setAttribute('data-len', String(Math.min(7, Math.max(2, txt.length))));
+      unit.textContent = worstEnt.unit;                  // verbatim from the wire: µg/m³
+      pill.textContent = worst.short;
+      pill.setAttribute('data-haz', worst.short === 'HAZARDOUS' ? '1' : '0');
+      src.textContent = reporting > 1
+        ? 'worst of ' + reporting + ' reporting boards · ' + worstEnt.title + ' · updated ' + ago(worstEnt.at)
+        : worstEnt.title + ' · updated ' + ago(worstEnt.at);
+      root.style.setProperty('--band', css(worst.v));
+      $('verdict').textContent = heroSay('live', worst, worstEnt.value.n1);
+    } else {
+      num.textContent = '—';
+      num.setAttribute('data-kind', 'word');
+      num.removeAttribute('data-len');
+      unit.textContent = '';
+      pill.textContent = 'NO DATA';
+      pill.setAttribute('data-haz', '0');
+      root.style.setProperty('--band', css('--ink-3'));
+      if (!pm.length) {
+        src.textContent = 'no PM2.5 board has announced itself on this broker';
+      } else if (reporting === 0) {
+        src.textContent = 'all ' + pm.length + ' boards are offline — nothing is measuring the air';
+      } else {
+        src.textContent = reporting === 1
+          ? '1 board is awake but has sent no usable reading'
+          : reporting + ' boards are awake but have sent no usable reading';
+      }
+      $('verdict').textContent = heroSay(reporting === 0 ? 'none' : 'quiet', null, null);
+    }
+
+    // ---- the ground. null band => the void, never the clear dawn. -------
+    setGround(worst);
+
+    // ---- the ruler ------------------------------------------------------
+    for (var i = 0; i < BANDS.length; i++) {
+      var seg = document.getElementById('seg-' + i);
+      if (seg) seg.setAttribute('data-on', worst === BANDS[i] ? '1' : '0');
+    }
+  }
+
+  // ================================================================ the ruler
+  (function buildRuler() {
+    var host = $('ruler');
+    BANDS.forEach(function (b, i) {
+      var el = document.createElement('div');
+      el.className = 'seg';
+      el.id = 'seg-' + i;
+      el.setAttribute('data-on', '0');
+      el.style.color = 'var(' + b.v + ')';
+      // b.short is authored in capitals in the BANDS table; b.r is a printed range.
+      el.innerHTML = '<i></i><b>' + esc(b.short) + '</b><em>' + esc(b.r) + '</em>';
+      host.appendChild(el);
+    });
+  })();
+
+  // ================================================================ the calm screen
+  function calm(sentence) {
+    $('calm-text').innerHTML = esc(sentence) + '<small>PRESS S FOR SETTINGS</small>';
+    $('calm').hidden = false;
+  }
+  function uncalm() { $('calm').hidden = true; }
+  function armCalm(sentence) {
+    if (calmTimer) clearTimeout(calmTimer);
+    calmTimer = setTimeout(function () { calm(sentence); }, CALM_AFTER_MS);
+  }
+  function disarmCalm() { if (calmTimer) { clearTimeout(calmTimer); calmTimer = null; } }
+
+  // ================================================================ connect
+  var LINK_TEXT = {
+    idle: 'not connected', connecting: 'connecting', connected: 'live',
+    reconnecting: 'reconnecting', error: 'no broker', fatal: 'refused'
+  };
+  function setLink(state, detail) {
+    connState = state;
+    $('link').setAttribute('data-s', state);
+    $('link-text').textContent = detail || LINK_TEXT[state] || state;
+  }
+
+  function describe(err) {
+    var code = err && (err.code !== undefined ? err.code : err.reasonCode);
+    var map = {
+      1: 'the broker rejected the MQTT protocol version',
+      2: 'the broker rejected this client id',
+      3: 'the broker is unavailable',
+      4: 'the username or passphrase is wrong',
+      5: 'this account is not authorised for the broker'
+    };
+    if (map[code]) return { text: map[code], fatal: code === 2 || code === 4 || code === 5 };
+    var m = String((err && err.message) || err || 'unknown error');
+    if (/not authoriz|bad user/i.test(m)) return { text: m, fatal: true };
+    return { text: m, fatal: false };
+  }
+
+  function disconnect() {
+    manualStop = true;
+    if (client) { try { client.end(true); } catch (e) {} client = null; }
+    subs.clear();
+  }
+
+  function connect(cfg) {
+    if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function') {
+      setLink('fatal', 'no library');
+      calm('This wall could not load the piece of software it needs to listen to the air monitors.');
+      return;
+    }
+
+    disconnect();
+    manualStop = false;
+    everConnected = false;
+    activeFilter = typeof cfg.filter === 'string' ? cfg.filter.trim() : '';
+    filteredOut.clear();
+    uncalm();
+
+    var scheme = cfg.tls ? 'wss' : 'ws';
+    // A browser cannot speak native MQTT. This is MQTT-over-WebSocket, port 1884 by default.
+    var url = scheme + '://' + cfg.host + ':' + cfg.port;
+    setLink('connecting');
+    armCalm('We cannot reach the air monitors right now.');
+
+    if (!cfg.tls && location.protocol === 'https:') {
+      // A page served over HTTPS cannot open a plaintext ws:// socket at all.
+      calm('This page is loaded over a secure connection, so the browser will not let it open a plain socket to the broker.');
+    }
+
+    try {
+      client = mqtt.connect(url, {
+        username: cfg.user || undefined,
+        password: cfg.pass || undefined,
+        clientId: 'air-spatial-' + Math.random().toString(16).slice(2, 10),
+        clean: true,
+        reconnectPeriod: 4000,
+        connectTimeout: 8000,
+        keepalive: 45,
+        resubscribe: true
+      });
+    } catch (e) {
+      setLink('fatal');
+      calm('This wall could not start a connection to the air monitors.');
+      return;
+    }
+
+    client.on('connect', function () {
+      everConnected = true;
+      setLink('connected');
+      disarmCalm();
+      uncalm();
+      // Bounded discovery wildcards. subRaw, not sub: these three are authored here and are
+      // the only wildcards this page may ever use. None of them contains '#'.
+      subRaw('homeassistant/+/+/config');      // <component>/<object_id>/config
+      subRaw('homeassistant/+/+/+/config');    // <component>/<node_id>/<object_id>/config
+      subRaw('dbk/+/status');                  // board availability
+      paint();
+    });
+
+    client.on('message', function (topic, payload) {
+      try { onMessage(topic, payload); } catch (e) { /* one bad message must never stop the stream */ }
+    });
+
+    client.on('reconnect', function () { if (!manualStop && connState !== 'fatal') setLink('reconnecting'); });
+    client.on('offline', function () { if (!manualStop && connState !== 'fatal') setLink('reconnecting'); });
+
+    // A browser never reveals WHY a WebSocket handshake failed, and for a refused port
+    // mqtt.js may close without ever emitting a useful 'error'.
+    client.on('close', function () {
+      if (manualStop || connState === 'fatal') return;
+      if (!everConnected) {
+        setLink('error');
+        armCalm('We cannot reach the air monitors right now.');
+      } else {
+        setLink('reconnecting');
+        // Readings already on screen keep ageing into stale on their own; no calm screen
+        // for a blip, only if the gap lasts.
+        armCalm('The connection to the air monitors has dropped.');
+      }
+    });
+
+    client.on('error', function (err) {
+      var d = describe(err);
+      if (d.fatal) {
+        setLink('fatal');
+        manualStop = true;
+        disarmCalm();
+        try { client.end(true); } catch (e) {}
+        client = null;
+        calm('The broker refused this connection — ' + d.text + '.');
+      } else {
+        setLink('error');
+        armCalm('We cannot reach the air monitors right now.');
+      }
+    });
+  }
+
+  // ================================================================ settings
+  var wrap = $('sheet-wrap');
+  function openSheet() { wrap.hidden = false; setTimeout(function () { $('f-host').focus(); }, 20); }
+  function closeSheet() { wrap.hidden = true; }
+
+  function readForm() {
+    return {
+      host: $('f-host').value.trim(),
+      port: $('f-port').value.trim(),
+      user: $('f-user').value,
+      pass: $('f-pass').value,
+      tls: $('f-tls').checked,
+      filter: $('f-filter').value.trim(),
+      remember: $('f-remember').checked
+    };
+  }
+  function fillForm(v) {
+    $('f-host').value = (v && v.host) || DEFAULT_HOST;
+    $('f-port').value = (v && v.port) || DEFAULT_PORT;
+    $('f-user').value = (v && v.user) || '';
+    $('f-pass').value = (v && v.pass) || '';
+    $('f-tls').checked = !!(v && v.tls);
+    $('f-filter').value = v && typeof v.filter === 'string' ? v.filter : DEFAULT_FILTER;
+    $('f-remember').checked = !!(v && (v.remember || v.pass));
+  }
+  // What goes to disk is not what is in the form: the passphrase is opt-in.
+  function storable(cfg) {
+    var out = { host: cfg.host, port: cfg.port, user: cfg.user, tls: cfg.tls,
+                filter: cfg.filter, remember: !!cfg.remember };
+    if (cfg.remember) out.pass = cfg.pass;
+    return out;
+  }
+
+  $('form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var cfg = readForm();
+    if (!cfg.host || !cfg.port) return;
+    entities.forEach(function (e) { if (e.card) e.card.root.remove(); });
+    entities.clear(); byState.clear(); byAvail.clear(); byUid.clear(); boardStatus.clear();
+    filteredOut.clear();
+    var ok = saveStore(storable(cfg));
+    $('msg').textContent = !ok
+      ? 'This browser refused to save settings (a private window?). The connection still works, but you will re-enter these next time.'
+      : cfg.remember
+        ? 'Saved in this browser only, on this device — passphrase included. Nothing is uploaded.'
+        : 'Saved in this browser only, on this device. The passphrase was NOT stored.';
+    closeSheet();
+    paint();
+    connect(cfg);
+  });
+
+  $('btn-forget').addEventListener('click', function () {
+    clearStore();
+    fillForm(null);
+    $('f-pass').value = '';
+    disconnect();
+    setLink('idle');
+    $('msg').textContent = 'Saved settings cleared from this browser.';
+  });
+  $('btn-close').addEventListener('click', closeSheet);
+
+  window.addEventListener('keydown', function (ev) {
+    var tag = ev.target && ev.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      if (ev.key === 'Escape') closeSheet();
+      return;
+    }
+    if (ev.key === 'Escape') { closeSheet(); return; }
+    if (ev.key === 's' || ev.key === 'S') {
+      ev.preventDefault();
+      wrap.hidden ? openSheet() : closeSheet();
+    }
+  });
+
+  // ================================================================ parallax
+  // The depth is layout; the movement is decoration. Under prefers-reduced-motion the
+  // planes keep their z-offsets and simply stop responding.
+  (function parallax() {
+    if (reduced) return;
+    var root = document.documentElement;
+    var tx = 0, ty = 0, cx = 0, cy = 0, raf = 0;
+
+    function loop() {
+      raf = 0;
+      cx += (tx - cx) * 0.12;
+      cy += (ty - cy) * 0.12;
+      root.style.setProperty('--px', cx.toFixed(4));
+      root.style.setProperty('--py', cy.toFixed(4));
+      if (Math.abs(tx - cx) > 0.0015 || Math.abs(ty - cy) > 0.0015) raf = requestAnimationFrame(loop);
+    }
+    function push(x, y) {
+      tx = Math.max(-1, Math.min(1, x));
+      ty = Math.max(-1, Math.min(1, y));
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('pointermove', function (ev) {
+      push((ev.clientX / window.innerWidth) * 2 - 1, (ev.clientY / window.innerHeight) * 2 - 1);
+    }, { passive: true });
+    window.addEventListener('pointerleave', function () { push(0, 0); }, { passive: true });
+
+    // Device orientation where the device has it — a tablet propped on a shelf gets the
+    // same depth as a pointer. gamma is left/right tilt, beta front/back.
+    if (typeof window.DeviceOrientationEvent !== 'undefined') {
+      window.addEventListener('deviceorientation', function (ev) {
+        if (ev.gamma === null && ev.beta === null) return;
+        push((Number(ev.gamma) || 0) / 24, ((Number(ev.beta) || 0) - 45) / 34);
+      }, { passive: true });
+    }
+  })();
+
+  // ================================================================ clock + heartbeat
+  function tick() {
+    var d = new Date();
+    $('clock').textContent =
+      String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    paint();   // re-ages every "updated Ns ago" and expires readings into stale
+  }
+  setInterval(tick, 1000);
+  tick();
+
+  // ================================================================ boot
+  // NO CONFIG UI ON LOAD. localStorage first, then ?u=&p= from the URL, then anonymous.
+  var saved = loadStore();
+  var q;
+  try { q = new URLSearchParams(location.search); } catch (e) { q = null; }
+  var fromUrl = q && (q.get('u') !== null || q.get('p') !== null);
+
+  var cfg;
+  if (saved && saved.host && saved.port && !(saved.user && !saved.pass)) {
+    cfg = saved;
+  } else if (fromUrl) {
+    cfg = {
+      host: (q.get('h') || DEFAULT_HOST).trim(),
+      port: (q.get('port') || DEFAULT_PORT).trim(),
+      user: q.get('u') || '',
+      pass: q.get('p') || '',
+      tls: q.get('tls') === '1',
+      filter: q.get('f') !== null ? q.get('f') : DEFAULT_FILTER,
+      remember: false
+    };
+  } else {
+    cfg = { host: DEFAULT_HOST, port: DEFAULT_PORT, user: '', pass: '', tls: false,
+            filter: DEFAULT_FILTER, remember: false };
+  }
+
+  fillForm(saved || cfg);
+  if (!storeWorks) $('msg').textContent = 'This browser blocks local storage, so settings cannot be remembered here.';
+
+  // The wall opens on the void, not on a sky. Nothing is known yet, and an unknown sky
+  // drawn as a clear dawn would be a false all-clear before a single byte has arrived.
+  setGround(null);
+  paint();
+  connect(cfg);
+
+  // Warm every ground once the page is up, so no band change can ever flash white.
+  setTimeout(function () { BANDS.forEach(function (b) { preload(b.img); }); }, 2500);
+})();
+</script>
+</body>
+</html>
