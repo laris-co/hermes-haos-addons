@@ -9,17 +9,10 @@ LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}"
 
-# python3 is NOT in the base image and is what run.sh uses to read
-# /data/options.json. Without it options are ignored SILENTLY.
-RUN apk add --no-cache nginx python3 \
-    && mkdir -p /run/nginx /usr/share/esp-flasher
+# nginx only — this add-on is a reverse proxy, it serves no local assets.
+RUN apk add --no-cache nginx \
+    && mkdir -p /run/nginx
 
 COPY ingress.conf /etc/nginx/http.d/default.conf
-COPY index.tmpl /usr/share/esp-flasher/index.tmpl
-COPY app.js         /usr/share/esp-flasher/app.js
-COPY characters.json /usr/share/esp-flasher/characters.json
-COPY lessons.json    /usr/share/esp-flasher/lessons.json
-COPY run.sh /run.sh
-RUN chmod 0755 /run.sh
 
-CMD ["/run.sh"]
+CMD ["nginx", "-g", "daemon off;"]

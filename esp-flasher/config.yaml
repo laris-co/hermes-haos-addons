@@ -1,9 +1,10 @@
 name: "ESP Web Flasher"
-version: "1.1.0"
+version: "2.0.0"
 slug: "esp_flasher"
 description: >-
-  Flash an ESP32 and set its Wi-Fi from the Home Assistant sidebar, over USB,
-  using Web Serial. No CLI, no serial contention with a running logger.
+  The Many Bodies, One Soul workshop gallery and web flasher, served inside the
+  Home Assistant sidebar. Flash any of the workshop firmwares over USB, or set an
+  already-flashed board's Wi-Fi, without leaving Home Assistant.
 url: "https://github.com/laris-co/hermes-haos-addons/tree/main/esp-flasher"
 arch:
   - amd64
@@ -20,14 +21,6 @@ host_network: false
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:usb-flash-drive
-panel_title: ESP Flasher
+panel_title: ESP32 Workshop
 panel_admin: false
 stage: experimental
-options:
-  gallery_url: "https://the-oracle-keeps-the-human-human.github.io/workshop-04-esp32-wasm/"
-  # Empty = "connect to an already-flashed board and set its Wi-Fi over Improv",
-  # which is the usual case. Point it at a firmware manifest.json to also install.
-  manifest_url: ""
-schema:
-  gallery_url: str
-  manifest_url: str?

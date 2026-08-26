@@ -1,25 +1,26 @@
-# ESP Web Flasher
+# ESP32 Workshop
 
-Flash an ESP32 and set its Wi-Fi over USB, from the Home Assistant sidebar,
-using [esp-web-tools](https://github.com/esphome/esp-web-tools) and Web Serial.
+Serves the **real** *Many Bodies, One Soul* gallery and web flasher inside the
+Home Assistant sidebar:
+
+- https://the-oracle-keeps-the-human-human.github.io/workshop-04-esp32-wasm/
+
+It is a reverse proxy, not a copy. `docs/` upstream is ~89 MB (47 firmware
+binaries), and a copy would go stale silently.
 
 ## The one thing that will confuse you
 
-**Web Serial only exists in a secure context.** Home Assistant reached over
-`http://<host>.local` is not one, so the Connect button will do nothing there —
-and the failure looks like a broken board rather than a blocked API.
-
-The panel detects this itself and tells you which case you are in. Open Home
-Assistant over **HTTPS** and the same panel works.
+**Web Serial only works in a secure context.** Home Assistant reached over
+`http://<host>.local` is not one, so Connect does nothing there. Open Home
+Assistant over **HTTPS** and it works.
 
 ## Also
 
-A running serial logger holds the port and the browser will not see the device.
+A running serial logger holds the port and the browser will not see the board.
 Stop it first.
 
-## Options
+## Why it survives ingress
 
-| option | meaning |
-|---|---|
-| `gallery_url` | link shown at the bottom of the page |
-| `manifest_url` | firmware `manifest.json` to install; leave empty to only configure Wi-Fi on an already-flashed board |
+Checked before building: `index.html` has **zero** absolute (`/…`) references —
+every link is relative or fully-qualified external. Absolute paths are what break
+pages mounted under `/api/hassio_ingress/<token>/`.
