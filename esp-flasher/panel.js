@@ -19,19 +19,44 @@
   // still should: ⌘-click (mac), Ctrl-click (win/linux), middle-click, and
   // Shift-click are how people say "I want this somewhere else", and silently
   // swallowing them is worse than the escaping we are fixing.
+  // captured before we replace window.open below, so off-site links can still
+  // use the real implementation
+  var nativeOpen = window.open;
+
   function wantsNewTab(e) {
     return e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
   }
 
+  // An ingress panel is an IFRAME. Most external sites refuse to be framed —
+  // github.com sends X-Frame-Options: DENY, and forcing its links to load
+  // in-panel produces "github.com refused to connect" instead of the page.
+  // Measured 2026-08-26 after doing exactly that.
+  //
+  // So the rule is by ORIGIN, not by target:
+  //   same-origin  -> stay in the panel (that is the whole point)
+  //   off-site     -> new tab (the only place it can actually render)
+  function sameOrigin(a) {
+    try { return a.hostname === window.location.hostname; } catch (_) { return false; }
+  }
+
   // Capture phase, so this runs before the page's own click handlers.
   document.addEventListener('click', function (e) {
-    if (wantsNewTab(e)) return;                 // let the browser do its thing
+    if (wantsNewTab(e)) return;                 // deliberate gesture — hands off
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
     if (!a) return;
 
     var href = a.getAttribute('href') || '';
     // in-page anchors and non-navigating schemes must be left alone
     if (!href || href.charAt(0) === '#' || /^(javascript|mailto|tel|data|blob):/i.test(href)) return;
+
+    if (!sameOrigin(a)) {
+      // sub_filter stripped target="_blank" from the proxied HTML, so without
+      // this an off-site link would try to render inside the iframe and fail.
+      e.preventDefault();
+      e.stopPropagation();
+      nativeOpen.call(window, a.href, '_blank', 'noopener');
+      return;
+    }
 
     var t = (a.getAttribute('target') || '').toLowerCase();
     if (t === '_blank' || t === '_new' || t === '_top' || t === '_parent') {
@@ -50,7 +75,6 @@
   // window.open -> same-document navigation. Returns a minimal stub rather than
   // null: some libraries do `var w = window.open(...); w.focus()` and a null
   // would throw where the original merely popped a blocked-popup warning.
-  var nativeOpen = window.open;
   window.open = function (url) {
     if (url) {
       try { window.location.href = String(url); } catch (_) { return nativeOpen.apply(window, arguments); }
