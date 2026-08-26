@@ -14,5 +14,7 @@ RUN apk add --no-cache nginx \
     && mkdir -p /run/nginx
 
 COPY ingress.conf /etc/nginx/http.d/default.conf
+RUN mkdir -p /usr/share/esp-flasher
+COPY panel.js /usr/share/esp-flasher/panel.js
 
 CMD ["nginx", "-g", "daemon off;"]
