@@ -1,0 +1,42 @@
+name: "MQTT Open Read"
+version: "1.0.0"
+slug: "mqtt_open"
+description: >-
+  Writes an allow_anonymous stanza into /share/mosquitto/ so dashboards and wall
+  displays can subscribe without a password. Read-only by default: anonymous
+  clients may subscribe, never publish, because a display that anyone on the LAN
+  can write to is a display that can be made to lie.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/mqtt-open"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+# The whole mechanism: write access to /share, where core_mosquitto's
+# customize.folder looks for *.conf to fold into its own configuration.
+map:
+  - share:rw
+hassio_api: false
+homeassistant_api: false
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:lock-open-variant-outline
+panel_title: MQTT Open Read
+panel_admin: true
+stage: experimental
+options:
+  # false keeps anonymous clients read-only. Setting this true lets ANY device on
+  # the network publish to ANY topic — including the readings a health display
+  # shows children. Nothing here needs that; a wall only ever subscribes.
+  allow_anonymous_publish: false
+  # Anonymous clients are confined to these topic patterns. Narrow this rather
+  # than widening it. A bare "#" is refused in code, not merely discouraged:
+  # an unscoped subscription against the fleet broker once measured ~109 GB/day.
+  read_topics:
+    - "dbk/#"
+    - "homeassistant/#"
+schema:
+  allow_anonymous_publish: bool
+  read_topics: [str]
