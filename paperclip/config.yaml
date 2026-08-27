@@ -1,5 +1,5 @@
 name: "Paperclip [EXPERIMENTAL]"
-version: "1.1.1"
+version: "1.1.2"
 slug: "paperclip"
 description: >-
   EXPERIMENTAL — may be withdrawn. Wraps the official
@@ -60,7 +60,13 @@ options:
   better_auth_secret: ""
   tool_action_signing_secret: ""
   # Optional — only needed for a real external domain. See README.
-  public_url: ""
+  #
+  # NOT given a "" default: the schema type is `url?`, where `?` means the key
+  # may be ABSENT, not that it may be an EMPTY STRING. Supervisor validates this
+  # options block against the schema before starting the add-on, so a `""` here
+  # makes the add-on refuse to start out of the box with "invalid options:
+  # expected a URL" and an EMPTY log (the container is never created). Same bug
+  # was found and fixed in hermes-agent on 2026-08-27 — see that config.yaml.
   extra_env: []
 schema:
   better_auth_secret: password?

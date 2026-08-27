@@ -1,5 +1,5 @@
 name: "Hermes Agent"
-version: "1.2.0"
+version: "1.2.1"
 slug: "hermes_agent"
 description: >-
   Nous Research's Hermes Agent, running as `hermes dashboard` — the web UI
@@ -47,9 +47,21 @@ ingress: true
 ingress_port: 8099
 panel_icon: mdi:robot-happy
 panel_title: Hermes Agent
+# NOTE: openrouter_base_url is deliberately NOT given a "" default here.
+# Its schema type is `url?` — the `?` means the key may be ABSENT, not that it
+# may be an EMPTY STRING. Supervisor validates the defaults in this block against
+# this very schema before it will start the add-on, so shipping `""` made the
+# add-on refuse to start out of the box on ANY host, with:
+#
+#   ERROR [supervisor.apps.app] App a90308c2_hermes_agent has invalid options:
+#   expected a URL. Got {'openrouter_base_url': '', ...}
+#
+# and an EMPTY add-on log, because the container is never created — Supervisor
+# rejects the options before Docker is involved. Reproduced on two independent
+# HAOS 18.2 guests, 2026-08-27. Omitting the key entirely is the correct way to
+# express "optional, unset by default". Do not "helpfully" add `""` back.
 options:
   openrouter_api_key: ""
-  openrouter_base_url: ""
   inference_provider: ""
   inference_model: ""
   extra_env: []
