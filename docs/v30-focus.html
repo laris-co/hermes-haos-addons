@@ -1,0 +1,1759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Air — one pane</title>
+<style>
+/* =====================================================================
+   FOCUS — one pane of glass on a photograph of the actual sky.
+
+   CONTRAST GUARANTEE (the hard part, solved once, structurally):
+   Every character on this page lives inside ONE dark glass pane. The pane
+   darkens whatever is behind it with backdrop-filter brightness(.58) and
+   then lays a dark fill of alpha .50 on top. Worst case — the pane sitting
+   on PURE WHITE, brighter than any of the six frames — the composite is
+   sRGB .308, relative luminance .0798. Measured against that ground:
+
+       white body text        8.09:1     (verdict, the number)
+       --ink-2  rgba .84      6.30:1     (the plain-language line)
+       --ink-3  rgba .70      4.96:1     (the fleet caption, small text)
+       dot rings .55 / .50    3.74 / 3.38:1  (graphics floor is 3:1)
+
+   Over the hazardous frame the same white text is ~19.5:1. Browsers without
+   backdrop-filter get an opaque .92 fill instead (16.6:1) via the @supports
+   block below. A text shadow is the third layer of insurance, and colour is
+   never used to carry a word — only to fill a dot.
+   ===================================================================== */
+:root{
+  --fade:1100ms;
+  --ink:#fff;
+  --ink-2:rgba(255,255,255,.84);
+  --ink-3:rgba(255,255,255,.70);   /* .60 measured 4.12:1 over the brightest ground — under the
+                                      4.5:1 floor for small text. .70 is 4.96:1 worst case. */
+  --pane-fill:rgba(9,12,17,.50);
+  --accent:#dfe6ee;
+  --dark:0;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0;max-width:100%;overflow:hidden}
+body{
+  /* The UNKNOWN ground. Deliberately NOT a photograph: a sky we cannot
+     vouch for must never look like clean air. Neutral graphite reads as
+     "no picture yet", which is the truth. */
+  background:radial-gradient(125% 105% at 50% 32%,#242b34 0%,#161b22 52%,#0a0d11 100%);
+  color:var(--ink);
+  font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* ---------- the photograph: two layers that cross-fade ---------- */
+.sky{
+  position:fixed;inset:0;background-size:cover;background-position:center 55%;
+  background-repeat:no-repeat;opacity:0;transition:opacity var(--fade) ease;will-change:opacity;
+}
+/* Per-band darkening. The bright dawn frames get more; the near-black
+   hazardous frame needs almost none. Keeps the photograph readable as a
+   photograph while holding the pane's surroundings quiet. */
+.veil{position:fixed;inset:0;background:#04060a;opacity:var(--dark);
+      transition:opacity var(--fade) ease;pointer-events:none}
+.scrim{
+  position:fixed;inset:0;pointer-events:none;
+  background:
+    radial-gradient(135% 108% at 50% 46%,rgba(3,5,8,.06) 0%,rgba(3,5,8,.30) 56%,rgba(3,5,8,.70) 100%),
+    linear-gradient(180deg,rgba(3,5,8,.26),rgba(3,5,8,0) 24%,rgba(3,5,8,0) 60%,rgba(3,5,8,.40));
+}
+
+/* ---------- stage ---------- */
+.stage{position:relative;height:100%;display:grid;place-items:center;
+       padding:clamp(1rem,4vw,3rem)}
+
+/* ---------- the one pane ---------- */
+.pane,.fail{
+  position:relative;
+  /* Bug B: the type sizes off THIS BOX, never the viewport. A reading is
+     never allowed to outgrow the pane that holds it. */
+  container-type:inline-size;
+  width:min(46rem,88vw);
+  padding:clamp(1.6rem,5cqi,3.1rem) clamp(1.4rem,5.5cqi,3.2rem) clamp(1.25rem,4cqi,2.3rem);
+  border-radius:clamp(20px,4cqi,34px);
+  background:var(--pane-fill);
+  -webkit-backdrop-filter:blur(30px) saturate(155%) brightness(.58);
+  backdrop-filter:blur(30px) saturate(155%) brightness(.58);
+  box-shadow:0 34px 90px -34px rgba(0,0,0,.8),0 2px 34px rgba(0,0,0,.26),
+             inset 0 1px 0 rgba(255,255,255,.20);
+  text-align:center;
+}
+/* 1px hairline, brightest along the top edge — the iOS glass tell. */
+.pane::after,.fail::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  border:1px solid rgba(255,255,255,.30);
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.30) 38%,rgba(0,0,0,.12) 100%);
+  mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.30) 38%,rgba(0,0,0,.12) 100%);
+}
+/* Firefox and anything else without backdrop-filter: a near-opaque fill,
+   never an unreadable transparent sheet. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .pane,.fail,.sheet-in{background:rgba(8,11,16,.92)}
+  .pane::after,.fail::after{border-color:rgba(255,255,255,.22)}
+}
+.pane[hidden],.fail[hidden],.sheet[hidden],.note[hidden]{display:none!important}
+
+.verdict{
+  margin:0;font-weight:600;letter-spacing:-.022em;line-height:1.04;color:var(--ink);
+  font-size:2.6rem;font-size:clamp(1.85rem,10cqi,4.5rem);
+  text-shadow:0 2px 16px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.55);
+  text-wrap:balance;
+}
+.line{
+  margin:.72em 0 0;color:var(--ink-2);font-weight:400;
+  font-size:1rem;font-size:clamp(.95rem,2.9cqi,1.32rem);line-height:1.45;
+  text-shadow:0 1px 3px rgba(0,0,0,.55);
+  max-width:26em;margin-left:auto;margin-right:auto;text-wrap:pretty;
+}
+.rule{
+  height:1px;width:min(100%,21rem);
+  margin:clamp(1.15rem,3.6cqi,2rem) auto clamp(.95rem,2.8cqi,1.5rem);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.26),transparent);
+}
+.read{
+  margin:0;color:var(--ink-2);font-variant-numeric:tabular-nums;
+  font-size:.9rem;font-size:clamp(.84rem,2.5cqi,1.08rem);
+  text-shadow:0 1px 3px rgba(0,0,0,.55);line-height:1.55;
+}
+/* Bug B, second half: digits never break and never wrap. */
+.read .val{white-space:nowrap;font-weight:650;color:var(--ink)}
+.read .sep{opacity:.45;padding:0 .5em}
+.read .quiet{color:var(--ink-3)}
+
+/* ---------- the other boards: three small dots ---------- */
+.dots{display:flex;justify-content:center;align-items:center;
+      gap:.66rem;margin-top:clamp(.95rem,2.8cqi,1.4rem);min-height:.8rem}
+.dot{width:.66rem;height:.66rem;border-radius:50%;flex:none;
+     border:1.5px solid rgba(255,255,255,.45);background:transparent;
+     transition:background-color 400ms ease,border-color 400ms ease,box-shadow 400ms ease}
+/* filled = this board is measuring right now */
+.dot[data-s="reporting"]{background:var(--accent);border-color:var(--accent);
+     box-shadow:0 0 12px 1px rgba(255,255,255,.30)}
+/* half-filled = awake, between readings */
+.dot[data-s="awake"]{background:rgba(255,255,255,.40);border-color:rgba(255,255,255,.72)}
+/* hollow ring = asleep. Two of three normally look like this: an empty
+   ring is a shape, not an absence — never a blank and never a zero. */
+/* Ring alphas are measured, not picked: .46 and .34 came in at 3.11:1 and 2.39:1
+   against the pane over the brightest frame — the second failed the 3:1 floor for
+   a graphic that carries meaning. .55 / .50 measure 3.74:1 and 3.38:1. */
+.dot[data-s="asleep"]{background:transparent;border-color:rgba(255,255,255,.55)}
+.dot[data-s="unknown"]{background:transparent;border-style:dotted;border-color:rgba(255,255,255,.50)}
+.fleet{
+  margin:.8rem 0 0;color:var(--ink-3);letter-spacing:.015em;
+  font-size:.78rem;font-size:clamp(.72rem,1.95cqi,.88rem);
+  text-shadow:0 1px 3px rgba(0,0,0,.55);
+}
+
+/* ---------- failure: the whole screen is one calm sentence ---------- */
+.fail{text-align:center}
+.fail p.big{
+  margin:0;font-weight:500;letter-spacing:-.015em;line-height:1.2;color:var(--ink);
+  font-size:1.6rem;font-size:clamp(1.25rem,6cqi,2.5rem);
+  text-shadow:0 2px 16px rgba(0,0,0,.5);text-wrap:balance;
+}
+.fail p.tiny{margin:1.6rem 0 0;color:var(--ink-3);font-size:clamp(.7rem,1.9cqi,.82rem)}
+
+/* ---------- corner hint (fades away, returns on movement) ---------- */
+.hint{
+  position:fixed;right:clamp(.8rem,2.4vw,1.6rem);bottom:clamp(.7rem,2.2vw,1.4rem);
+  margin:0;padding:.3rem .62rem;border-radius:999px;
+  /* The pill needs the SAME brightness clamp as the pane. Blur alone left it at
+     2.32:1 over the dawn frame; blur+brightness(.50) with a .52 fill is 7.66:1. */
+  background:rgba(9,12,17,.52);
+  -webkit-backdrop-filter:blur(16px) saturate(140%) brightness(.50);
+  backdrop-filter:blur(16px) saturate(140%) brightness(.50);
+  border:1px solid rgba(255,255,255,.16);
+  color:rgba(255,255,255,.85);font-size:.7rem;letter-spacing:.03em;
+  text-shadow:0 1px 3px rgba(0,0,0,.6);
+  opacity:0;transition:opacity 700ms ease;pointer-events:none;
+}
+.hint.show{opacity:1}
+.hint kbd{font:inherit;font-weight:700;color:#fff}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .hint{background:rgba(8,11,16,.88)}
+}
+
+/* ---------- settings, behind the "s" key only ---------- */
+.sheet{position:fixed;inset:0;display:grid;place-items:center;
+       background:rgba(3,5,8,.62);padding:clamp(.8rem,3vw,2rem);z-index:9}
+.sheet-in{
+  width:min(38rem,94vw);max-height:100%;
+  background:rgba(11,15,21,.72);
+  -webkit-backdrop-filter:blur(34px) saturate(150%);backdrop-filter:blur(34px) saturate(150%);
+  border:1px solid rgba(255,255,255,.16);border-radius:20px;
+  box-shadow:0 30px 90px -30px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,255,255,.18);
+  padding:clamp(1rem,2.6vw,1.5rem);
+}
+.sheet h2{margin:0 0 .2rem;font-size:1.02rem;font-weight:600;letter-spacing:-.01em}
+.sheet .sub{margin:0 0 .9rem;color:var(--ink-3);font-size:.8rem;line-height:1.5}
+.form{display:grid;gap:.6rem .8rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr))}
+.f{display:flex;flex-direction:column;gap:.28rem;min-width:0}
+.f label{font-size:.7rem;letter-spacing:.06em;color:var(--ink-3)}
+.f input[type=text],.f input[type=password]{
+  background:rgba(0,0,0,.42);color:#fff;border:1px solid rgba(255,255,255,.20);
+  border-radius:10px;padding:.5rem .6rem;font:inherit;font-size:.9rem;width:100%;min-width:0}
+.f input:focus-visible{outline:2px solid #7cc7ff;outline-offset:1px}
+.f-check{flex-direction:row;align-items:center;gap:.45rem}
+.f-check label{letter-spacing:0;font-size:.82rem;color:var(--ink-2)}
+.acts{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.9rem}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:10px;padding:.52rem .95rem;
+  background:rgba(255,255,255,.92);color:#0b0f15;border:1px solid transparent}
+button.ghost{background:rgba(255,255,255,.06);color:var(--ink-2);border-color:rgba(255,255,255,.20)}
+button:focus-visible{outline:2px solid #7cc7ff;outline-offset:2px}
+.notes{margin:.9rem 0 0;display:flex;flex-direction:column;gap:.4rem}
+.notes:empty{display:none}
+.note{border-left:2px solid rgba(255,255,255,.35);padding:.3rem .55rem;
+      background:rgba(0,0,0,.30);border-radius:0 8px 8px 0;
+      color:var(--ink-2);font-size:.76rem;line-height:1.5}
+.note b{color:#fff}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;clip-path:inset(50%);overflow:hidden}
+
+/* ---------- language: one quiet pair in the opposite corner ----------
+   The hint pill sits bottom-right and fades. This is the only permanent
+   second object on the wall, so it is small, dim, and never brighter than
+   the reading. Same brightness clamp as the pane and the hint — a control
+   over a dawn photograph is unreadable without it. */
+.lang{
+  position:fixed;left:clamp(.8rem,2.4vw,1.6rem);bottom:clamp(.7rem,2.2vw,1.4rem);
+  display:flex;align-items:center;gap:.1rem;padding:.16rem .28rem;border-radius:999px;
+  background:rgba(9,12,17,.52);
+  -webkit-backdrop-filter:blur(16px) saturate(140%) brightness(.50);
+  backdrop-filter:blur(16px) saturate(140%) brightness(.50);
+  border:1px solid rgba(255,255,255,.16);
+  opacity:.72;transition:opacity 500ms ease;z-index:8;
+}
+.lang:hover,.lang:focus-within{opacity:1}
+.lang button{
+  font:inherit;font-size:.68rem;font-weight:600;letter-spacing:.08em;line-height:1;
+  background:transparent;border:0;border-radius:999px;padding:.26rem .42rem;
+  color:rgba(255,255,255,.66);cursor:pointer;
+  text-shadow:0 1px 3px rgba(0,0,0,.6);
+}
+.lang button[aria-pressed="true"]{color:#fff}
+.lang button:focus-visible{outline:2px solid #7cc7ff;outline-offset:2px}
+.lang .bar{color:rgba(255,255,255,.26);font-size:.68rem;line-height:1}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .lang{background:rgba(8,11,16,.88)}
+}
+
+/* ---------- Thai ----------------------------------------------------
+   Thai stacks marks above AND below the line (สั้ / ญู), so every block
+   that can hold Thai gets more leading and loses the negative tracking
+   that was tuned for Latin display type. Thai also has no spaces between
+   words, so a long string has nowhere to break — break-word is the only
+   thing standing between a verdict and a horizontal overflow.
+
+   The numeric reading is deliberately exempt: breaking "163.3" into
+   "163." and "3" is not a wrapped line, it is a wrong number. */
+html[lang="th"] body{
+  font-family:'Noto Sans Thai','IBM Plex Sans Thai','Sarabun',
+              ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+/* display type: 1.04 clipped the marks outright. 1.35 clears them and still
+   reads as one headline from across a room. */
+html[lang="th"] .verdict{
+  line-height:1.35;letter-spacing:normal;
+  overflow-wrap:break-word;word-break:break-word;
+}
+html[lang="th"] .fail p.big{
+  line-height:1.4;letter-spacing:normal;
+  overflow-wrap:break-word;word-break:break-word;
+}
+/* body text: 1.55+ */
+html[lang="th"] .line,
+html[lang="th"] .read,
+html[lang="th"] .fleet,
+html[lang="th"] .fail p.tiny,
+html[lang="th"] .hint,
+html[lang="th"] .sheet .sub,
+html[lang="th"] .note{
+  line-height:1.6;letter-spacing:normal;
+  overflow-wrap:break-word;word-break:break-word;
+}
+html[lang="th"] .read .val{white-space:nowrap;overflow-wrap:normal;word-break:normal}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ------------------------------------------------------------------ demo ---
+   ?demo= and nothing else turns this on. See DEMO MODE in the script.
+
+   The marker is a SAFETY DEVICE, not part of the picture, so it is drawn in one
+   fixed pair of colours that never tracks the EPA band. A green DEMO bar under a
+   green "Good" wall would borrow the health signal it exists to withdraw. Fixed
+   top AND bottom plus a ring around the viewport, so no crop of a photograph of
+   this wall can lose it, and sized against the viewport rather than capped in
+   rem: on a wall-sized screen a marker that stops growing stops being a marker.
+
+   Nothing here is uppercased by CSS. Every capital is typed as a capital,
+   because text-transform maps "µ" to "M" and turns µg/m³ into a 1000x lie. */
+.wdemo{
+  position:fixed;left:0;right:0;z-index:2147483000;
+  display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;
+  gap:.3em 1em;text-align:center;
+  background:#12100a;color:#ffeec2;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  line-height:1.3;letter-spacing:.12em;
+}
+.wdemo-top{
+  top:0;font-size:clamp(.78rem,2.35vmin,1.6rem);
+  padding:clamp(.35rem,1.1vmin,.7rem) clamp(.6rem,2vw,1.4rem)
+          calc(clamp(.35rem,1.1vmin,.7rem) + .6rem);
+}
+.wdemo-bot{
+  bottom:0;font-size:clamp(.62rem,1.62vmin,1.1rem);
+  padding:calc(clamp(.35rem,1.1vmin,.7rem) + .6rem) clamp(.6rem,2vw,1.4rem)
+          clamp(.35rem,1.1vmin,.7rem);
+}
+/* The caution banding sits inside each bar's own box, reserved in padding, so a
+   measured bar height is the whole marker and nothing sticks out unaccounted. */
+.wdemo-top::after,.wdemo-bot::before{
+  content:"";position:absolute;left:0;right:0;height:.6rem;
+  background:repeating-linear-gradient(135deg,#ffb300 0 .8rem,#12100a .8rem 1.6rem);
+}
+.wdemo-top::after{bottom:0}
+.wdemo-bot::before{top:0}
+.wdemo b{font-weight:800;font-size:1.6em;letter-spacing:.3em;margin-right:-.3em;color:#ffb300}
+/* Thai never takes the wide tracking — it pulls the combining marks apart. */
+.wdemo .wd-th{letter-spacing:normal;font-size:1.12em;color:#ffd166}
+.wdemo .wd-val{
+  border:.14em solid #ffb300;padding:.1em .55em;max-width:100%;
+  color:#fff6df;font-weight:700;letter-spacing:.04em;
+  white-space:normal;                  /* the bar may wrap … */
+}
+.wdemo .wd-val .nb{white-space:nowrap} /* … but a number never leaves its unit */
+.wdemo-ring{
+  position:fixed;inset:0;z-index:2147482999;pointer-events:none;
+  border:clamp(3px,.7vmin,10px) solid #ffb300;
+}
+html[lang="th"] .wdemo{letter-spacing:normal;line-height:1.6}
+</style>
+</head>
+<body>
+
+<div class="sky" id="sky-a"></div>
+<div class="sky" id="sky-b"></div>
+<div class="veil"></div>
+<div class="scrim"></div>
+
+<main class="stage">
+
+  <!-- Only the verdict and its line are a live region. The reading line reprints
+       "4s ago" every second; inside aria-live that would be a screen reader
+       talking over itself forever. -->
+  <section class="pane" id="pane">
+    <p class="verdict" id="verdict" role="status" aria-live="polite">No reading — air quality unknown.</p>
+    <p class="line" id="line" aria-live="polite">connecting</p>
+    <div class="rule"></div>
+    <p class="read" id="read" aria-live="off"><span class="quiet">no reading</span></p>
+    <div class="dots" id="dots" role="list" aria-label="air monitors"></div>
+    <p class="fleet" id="fleet" aria-live="off">connecting</p>
+  </section>
+
+  <section class="fail" id="fail" role="status" aria-live="polite" hidden>
+    <p class="big" id="fail-text">Cannot reach the broker.</p>
+    <p class="tiny" id="fail-hint">Press s to enter the details.</p>
+  </section>
+
+</main>
+
+<p class="hint" id="hint">Press s to enter the details.</p>
+
+<div class="lang" id="lang" role="group" aria-label="Language">
+  <button type="button" id="lang-th" data-l="th" aria-pressed="false">TH</button>
+  <span class="bar" aria-hidden="true">/</span>
+  <button type="button" id="lang-en" data-l="en" aria-pressed="true">EN</button>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in">
+    <h2>Broker connection</h2>
+    <p class="sub">Stored in this browser only, on this device. The passphrase is kept only if
+      you tick <b>Remember passphrase</b> — leave it off on a shared or wall machine.</p>
+    <form class="form" id="form" autocomplete="off">
+      <div class="f"><label for="f-host">Host</label>
+        <input id="f-host" type="text" spellcheck="false" required></div>
+      <div class="f"><label for="f-port">WebSocket port</label>
+        <input id="f-port" type="text" inputmode="numeric" required></div>
+      <div class="f"><label for="f-user">Username</label>
+        <input id="f-user" type="text" spellcheck="false"></div>
+      <div class="f"><label for="f-pass">Passphrase</label>
+        <input id="f-pass" type="password" autocomplete="off"></div>
+      <div class="f"><label for="f-filter">Topic starts with</label>
+        <input id="f-filter" type="text" spellcheck="false" placeholder="dbk/"></div>
+      <div class="f f-check"><input id="f-tls" type="checkbox"><label for="f-tls">TLS (wss)</label></div>
+      <div class="f f-check"><input id="f-remember" type="checkbox"><label for="f-remember">Remember passphrase</label></div>
+      <div class="f acts" style="grid-column:1/-1">
+        <button type="submit">Connect</button>
+        <button type="button" class="ghost" id="btn-forget">Forget</button>
+        <button type="button" class="ghost" id="btn-close">Close</button>
+      </div>
+    </form>
+    <div class="notes" id="notes"></div>
+  </div>
+</div>
+
+<!-- Pinned AND hash-locked: this page can carry a broker passphrase, so a
+     hijacked CDN response must not be able to execute here. -->
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"
+        integrity="sha384-haZiwxTLortiFcYMBEEE1+8ayC+o18YtuwHZv+4WQHoPaLzRjwOV6h7Vva5iLSCZ"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- language
+  // Every word a reader sees comes from here. The Thai is authored Thai, not a
+  // translation of the English beside it — the two columns answer the same
+  // question the way each language actually asks it. Do not re-translate.
+  var STR = {
+    en: {
+      'verdict.good':      'Go outside. The air is clean.',
+      'verdict.moderate':  'Air is okay. Outdoor play is fine.',
+      'verdict.sensitive': 'Sensitive groups take care.',
+      'verdict.unhealthy': 'Unhealthy — stay indoors.',
+      'verdict.verybad':   'Very unhealthy — stay indoors.',
+      'verdict.hazardous': 'Hazardous — stay inside.',
+      'verdict.unknown':   'No reading — air quality unknown.',
+
+      'band.good':      'Good',
+      'band.moderate':  'Moderate',
+      'band.sensitive': 'Unhealthy for sensitive groups',
+      'band.unhealthy': 'Unhealthy',
+      'band.verybad':   'Very unhealthy',
+      'band.hazardous': 'Hazardous',
+      'band.none':      'Not rated',
+
+      'state.offline':   'offline',
+      'state.noreading': 'no reading',
+      'state.stale':     'stale',
+      'state.waiting':   'waiting',
+      'state.live':      'live',
+      'state.fault':     'sensor fault',
+
+      'conn.connecting':  'connecting',
+      'conn.connected':   'connected',
+      'conn.retrying':    'reconnecting',
+      'conn.refused':     'The broker refused this connection.',
+      'conn.unreachable': 'Cannot reach the broker.',
+      'conn.hint':        'Press s to enter the details.',
+
+      'demo.warn': 'SIMULATED DATA, NOT A REAL READING',
+      'demo.at':   'every board faked at',
+
+      'time.justnow':    'just now',
+      'time.secondsAgo': '{n}s ago',
+      'time.minutesAgo': '{n}m ago',
+      'time.hoursAgo':   '{n}h ago',
+
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'US EPA PM2.5 scale'
+    },
+    th: {
+      'verdict.good':      'อากาศดี ออกไปเล่นได้เลย',
+      'verdict.moderate':  'อากาศพอใช้ได้ ออกไปข้างนอกได้ตามปกติ',
+      'verdict.sensitive': 'ถ้าแพ้ง่าย เลี่ยงออกข้างนอกไว้ก่อน',
+      'verdict.unhealthy': 'อากาศไม่ดี อยู่ในบ้านดีกว่า',
+      'verdict.verybad':   'อากาศแย่มาก อย่าเพิ่งออกไปข้างนอก',
+      'verdict.hazardous': 'อันตราย อยู่ในบ้าน ปิดประตูหน้าต่างให้หมด',
+      'verdict.unknown':   'ยังไม่มีค่า ไม่รู้ว่าอากาศเป็นยังไง',
+
+      'band.good':      'ดี',
+      'band.moderate':  'ปานกลาง',
+      'band.sensitive': 'เริ่มมีผลกับคนแพ้ง่าย',
+      'band.unhealthy': 'ไม่ดีต่อสุขภาพ',
+      'band.verybad':   'แย่มาก',
+      'band.hazardous': 'อันตราย',
+      'band.none':      'ไม่มีเกณฑ์',
+
+      'state.offline':   'ไม่ได้ส่งข้อมูล',
+      'state.noreading': 'ยังไม่มีค่า',
+      'state.stale':     'ค่าเก่า',
+      'state.waiting':   'กำลังรอ',
+      'state.live':      'สด',
+      'state.fault':     'เซ็นเซอร์มีปัญหา',
+
+      'conn.connecting':  'กำลังเชื่อมต่อ',
+      'conn.connected':   'เชื่อมต่อแล้ว',
+      'conn.retrying':    'กำลังเชื่อมต่อใหม่',
+      'conn.refused':     'เข้าระบบไม่ได้ บัญชีนี้ไม่มีสิทธิ์',
+      'conn.unreachable': 'ติดต่อ broker ไม่ได้',
+      'conn.hint':        'กด s เพื่อใส่ข้อมูลเข้าระบบ',
+
+      'demo.warn': 'ข้อมูลตัวอย่าง ไม่ใช่ค่าจริง',
+      'demo.at':   'ตั้งค่าทุกบอร์ดเป็น',
+
+      'time.justnow':    'เมื่อกี้',
+      'time.secondsAgo': '{n} วินาทีที่แล้ว',
+      'time.minutesAgo': '{n} นาทีที่แล้ว',
+      'time.hoursAgo':   '{n} ชั่วโมงที่แล้ว',
+
+      'unit.ugm3': 'µg/m³',
+      'scale.epa': 'เกณฑ์ PM2.5 ของ US EPA'
+    }
+  };
+
+  var LANG_KEY = 'air-focus.lang.v1';
+
+  // ?lang= wins (a wall is configured by its URL), then what this browser was
+  // last set to, then what the browser itself asks for, then English.
+  function pickLang(){
+    var q = null;
+    try { q = new URLSearchParams(location.search).get('lang'); } catch (e) {}
+    if (q === 'th' || q === 'en') return q;
+    var s = null;
+    try { s = localStorage.getItem(LANG_KEY); } catch (e) {}   // throws in private mode
+    if (s === 'th' || s === 'en') return s;
+    var n = '';
+    try { n = navigator.language || (navigator.languages && navigator.languages[0]) || ''; } catch (e) {}
+    if (String(n).toLowerCase().indexOf('th') === 0) return 'th';
+    return 'en';
+  }
+
+  var LANG = pickLang();
+
+  // Never returns "undefined" on a wall: missing key falls back to English,
+  // then to the key itself, so a gap is loud in dev and silent-but-legible here.
+  function t(key, vars){
+    var s = (STR[LANG] || STR.en)[key];
+    if (s == null) s = STR.en[key];
+    if (s == null) s = key;
+    s = String(s);
+    if (vars) s = s.replace(/\{(\w+)\}/g, function(m, k){
+      return Object.prototype.hasOwnProperty.call(vars, k) && vars[k] != null ? String(vars[k]) : m;
+    });
+    return s;
+  }
+
+  // ---------------------------------------------------------------- config
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
+  var DEFAULT_PORT = '1884';            // the broker's MQTT-over-WebSocket listener; a browser
+                                        // cannot open the plain TCP MQTT port at all.
+  var STORE_KEY = 'air-focus.conn.v1';
+  var MAX_SUBS = 64;
+  var DEFAULT_EXPIRE = 900;
+  var DEFAULT_FILTER = 'dbk/';
+  var FADE = 1100;                      // must match --fade
+  var FAIL_AFTER_BOOT = 14000;          // never connected this long -> one calm sentence
+  var FAIL_AFTER_DROP = 120000;         // link gone this long -> same
+  var UNSURE_AFTER_DROP = 25000;        // link gone this long -> stop trusting the picture
+
+  // US EPA PM2.5 breakpoints. One row per band carries everything that band
+  // changes about the PICTURE: the photograph, how hard to darken it, the dot
+  // colour. The words moved out — `key` is the lookup into STR, so the answer
+  // to "should we go outside?" is the same sentence in both languages.
+  var BANDS = [
+    { max: 12.0,     key:'good',      img:'img/good.jpg',      dark:.34, accent:'#8fe8b4' },
+    { max: 35.4,     key:'moderate',  img:'img/moderate.jpg',  dark:.30, accent:'#ffdd80' },
+    { max: 55.4,     key:'sensitive', img:'img/sensitive.jpg', dark:.24, accent:'#ffb877' },
+    { max: 150.4,    key:'unhealthy', img:'img/unhealthy.jpg', dark:.18, accent:'#ffa0a0' },
+    { max: 250.4,    key:'verybad',   img:'img/verybad.jpg',   dark:.16, accent:'#cdb6ff' },
+    { max: Infinity, key:'hazardous', img:'img/hazardous.jpg', dark:.22, accent:'#ff93a6' }
+  ];
+
+  var ALIASES = {
+    stat_t:'state_topic', avty_t:'availability_topic', uniq_id:'unique_id',
+    unit_of_meas:'unit_of_measurement', dev_cla:'device_class', stat_cla:'state_class',
+    exp_aft:'expire_after', pl_avail:'payload_available', pl_not_avail:'payload_not_available',
+    dev:'device', val_tpl:'value_template', avty:'availability', ic:'icon'
+  };
+
+  // ---------------------------------------------------------------- state
+  var client = null;
+  var entities = new Map();      // discovery topic -> entity
+  var byState  = new Map();      // state topic     -> Set(discovery topic)
+  var byAvail  = new Map();      // avail topic     -> Set(discovery topic)
+  var byUid    = new Map();      // unique_id       -> discovery topic
+  var boardStatus = new Map();   // board id        -> { raw, at }
+  var subs = new Set();
+  var filteredOut = new Set();
+  var activeFilter = '';
+  var parseErrors = 0;
+  var connState = 'idle';
+  var failKey = null;            // overrides the curtain's sentence; a STR key, never prose
+  var manualStop = false;
+  var everConnected = false;
+  var bootAt = Date.now();
+  var lostAt = 0;                // when the link went away (0 = link is fine)
+
+  var $ = function (id) { return document.getElementById(id); };
+  var elPane = $('pane'), elFail = $('fail'), elFailText = $('fail-text');
+  var elVerdict = $('verdict'), elLine = $('line'), elRead = $('read');
+  var elDots = $('dots'), elFleet = $('fleet'), elSheet = $('sheet'), elNotes = $('notes');
+  var root = document.documentElement;
+
+  // ---------------------------------------------------------------- helpers
+  function esc(s){
+    return String(s).replace(/[&<>"]/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+    });
+  }
+
+  // The EPA scale starts at 0. Without the lower bound a faulty sensor
+  // reporting -999 landed in the first band and rendered a reassuring "Good".
+  function bandFor(n){
+    if (!Number.isFinite(n) || n < 0) return null;
+    for (var i=0;i<BANDS.length;i++) if (n <= BANDS[i].max) return BANDS[i];
+    return BANDS[BANDS.length-1];
+  }
+  function bandIndex(b){ return BANDS.indexOf(b); }
+
+  function isPm(ent){
+    return ent.deviceClass === 'pm25' || /pm ?2\.?5/i.test(ent.measure || ent.title || '');
+  }
+
+  // Hours are the last unit: a reading old enough to need "d ago" expired
+  // hours before it got here, so there is no day form to translate.
+  function ago(ts){
+    if (!ts) return t('state.noreading');
+    var s = Math.max(0, Math.round((Date.now()-ts)/1000));
+    if (s < 2) return t('time.justnow');
+    if (s < 60) return t('time.secondsAgo', { n:s });
+    var m = Math.floor(s/60);
+    if (m < 60) return t('time.minutesAgo', { n:m });
+    return t('time.hoursAgo', { n:Math.floor(m/60) });
+  }
+
+  // A payload may be "0", "0.0", "unknown", "unavailable" or empty. Never NaN.
+  function parseValue(raw){
+    var s = String(raw == null ? '' : raw).trim();
+    if (s === '') return { kind:'empty', text:'no value' };
+    if (/^(unknown|unavailable|none|null|nan|n\/a)$/i.test(s)) return { kind:'unknown', text:s.toLowerCase() };
+    var n = Number(s);
+    if (!Number.isFinite(n)) return { kind:'text', text:s };
+    // The EPA method truncates to one decimal BEFORE applying breakpoints.
+    // Truncate once, here, and classify on the same value that is printed —
+    // truncate, never round: rounding 35.44 up to 35.5 would invent a severity.
+    var n1 = Math.trunc(n*10)/10;
+    var text;
+    if (/^[+-]?\d+(\.\d)?$/.test(s)) text = s.replace(/^\+/,'');  // keep the device's precision: "0", "0.0"
+    else text = n1.toFixed(1);
+    return { kind:'number', n:n, n1:n1, text:text };
+  }
+
+  // Bug C: the discovery "name" is "PM2.5" on every board, so identity can
+  // only come from the state topic. dbk/<BOARD>/<measure>.
+  function boardFromTopic(topic){
+    var m = /^dbk\/([^/]+)\//i.exec(topic || '');
+    return m ? m[1] : null;
+  }
+
+  var storeWorks = true;
+  function loadStore(){
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); }
+    catch (e) { storeWorks = false; return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (e) { try { localStorage.removeItem(STORE_KEY); } catch (e2) {} return null; }
+  }
+  function saveStore(v){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; }
+    catch (e) { storeWorks = false; return false; }
+  }
+  function clearStore(){ try { localStorage.removeItem(STORE_KEY); return true; } catch (e) { return false; } }
+
+  // ---------------------------------------------------------------- notes
+  // Nothing shouts on this wall. Diagnostics live inside the settings sheet,
+  // which is behind a keypress, so the resting screen stays one pane.
+  function setNote(id, html){
+    var el = elNotes.querySelector('.note[data-id="'+id+'"]');
+    if (!el){ el = document.createElement('div'); el.className='note';
+              el.setAttribute('data-id',id); elNotes.appendChild(el); }
+    el.innerHTML = html;
+  }
+  function clearNote(id){
+    var el = elNotes.querySelector('.note[data-id="'+id+'"]');
+    if (el) el.remove();
+  }
+
+  // ---------------------------------------------------------------- subscribe
+  // subRaw is the ONLY place that talks to the broker and is private to this
+  // file's own authored topics. Anything that came off the wire goes through
+  // sub(), which refuses wildcards outright.
+  function subRaw(topic){
+    // In demo mode there is no broker to ask, and there must never be one — but a
+    // synthesised sensor still has to pass the very same subscribe test a real one
+    // does, because onDiscovery() DELETES any entity whose topic it cannot listen
+    // to. Refusing on !client here would silently empty the wall under a confident
+    // DEMO bar. subRaw() stops short of the client itself, a few lines down.
+    if ((!client && !DEMO) || !topic || typeof topic !== 'string') return false;
+    if (subs.has(topic)) return true;
+    if (subs.size >= MAX_SUBS){
+      setNote('subcap','<b>Subscription ceiling reached ('+MAX_SUBS+').</b> Further sensors are ignored so this page cannot flood the broker.');
+      return false;
+    }
+    subs.add(topic);
+    if (DEMO) return true;   // a demo has no broker to ask, and must never look for one
+    client.subscribe(topic,{qos:0},function(err){
+      if (err){
+        subs.delete(topic);
+        setNote('suberr','<b>Subscribe rejected.</b> <span class="mono">'+esc(topic)+'</span> — '+
+          esc(err.message||String(err))+'. The broker ACL may not allow this topic.');
+      }
+    });
+    return true;
+  }
+  function sub(topic){
+    // In demo mode there is no broker to ask, and there must never be one — but a
+    // synthesised sensor still has to pass the very same subscribe test a real one
+    // does, because onDiscovery() DELETES any entity whose topic it cannot listen
+    // to. Refusing on !client here would silently empty the wall under a confident
+    // DEMO bar. subRaw() stops short of the client itself, a few lines down.
+    if ((!client && !DEMO) || !topic || typeof topic !== 'string') return false;
+    // Bug D and its twin: '#' costs ~109 GB/day on the fleet broker, and '+'
+    // is every bit as dangerous — a retained config declaring "+/+/+" pulled
+    // ten of ten unrelated fleet topics in testing. Wire topics must be concrete.
+    if (/[#+]/.test(topic)){
+      setNote('wildcard','<b>Refused a wildcard subscription.</b> A discovery payload asked for '+
+        '<span class="mono">'+esc(topic)+'</span>. Topics that arrive over the wire must name one exact topic.');
+      return false;
+    }
+    return subRaw(topic);
+  }
+  function unsub(topic){
+    if (!topic || !subs.has(topic)) return;
+    if (byState.has(topic) || byAvail.has(topic)) return;
+    subs.delete(topic);
+    if (client){ try { client.unsubscribe(topic); } catch (e) {} }
+  }
+
+  // ---------------------------------------------------------------- discovery
+  function expand(cfg){
+    var out = {};
+    Object.keys(cfg).forEach(function(k){ out[ALIASES[k]||k] = cfg[k]; });
+    var base = out['~'];
+    if (typeof base === 'string' && base){
+      ['state_topic','availability_topic'].forEach(function(k){
+        var v = out[k];
+        if (typeof v !== 'string') return;
+        if (v.charAt(0) === '~') out[k] = base + v.slice(1);
+        else if (v.charAt(v.length-1) === '~') out[k] = v.slice(0,-1) + base;
+      });
+    }
+    if (!out.availability_topic && Array.isArray(out.availability) && out.availability.length){
+      var a = out.availability[0];
+      if (a && typeof a.topic === 'string'){
+        out.availability_topic = a.topic;
+        if (a.payload_available) out.payload_available = a.payload_available;
+        if (a.payload_not_available) out.payload_not_available = a.payload_not_available;
+      }
+    }
+    return out;
+  }
+
+  function index(map,key,dtopic){
+    if (!key) return;
+    if (!map.has(key)) map.set(key,new Set());
+    map.get(key).add(dtopic);
+  }
+  function unindex(map,key,dtopic){
+    if (!key || !map.has(key)) return;
+    var set = map.get(key);
+    set.delete(dtopic);
+    if (set.size === 0){ map.delete(key); unsub(key); }
+  }
+  function removeEntity(dtopic){
+    var gone = entities.get(dtopic);
+    if (!gone) return false;
+    entities.delete(dtopic);
+    if (gone.uid && byUid.get(gone.uid) === dtopic) byUid.delete(gone.uid);
+    unindex(byState, gone.stateTopic, dtopic);
+    unindex(byAvail, gone.availTopic, dtopic);
+    return true;
+  }
+  function matchesFilter(topic){ return !activeFilter || String(topic).indexOf(activeFilter) === 0; }
+
+  function onDiscovery(dtopic,text){
+    if (text.trim() === ''){                 // empty retained payload = HA delete
+      filteredOut.delete(dtopic);
+      if (removeEntity(dtopic)) schedulePaint();
+      return;
+    }
+    var cfg;
+    try { cfg = JSON.parse(text); }
+    catch (e){
+      parseErrors++;
+      setNote('parse','<b>'+parseErrors+' malformed discovery payload'+(parseErrors===1?'':'s')+
+        ' ignored.</b> Latest: <span class="mono">'+esc(dtopic)+'</span>. Everything else still works.');
+      return;
+    }
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)){ parseErrors++; return; }
+
+    cfg = expand(cfg);
+    if (typeof cfg.state_topic !== 'string' || !cfg.state_topic) return;
+
+    if (!matchesFilter(cfg.state_topic)){
+      filteredOut.add(dtopic);
+      if (removeEntity(dtopic)) schedulePaint();
+      return;
+    }
+    filteredOut.delete(dtopic);
+
+    var parts = dtopic.split('/');
+    var dev = cfg.device && typeof cfg.device === 'object' ? cfg.device : null;
+    var devName = dev && typeof dev.name === 'string' ? dev.name : '';
+    var measure = typeof cfg.name === 'string' && cfg.name ? cfg.name : (parts[2] || 'sensor');
+    var expire = Number(cfg.expire_after);
+    var uid = typeof cfg.unique_id === 'string' && cfg.unique_id ? cfg.unique_id : '';
+    var board = boardFromTopic(cfg.state_topic);
+    var newAvail = typeof cfg.availability_topic === 'string' ? cfg.availability_topic : '';
+
+    // HA collapses two discovery topics carrying one unique_id into one entity.
+    if (uid && byUid.has(uid) && byUid.get(uid) !== dtopic) removeEntity(byUid.get(uid));
+
+    var ent = entities.get(dtopic) || { key:dtopic, value:null, at:0, availRaw:null, availAt:0 };
+
+    // Drop stale index entries AND the value read through them: a number from
+    // DBK-001 must never survive under a card now named DBK-999.
+    if (ent.stateTopic && ent.stateTopic !== cfg.state_topic){
+      unindex(byState, ent.stateTopic, dtopic);
+      ent.value = null; ent.at = 0; ent.raw = undefined;
+    }
+    if (ent.availTopic && ent.availTopic !== newAvail){
+      unindex(byAvail, ent.availTopic, dtopic);
+      ent.availRaw = null; ent.availAt = 0;
+    }
+    if (ent.uid && ent.uid !== uid && byUid.get(ent.uid) === dtopic) byUid.delete(ent.uid);
+
+    // Bug C: the board id parsed from state_topic is the identity. The
+    // discovery name ("PM2.5" on all three boards) is only the measurement.
+    ent.title    = board || devName || uid || measure;
+    ent.measure  = measure;
+    ent.uid      = uid;
+    ent.stateTopic = cfg.state_topic;
+    ent.availTopic = newAvail;
+    ent.unit     = typeof cfg.unit_of_measurement === 'string' ? cfg.unit_of_measurement : '';
+    ent.deviceClass = typeof cfg.device_class === 'string' ? cfg.device_class : '';
+    ent.expire   = Number.isFinite(expire) && expire > 0 ? expire : DEFAULT_EXPIRE;
+    ent.pAvail   = typeof cfg.payload_available === 'string' ? cfg.payload_available : 'online';
+    ent.pNot     = typeof cfg.payload_not_available === 'string' ? cfg.payload_not_available : 'offline';
+    ent.templated = !!cfg.value_template;
+    ent.board    = board;
+
+    // A sensor this page cannot listen to must never occupy the wall.
+    if (!sub(ent.stateTopic)){ if (removeEntity(dtopic)) schedulePaint(); return; }
+
+    entities.set(dtopic, ent);
+    if (uid) byUid.set(uid, dtopic);
+    index(byState, ent.stateTopic, dtopic);
+    if (ent.availTopic){ index(byAvail, ent.availTopic, dtopic); sub(ent.availTopic); }
+
+    schedulePaint();
+  }
+
+  // ---------------------------------------------------------------- messages
+  function onMessage(topic,payload){
+    var text;
+    try { text = new TextDecoder('utf-8').decode(payload); }
+    catch (e) { text = String(payload); }
+
+    if (/^homeassistant\/.+\/config$/.test(topic)){
+      try { onDiscovery(topic,text); }
+      catch (e){
+        parseErrors++;
+        setNote('parse','<b>A discovery payload could not be applied.</b> '+esc(e.message||''));
+      }
+      return;
+    }
+
+    var now = Date.now();
+
+    // Board availability, even where discovery declared no availability_topic.
+    var b = /^dbk\/([^/]+)\/status$/i.exec(topic);
+    if (b) boardStatus.set(b[1], { raw:text.trim(), at:now });
+
+    if (byState.has(topic)){
+      byState.get(topic).forEach(function(k){
+        var e = entities.get(k);
+        if (!e) return;
+        e.raw = text; e.value = parseValue(text); e.at = now;
+      });
+    }
+    if (byAvail.has(topic)){
+      byAvail.get(topic).forEach(function(k){
+        var e = entities.get(k);
+        if (!e) return;
+        e.availRaw = text.trim(); e.availAt = now;
+      });
+    }
+    schedulePaint();
+  }
+
+  // ---------------------------------------------------------------- entity state
+  function availabilityOf(ent){
+    if (ent.availTopic && ent.availRaw !== null){
+      if (ent.availRaw === ent.pNot) return 'offline';
+      if (ent.availRaw === ent.pAvail) return 'online';
+      return 'unknown';
+    }
+    if (ent.board && boardStatus.has(ent.board)){
+      var raw = boardStatus.get(ent.board).raw;
+      if (raw === ent.pNot || raw === 'offline') return 'offline';
+      if (raw === ent.pAvail || raw === 'online') return 'online';
+    }
+    return 'unknown';
+  }
+
+  function stateOf(ent){
+    if (availabilityOf(ent) === 'offline') return 'offline';
+    if (!ent.at || !ent.value) return 'waiting';
+    if (ent.value.kind === 'unknown' || ent.value.kind === 'empty') return 'unknown';
+    // A concentration cannot be negative. Checked before stale and before live
+    // so a broken sensor is never dressed up as a reading — least of all a green one.
+    if (ent.value.kind === 'number' && ent.value.n1 < 0 && isPm(ent)) return 'fault';
+    if ((Date.now()-ent.at)/1000 > ent.expire) return 'stale';
+    return 'live';
+  }
+
+  // ---------------------------------------------------------------- boards
+  function boardIds(){
+    var s = new Set();
+    boardStatus.forEach(function(v,k){ s.add(k); });
+    entities.forEach(function(e){ if (e.board) s.add(e.board); });
+    return Array.from(s).sort();
+  }
+
+  function boardStateOf(id){
+    var st = boardStatus.has(id) ? boardStatus.get(id).raw : null;
+    if (st === 'offline') return 'asleep';
+    var reporting = false, waiting = false;
+    entities.forEach(function(e){
+      if (e.board !== id || !isPm(e)) return;
+      var s = stateOf(e);
+      if (s === 'live') reporting = true;
+      else if (s === 'waiting' || s === 'stale' || s === 'unknown' || s === 'fault') waiting = true;
+    });
+    if (reporting) return 'reporting';
+    if (st === 'online') return 'awake';
+    if (waiting) return 'unknown';
+    return 'unknown';
+  }
+
+  // ---------------------------------------------------------------- the sky
+  var layers = [$('sky-a'), $('sky-b')];
+  var top = 0, curImg = null, fadeT = null, skyToken = 0;
+  var preloaded = new Set();
+
+  function preload(src){
+    if (!src || preloaded.has(src)) return;
+    preloaded.add(src);
+    var i = new Image();
+    try { i.decoding = 'async'; } catch (e) {}
+    i.src = src;
+  }
+  function preloadAround(i){
+    preload(BANDS[i].img);
+    if (i > 0) preload(BANDS[i-1].img);
+    if (i < BANDS.length-1) preload(BANDS[i+1].img);
+  }
+
+  function applySky(src){
+    var incoming = layers[1-top], outgoing = layers[top];
+    incoming.style.backgroundImage = 'url("' + src + '")';
+    incoming.style.zIndex = '1';
+    outgoing.style.zIndex = '0';
+    incoming.style.opacity = '1';
+    if (fadeT) clearTimeout(fadeT);
+    fadeT = setTimeout(function(){ outgoing.style.opacity = '0'; }, FADE + 90);
+    top = 1 - top;
+  }
+
+  // src === null means UNKNOWN: fade every photograph away and let the neutral
+  // graphite ground show through. An unknown sky is never the clear dawn.
+  function showSky(src){
+    if (src === curImg) return;
+    curImg = src;
+    var token = ++skyToken;
+    if (!src){
+      if (fadeT) clearTimeout(fadeT);
+      layers[0].style.opacity = '0';
+      layers[1].style.opacity = '0';
+      return;
+    }
+    // Decode before revealing so a band change is a cross-fade, never a flash.
+    var im = new Image();
+    var done = false;
+    var go = function(){ if (done || token !== skyToken) return; done = true; applySky(src); };
+    im.onload = go;
+    im.onerror = go;
+    im.src = src;
+    if (im.complete) go();
+    setTimeout(go, 2500);
+  }
+
+  // ---------------------------------------------------------------- paint
+  var pending = false;
+  function schedulePaint(){
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function(){ pending = false; paint(); });
+  }
+
+  function linkMode(){
+    // A demo is never waiting for a link, and after FAIL_AFTER_BOOT it would
+    // otherwise fall into 'fail' and raise the apology curtain over the whole
+    // wall — which would hide the one thing a demo exists to show, including
+    // every one of the six band photographs, since showSky() is only reached
+    // from the 'ok' branch.
+    if (DEMO) return 'ok';
+    if (connState === 'fatal') return 'fail';
+    if (!everConnected) return (Date.now()-bootAt > FAIL_AFTER_BOOT) ? 'fail' : 'boot';
+    if (lostAt && Date.now()-lostAt > FAIL_AFTER_DROP) return 'fail';
+    if (lostAt && Date.now()-lostAt > UNSURE_AFTER_DROP) return 'lost';
+    return 'ok';
+  }
+
+  function paintDots(ids){
+    // Rebuild only when the shape changed; otherwise just restate each dot.
+    if (elDots.childElementCount !== ids.length){
+      elDots.textContent = '';
+      ids.forEach(function(){
+        var d = document.createElement('span');
+        d.className = 'dot'; d.setAttribute('role','listitem');
+        elDots.appendChild(d);
+      });
+    }
+    ids.forEach(function(id,i){
+      var st = boardStateOf(id);
+      var d = elDots.children[i];
+      d.setAttribute('data-s', st);
+      // Authored words only — the board id is passed through verbatim, and the
+      // separator is a middle dot so the label needs no conjunction in either
+      // language.
+      d.setAttribute('title', id + ' · ' + t(DOT_WORD[st]));
+      d.setAttribute('aria-label', id + ' ' + t(DOT_WORD[st]));
+    });
+  }
+
+  // The dot's four shapes, said in words. Each maps onto one vetted state word.
+  var DOT_WORD = { reporting:'state.live', awake:'state.waiting',
+                   asleep:'state.offline', unknown:'state.noreading' };
+
+  // What the link itself is doing, for the moments when no board has spoken yet.
+  function connWordKey(){
+    // Said first, because it is the only one of these that is not about a socket:
+    // in demo mode there is no link at all, and a pill still reading "connecting"
+    // would be the one line on this wall implying real air is on its way.
+    if (DEMO) return 'conn.demo';
+    if (connState === 'fatal') return 'conn.refused';
+    if (connState === 'connected') return 'state.waiting';
+    if (connState === 'reconnecting') return 'conn.retrying';
+    return 'conn.connecting';
+  }
+
+  function say(verdict, line){
+    if (elVerdict.textContent !== verdict) elVerdict.textContent = verdict;
+    if (elLine.textContent !== line) elLine.textContent = line;
+  }
+
+  function paint(){
+    var mode = linkMode();
+    var ids = boardIds();
+
+    // ---- who is where. Counted once; the verdict line and the fleet caption
+    //      both name the boards out of this.
+    var counts = { reporting:0, awake:0, asleep:0, unknown:0 };
+    var named  = { reporting:[], awake:[], asleep:[], unknown:[] };
+    ids.forEach(function(id){
+      var st = boardStateOf(id);
+      counts[st]++;
+      named[st].push(id);          // already the board id off the topic
+    });
+
+    // ---- gather PM2.5 entities by state
+    var live = [], faults = 0, stales = 0, waits = 0;
+    entities.forEach(function(e){
+      if (!isPm(e)) return;
+      var st = stateOf(e);
+      if (st === 'live' && e.value && e.value.kind === 'number'){
+        var b = bandFor(e.value.n1);
+        if (b) live.push({ e:e, n:e.value.n1, band:b });
+      }
+      else if (st === 'fault') faults++;
+      else if (st === 'stale') stales++;
+      else if (st === 'waiting' || st === 'unknown') waits++;
+    });
+
+    // ---- failure: the whole screen becomes one calm sentence
+    if (mode === 'fail'){
+      elPane.hidden = true;
+      elFail.hidden = false;
+      showSky(null);
+      root.style.setProperty('--dark','0');
+      var failMsg = t(failKey || (connState === 'fatal' ? 'conn.refused' : 'conn.unreachable'));
+      if (elFailText.textContent !== failMsg) elFailText.textContent = failMsg;
+      return;
+    }
+    elFail.hidden = true;
+    elPane.hidden = false;
+
+    // ---- the worst live reading is the one the wall answers with
+    var worst = null;
+    for (var i=0;i<live.length;i++) if (!worst || live[i].n > worst.n) worst = live[i];
+
+    if (worst && mode === 'ok'){
+      var band = worst.band, bi = bandIndex(band);
+      showSky(band.img);
+      root.style.setProperty('--dark', String(band.dark));
+      root.style.setProperty('--accent', band.accent);
+      preloadAround(bi);
+      // The big line is the answer. The quiet line beneath says which band the
+      // answer came from, and whose scale drew the band.
+      say(t('verdict.' + band.key), t('band.' + band.key) + ' · ' + t('scale.epa'));
+
+      // Number small beneath. Unit is wire text, printed verbatim — never
+      // uppercased (bug A: CSS uppercase maps "µ" to "M": a 1000x unit error).
+      // "PM2.5" and the board id are not prose and are the same in both
+      // languages, so they sit between middle dots rather than inside a
+      // sentence that would need translating.
+      var unit = worst.e.unit ? ' ' + esc(worst.e.unit) : '';
+      var who  = worst.e.title;           // board id, from the state topic
+      var html = '<span class="val">' + esc(worst.e.value.text) + unit + '</span>' +
+                 '<span class="sep">·</span>PM2.5' +
+                 '<span class="sep">·</span>' + esc(who) +
+                 '<span class="sep">·</span><span class="quiet">' + esc(ago(worst.e.at)) + '</span>';
+      if (elRead.innerHTML !== html) elRead.innerHTML = html;
+    } else {
+      // ---- UNKNOWN. Never the clear-dawn photograph, never a number.
+      showSky(null);
+      root.style.setProperty('--dark','0');
+      root.style.setProperty('--accent','#dfe6ee');
+
+      // One verdict for every shade of "we do not know", and beneath it the one
+      // word that says WHICH shade — plus, where it is knowable, which board.
+      var why;
+      if (mode === 'lost')                                 why = t('conn.retrying');
+      else if (ids.length === 0)                           why = t(connWordKey());
+      else if (faults > 0 && waits === 0 && stales === 0)  why = t('state.fault');
+      else if (stales > 0)                                 why = t('state.stale');
+      else if (waits > 0)                                  why = withNames(named.awake.concat(named.unknown), 'state.waiting');
+      else                                                 why = withNames(named.asleep, 'state.offline');
+      say(t('verdict.unknown'), why);
+
+      var quiet = '<span class="quiet">' + esc(t('state.noreading')) + '</span>';
+      if (elRead.innerHTML !== quiet) elRead.innerHTML = quiet;
+    }
+
+    // ---- the other boards: three small dots + one quiet line
+    paintDots(ids);
+    // The tally NAMES the boards it is counting. A bare "2 asleep" tells whoever keeps
+    // these boards running that something is down but not which thing — the wall could
+    // not be used to go and fix the sensor it is reporting on. The ids cost no layout:
+    // they replace the bare count in the phrase that was already there.
+    var fleet;
+    if (ids.length === 0){
+      fleet = t(connWordKey());
+    } else {
+      var bits = [counts.reporting + '/' + ids.length + ' ' + t('state.live')];
+      if (counts.asleep)  bits.push(withNames(named.asleep,  'state.offline'));
+      if (counts.awake)   bits.push(withNames(named.awake,   'state.waiting'));
+      if (counts.unknown) bits.push(withNames(named.unknown, 'state.noreading'));
+      fleet = bits.join(' · ');
+    }
+    if (elFleet.textContent !== fleet) elFleet.textContent = fleet;
+  }
+
+  // "DBK-001 offline" / "DBK-001 ไม่ได้ส่งข้อมูล". The ids are data, the word is
+  // vetted, and a SPACE joins them — Thai's own phrase separator, and the same
+  // shape the English caption always had. The middle dot is left to do one job
+  // only: separating whole groups. Sharing it did both jobs badly, running
+  // "DBK-007 offline · DBK-002 waiting" into one undifferentiated chain.
+  function withNames(list, key){
+    return list.length ? nameList(list) + ' ' + t(key) : t(key);
+  }
+
+
+  // "DBK-001", "DBK-001 and DBK-010", "A, B and C" — the ids as a reader would
+  // say them. Thai gets the same ids separated by middle dots: the conjunction
+  // would be invented prose, and Thai does not punctuate a list this way anyway.
+  function nameList(list){
+    if (!list.length) return '';
+    if (list.length === 1) return list[0];
+    if (LANG !== 'en') return list.join(' · ');
+    if (list.length === 2) return list[0] + ' and ' + list[1];
+    return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+  }
+
+  setInterval(paint, 1000);   // ages "4s ago", expires readings, arms the fail screen
+
+  // ---------------------------------------------------------------- connect
+  function describe(err){
+    var code = err && (err.code !== undefined ? err.code : err.reasonCode);
+    var map = { 1:'the broker rejected the MQTT protocol version',
+                2:'the broker rejected this client id',
+                3:'the broker is unavailable',
+                4:'the username or passphrase is wrong',
+                5:'this account is not authorised for the broker' };
+    if (map[code]) return { text:map[code], fatal:(code===2||code===4||code===5) };
+    var m = String((err && err.message) || err || 'unknown error');
+    if (/not authoriz|bad user/i.test(m)) return { text:m, fatal:true };
+    return { text:m, fatal:false };
+  }
+
+  function disconnect(){
+    manualStop = true;
+    if (client){ try { client.end(true); } catch (e) {} client = null; }
+    subs.clear();
+  }
+
+
+  /* ===================================================================
+     DEMO MODE — opt-in from the address bar, and from nowhere else.
+
+       ?demo=163.3     every board publishes that value
+       ?demo=<band>    good | moderate | sensitive | unhealthy | verybad | hazardous
+       ?demo=cycle     all six bands in turn, four seconds each (also the empty value)
+       ?demo=mixed     the fleet as it usually is: one live, one stale, one dark
+
+     Why this is safe to leave in a file that hangs on a school wall:
+
+       1. It cannot start itself. One switch, in the URL. Nothing is written to
+          storage and nothing defaults to it, so a reload without the parameter
+          is an ordinary wall display again, byte for byte.
+       2. It never opens a socket. connect() refuses outright while DEMO is set,
+          and subRaw() returns before it can reach a client — so real air and
+          invented air can never appear on one screen.
+       3. It cannot be missed or cropped away: two fixed bars, top and bottom, a
+          ring around the whole viewport, and "DEMO ·" in the tab title. The bars
+          carry the VALUE being simulated, not merely the word DEMO.
+       4. It renders through the SHIPPED path. The scene is emitted as discovery
+          configs and state payloads — the same abbreviated-key JSON and the same
+          UTF-8 bytes a board puts on the wire — and pushed through onDiscovery()
+          and onMessage(). There is no second renderer, so the alias expansion,
+          the wildcard refusal, the unique_id eviction, the EPA truncate-then-band
+          and the availability rules all still run, and the band-reactive backdrop
+          is swapped by exactly the code the broker drives.
+
+     An unrecognised value FAILS TOWARD THE DEMO, never toward live air: whoever
+     typed ?demo= is shown the mixed fleet with their token echoed back and
+     crossed out. Silently handing them today's real reading, under an expectation
+     of a simulation, is the more dangerous of the two answers — it is the one
+     that can send a child outside during a hazardous episode.
+     =================================================================== */
+
+  // Written as escapes, not as a literal: the micro sign and the letter M are one
+  // careless transform apart, and µg/m³ read as mg/m³ is a 1000x lie about the air.
+  // Spelled this way no editor, pipeline or copy-paste can bend it.
+  var DEMO_UNIT = '\u00b5g/m\u00b3';
+
+  // A value from the middle of each band, so a screenshot shows that band's
+  // colour and wording rather than an edge case that could belong to either
+  // neighbour. `wire` is the English payload a board publishes on
+  // air_quality_level — it is data, not display copy, and is never shown as-is.
+  var DEMO_BANDS = [
+    { key:'good',      max:12.0,     mid:6,   wire:'Good' },
+    { key:'moderate',  max:35.4,     mid:24,  wire:'Moderate' },
+    { key:'sensitive', max:55.4,     mid:45,  wire:'Unhealthy for Sensitive Groups' },
+    { key:'unhealthy', max:150.4,    mid:103, wire:'Unhealthy' },
+    { key:'verybad',   max:250.4,    mid:200, wire:'Very Unhealthy' },
+    { key:'hazardous', max:Infinity, mid:320, wire:'Hazardous' }
+  ];
+
+  var demoBad = '';                  // the token that was not understood, as typed
+  var DEMO = readDemo();             // decided ONCE, here, and never re-read
+  var demoStep = 0, demoStarted = false, demoDeclared = false;
+  var demoValEl = null, demoTopEl = null, demoBotEl = null, demoFootEl = null;
+  var demoLast = null;
+
+  function demoBandOf(n) {
+    for (var i = 0; i < DEMO_BANDS.length; i++) { if (n <= DEMO_BANDS[i].max) return DEMO_BANDS[i]; }
+    return DEMO_BANDS[DEMO_BANDS.length - 1];
+  }
+  function demoByKey(k) {
+    for (var i = 0; i < DEMO_BANDS.length; i++) { if (DEMO_BANDS[i].key === k) return DEMO_BANDS[i]; }
+    return null;
+  }
+
+  function readDemo() {
+    var q;
+    try { q = new URLSearchParams(location.search); } catch (e) { return null; }
+    if (!q.has('demo')) return null;              // the real wall, untouched
+    var raw = q.get('demo');
+    var s = String(raw == null ? '' : raw).trim().toLowerCase();
+    if (s === '' || s === 'cycle') return { mode:'cycle' };
+    if (s === 'mixed') return { mode:'mixed' };
+    var b = demoByKey(s);
+    if (b) return { mode:'value', value:b.mid };
+    // Digits only. Number('') is 0 and Number('-') is NaN; letting either through
+    // would answer a question nobody asked with a confident green zero.
+    if (/^\d+(\.\d+)?$/.test(s)) return { mode:'value', value:Number(s) };
+    demoBad = String(raw);
+    return { mode:'mixed' };
+  }
+
+  // Truncate, never round — the same rule the shipped parser applies to a payload.
+  function demoTrunc(n) { return Math.trunc(n * 10) / 10; }
+
+  var demoEnc = (typeof TextEncoder === 'function') ? new TextEncoder() : null;
+
+  // Exactly the bytes a board puts on the wire, into the handler the broker feeds.
+  // Encoded rather than handed over as a string so the UTF-8 decode that protects
+  // µ is part of what the demo exercises.
+  function demoPublish(topic, text) {
+    var s = String(text);
+    try { onMessage(topic, demoEnc ? demoEnc.encode(s) : s); }
+    catch (e) { /* one bad synthetic message must not stop the scene */ }
+  }
+
+  // DBK-002 publishes more than PM2.5; the other two send PM2.5 only, which is
+  // itself worth demonstrating — a dense layout has to survive both.
+  var DEMO_EXTRA = [
+    { leaf:'pm1_0',             name:'PM1.0',             cls:'pm1',             unit:DEMO_UNIT },
+    { leaf:'pm10',              name:'PM10',              cls:'pm10',            unit:DEMO_UNIT },
+    { leaf:'wi-fi_rssi',        name:'WiFi Signal',       cls:'signal_strength', unit:'dBm' },
+    { leaf:'uptime',            name:'Uptime',            cls:'duration',        unit:'s' },
+    { leaf:'air_quality_level', name:'Air Quality Level', cls:'',                unit:'' }
+  ];
+
+  function demoDeclare(id) {
+    var slug = id.toLowerCase();
+    var list = [{ leaf:'pm2_5', name:'PM2.5', cls:'pm25', unit:DEMO_UNIT }];
+    if (id === 'DBK-002') list = list.concat(DEMO_EXTRA);
+    list.forEach(function (s) {
+      // Abbreviated keys and a '~' base on purpose: alias expansion is part of
+      // what a demo has to prove still works, not something to step around.
+      var cfg = {
+        '~': 'dbk/' + id,
+        name: s.name,                 // every board calls its sensor the same thing —
+        stat_t: '~/' + s.leaf,        // identity has to come from the board id
+        avty_t: '~/status',
+        uniq_id: slug + '-' + s.leaf,
+        exp_aft: 900,
+        dev: { name: 'Kit4Kids ' + id, ids: [slug] }
+      };
+      if (s.unit) { cfg.unit_of_meas = s.unit; cfg.stat_cla = 'measurement'; }
+      if (s.cls) cfg.dev_cla = s.cls;
+      demoPublish('homeassistant/sensor/' + slug + '/' + s.leaf + '/config', JSON.stringify(cfg));
+    });
+  }
+
+  // When a message arrived is the only thing that makes a reading stale, so
+  // back-date the very field onMessage() just wrote. No parallel clock and no
+  // second state model — the shipped expiry rule still decides.
+  function demoAge(id, secondsAgo) {
+    if (!secondsAgo) return;
+    var t0 = Date.now() - secondsAgo * 1000;
+    entities.forEach(function (e) { if (e.board === id && e.at) e.at = t0; });
+  }
+
+  function demoScene() {
+    if (DEMO.mode === 'mixed') {
+      // What the fleet actually looks like most days, and the layout that breaks
+      // first: a three-digit reading beside two boards with nothing to say. 163.3
+      // is the string that once wrapped between "163." and "3"; it stays here as
+      // a regression test.
+      return [
+        { id:'DBK-001', up:true,  pm:41.8,  age:26 * 60 },   // older than expire_after
+        { id:'DBK-002', up:true,  pm:163.3, age:11 },
+        { id:'DBK-010', up:false, pm:24.6,  age:4 * 3600 }
+      ];
+    }
+    var v = (DEMO.mode === 'cycle')
+      ? DEMO_BANDS[demoStep % DEMO_BANDS.length].mid
+      : DEMO.value;
+    return [
+      { id:'DBK-001', up:true, pm:v, age:9 },
+      { id:'DBK-002', up:true, pm:v, age:6 },
+      { id:'DBK-010', up:true, pm:v, age:14 }
+    ];
+  }
+
+  function demoApply() {
+    var scene = demoScene();
+    if (!demoDeclared) { scene.forEach(function (b) { demoDeclare(b.id); }); demoDeclared = true; }
+    scene.forEach(function (b) {
+      var pm = demoTrunc(b.pm);
+      demoPublish('dbk/' + b.id + '/status', b.up ? 'online' : 'offline');
+      demoPublish('dbk/' + b.id + '/pm2_5', pm.toFixed(1));
+      if (b.id === 'DBK-002') {
+        // Derived from the same reading rather than invented separately: a PM1
+        // that contradicts PM2.5 teaches a wrong shape to anyone reading a dense
+        // board.
+        demoPublish('dbk/DBK-002/pm1_0', demoTrunc(b.pm * 0.62).toFixed(1));
+        demoPublish('dbk/DBK-002/pm10',  demoTrunc(b.pm * 1.45).toFixed(1));
+        demoPublish('dbk/DBK-002/wi-fi_rssi', '-58');
+        demoPublish('dbk/DBK-002/uptime', String(93124 + demoStep * 4));
+        demoPublish('dbk/DBK-002/air_quality_level', demoBandOf(pm).wire);
+      }
+      demoAge(b.id, b.age);
+    });
+    demoLast = scene;
+    demoMark(scene);
+    paint();
+  }
+
+  /* -------------------------------------------------- the non-negotiable bit --
+     Two fixed bars and a ring. They do not fade, they do not scroll away, they
+     cannot be dismissed, and they carry the word DEMO, the Thai ตัวอย่าง, and the
+     VALUE being simulated — "DEMO" alone leaves a reader wondering which part of
+     the screen is pretending. */
+  function demoMark(scene) {
+    if (!demoValEl) return;
+    var parts = [];
+    if (DEMO.mode === 'mixed') {
+      scene.forEach(function (b) {
+        parts.push(b.id + ' ' + (!b.up ? 'offline'
+          : b.age > 900 ? 'stale'
+          : demoTrunc(b.pm).toFixed(1) + ' ' + DEMO_UNIT));
+      });
+    } else {
+      var v = demoTrunc(scene[0].pm);
+      parts.push('every board at ' + v.toFixed(1) + ' ' + DEMO_UNIT +
+                 ' · ' + demoBandOf(v).wire);
+      // A glyph and a duration rather than a clause: this fragment has no
+      // reviewed Thai and needs none, because it is not words.
+      if (DEMO.mode === 'cycle') parts.push('↻ 4s');
+    }
+    // Echoed back exactly as typed, with a cross. Whoever put a bad token in the
+    // address bar reads their own token, in whatever language they typed it.
+    if (demoBad) parts.push('?demo=' + demoBad + ' ✗');
+
+    demoValEl.textContent = '';
+    parts.forEach(function (p, i) {
+      if (i) demoValEl.appendChild(document.createTextNode(' · '));
+      var s = document.createElement('span');
+      s.className = 'nb';
+      s.textContent = p;
+      demoValEl.appendChild(s);
+    });
+  }
+
+  function demoBar(cls) {
+    var el = document.createElement('div');
+    el.className = 'wdemo ' + cls;
+    var w = document.createElement('b');
+    w.textContent = 'DEMO';
+    var th = document.createElement('span');
+    th.className = 'wd-th';
+    th.textContent = 'ตัวอย่าง';   // ตัวอย่าง
+    el.appendChild(w);
+    el.appendChild(th);
+    return el;
+  }
+
+  // The warning is printed in BOTH languages, always, whatever the wall is set
+  // to. It is a safety marker, not copy: a Thai-speaking child and an
+  // English-reading visitor must both be told these numbers are invented, and
+  // neither of them pressed the language button.
+  function demoBuild() {
+    document.documentElement.setAttribute('data-demo', DEMO.mode);
+
+    var top = demoBar('wdemo-top');
+    top.setAttribute('role', 'status');
+    var en = document.createElement('span');
+    en.textContent = 'SIMULATED DATA, NOT A REAL READING';
+    var th = document.createElement('span');
+    th.className = 'wd-th';
+    th.textContent = 'ข้อมูลตัวอย่าง ' +
+                     'ไม่ใช่ค่าจริง';
+    demoValEl = document.createElement('span');
+    demoValEl.className = 'wd-val';
+    top.appendChild(en);
+    top.appendChild(th);
+    top.appendChild(demoValEl);
+
+    var bot = demoBar('wdemo-bot');
+    demoFootEl = document.createElement('span');
+    demoFootEl.textContent = 'every number on this screen is invented for design testing · ' +
+      'no broker is connected · remove ?demo= from the address for the real wall';
+    var botTh = document.createElement('span');
+    botTh.className = 'wd-th';
+    botTh.textContent = 'ทุกตัวเลขสร้าง' +
+      'ขึ้นมาเพื่อทดสอบหน้าจอ';
+    bot.appendChild(demoFootEl);
+    bot.appendChild(botTh);
+
+    var ring = document.createElement('div');
+    ring.className = 'wdemo-ring';
+    ring.setAttribute('aria-hidden', 'true');
+
+    document.body.appendChild(top);
+    document.body.appendChild(bot);
+    document.body.appendChild(ring);
+    demoTopEl = top; demoBotEl = bot;
+  }
+
+  function demoStart() {
+    if (demoStarted) return;             // connect() can be called again from the
+    demoStarted = true;                  // settings sheet; the demo starts once
+    document.title = 'DEMO · ' + document.title;
+    // The pill must not go on saying "connecting…" while nothing is connecting.
+    // The words go into the language tables rather than straight into the DOM, so
+    // a language switch relabels them like any other word on the wall.
+    try {
+      STR.en['conn.demo'] = 'demo · no broker';
+      STR.th['conn.demo'] = 'ตัวอย่าง · ' +
+                            'ไม่ได้ต่อ broker';
+      connState='demo';
+    } catch (e) {}
+    demoBuild();
+    demoApply();
+    // Re-assert the scene. Without this a static demo drifts past expire_after and
+    // starts describing itself as stale; re-applying is idempotent, including the
+    // back-dating that keeps the deliberately stale board stale.
+    setInterval(function () {
+      if (DEMO.mode === 'cycle') demoStep++;
+      demoApply();
+    }, DEMO.mode === 'cycle' ? 4000 : 15000);
+  }
+
+  function connect(cfg) {
+    // The one gate that makes demo mode safe on a health display: while ?demo= is
+    // set no socket is opened, from here or from the settings sheet, so real air
+    // and invented air can never be on one screen.
+    if (DEMO) { demoStart(); return; }
+
+    if (typeof mqtt === 'undefined' || !mqtt || typeof mqtt.connect !== 'function'){
+      connState = 'fatal';
+      // The curtain says the true effect in the reader's language; the exact
+      // cause is English, in the notes, where whoever fixes it will look.
+      failKey = 'conn.unreachable';
+      setNote('lib','<b>The MQTT library did not load.</b> This page needs '+
+        '<span class="mono">unpkg.com/mqtt@5.15.2</span>. Check the network, or host a local copy beside this file.');
+      schedulePaint();
+      return;
+    }
+
+    disconnect();
+    manualStop = false;
+    everConnected = false;
+    bootAt = Date.now();
+    lostAt = 0;
+    connState = 'connecting';
+    failKey = null;
+    activeFilter = typeof cfg.filter === 'string' ? cfg.filter.trim() : '';
+    filteredOut.clear();
+    ['conn','auth','mixed','suberr','parse','wildcard','subcap','lib'].forEach(clearNote);
+
+    var scheme = cfg.tls ? 'wss' : 'ws';
+    var url = scheme + '://' + cfg.host + ':' + cfg.port;
+
+    if (!cfg.tls && location.protocol === 'https:'){
+      setNote('mixed','<b>Mixed content.</b> This page is served over HTTPS, so the browser blocks the '+
+        'plaintext <span class="mono">ws://</span> connection. Tick <b>TLS (wss)</b>, or open this file from disk.');
+    }
+
+    try {
+      client = mqtt.connect(url,{
+        username: cfg.user || undefined,
+        password: cfg.pass || undefined,
+        clientId: 'air-focus-' + Math.random().toString(16).slice(2,10),
+        clean: true, reconnectPeriod: 4000, connectTimeout: 8000,
+        keepalive: 45, resubscribe: true
+      });
+    } catch (e){
+      connState = 'fatal';
+      setNote('conn','<b>Could not start the connection.</b> '+esc(e.message||String(e)));
+      schedulePaint();
+      return;
+    }
+
+    client.on('connect', function(){
+      everConnected = true;
+      lostAt = 0;
+      connState = 'connected';
+      clearNote('conn');
+      // Bounded discovery wildcards, authored here — the ONLY wildcards this
+      // page ever subscribes to, and never '#'.
+      subRaw('homeassistant/+/+/config');
+      subRaw('homeassistant/+/+/+/config');
+      subRaw('dbk/+/status');
+      schedulePaint();
+    });
+
+    client.on('message', function(topic,payload){
+      try { onMessage(topic,payload); } catch (e) { /* one bad message never stops the stream */ }
+    });
+
+    client.on('reconnect', function(){
+      if (manualStop || connState === 'fatal') return;
+      connState = 'reconnecting';
+      if (everConnected && !lostAt) lostAt = Date.now();
+      schedulePaint();
+    });
+    client.on('offline', function(){
+      if (manualStop || connState === 'fatal') return;
+      connState = 'reconnecting';
+      if (everConnected && !lostAt) lostAt = Date.now();
+      schedulePaint();
+    });
+
+    // A browser never reveals WHY a WebSocket handshake failed, and for a
+    // refused port mqtt.js may close without emitting a useful 'error'.
+    client.on('close', function(){
+      if (manualStop || connState === 'fatal') return;
+      if (everConnected && !lostAt) lostAt = Date.now();
+      connState = everConnected ? 'reconnecting' : 'error';
+      setNote('conn','<b>'+(everConnected ? 'The connection dropped.' : 'Cannot reach the broker')+'</b> at '+
+        '<span class="mono">'+esc(url)+'</span>. Browsers do not report why a WebSocket handshake fails, so check '+
+        'the host, the WebSocket port, and that the broker has a <span class="mono">protocol websockets</span> '+
+        'listener there. Retrying every 4 seconds.');
+      schedulePaint();
+    });
+
+    client.on('error', function(err){
+      var d = describe(err);
+      if (d.fatal){
+        connState = 'fatal';
+        manualStop = true;
+        setNote('auth','<b>The broker refused this connection:</b> '+esc(d.text)+
+          '. Retrying has stopped. Fix the details above and press Connect.');
+        try { client.end(true); } catch (e) {}
+        client = null;
+      } else {
+        if (everConnected && !lostAt) lostAt = Date.now();
+        connState = everConnected ? 'reconnecting' : 'error';
+        setNote('conn','<b>Cannot reach the broker</b> at <span class="mono">'+esc(url)+'</span> — '+
+          esc(d.text)+'. Retrying every 4 seconds.');
+      }
+      schedulePaint();
+    });
+  }
+
+  // ---------------------------------------------------------------- settings
+  var form = $('form');
+  function readForm(){
+    return { host:$('f-host').value.trim(), port:$('f-port').value.trim(),
+             user:$('f-user').value, pass:$('f-pass').value, tls:$('f-tls').checked,
+             filter:$('f-filter').value.trim(), remember:$('f-remember').checked };
+  }
+  function fillForm(v){
+    $('f-host').value = (v && v.host) || DEFAULT_HOST;
+    $('f-port').value = (v && v.port) || DEFAULT_PORT;
+    $('f-user').value = (v && v.user) || '';
+    $('f-pass').value = (v && v.pass) || '';
+    $('f-tls').checked = !!(v && v.tls);
+    $('f-filter').value = v && typeof v.filter === 'string' ? v.filter : DEFAULT_FILTER;
+    $('f-remember').checked = !!(v && (v.remember || v.pass));
+  }
+  // What goes to disk is not what is in the form: the passphrase is opt-in.
+  function storable(cfg){
+    var out = { host:cfg.host, port:cfg.port, user:cfg.user, tls:cfg.tls,
+                filter:cfg.filter, remember:!!cfg.remember };
+    if (cfg.remember) out.pass = cfg.pass;
+    return out;
+  }
+
+  function openSheet(){ elSheet.hidden = false; $('f-host').focus(); }
+  function closeSheet(){ elSheet.hidden = true; }
+
+  form.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var cfg = readForm();
+    if (!cfg.host || !cfg.port) return;
+    entities.clear(); byState.clear(); byAvail.clear(); byUid.clear(); boardStatus.clear();
+    filteredOut.clear(); parseErrors = 0;
+    curImg = 'reset';                 // force the next showSky() to take effect
+    closeSheet();
+    saveStore(storable(cfg));
+    connect(cfg);
+    schedulePaint();
+  });
+  $('btn-close').addEventListener('click', closeSheet);
+  $('btn-forget').addEventListener('click', function(){
+    clearStore();
+    fillForm(null);
+    $('f-pass').value = '';
+    setNote('forget','<b>Saved settings cleared</b> from this browser.');
+  });
+
+  var hint = $('hint'), hintT = null;
+  function flashHint(){
+    hint.classList.add('show');
+    if (hintT) clearTimeout(hintT);
+    hintT = setTimeout(function(){ hint.classList.remove('show'); }, 4000);
+  }
+  window.addEventListener('mousemove', flashHint, { passive:true });
+  window.addEventListener('keydown', function(ev){
+    if (ev.key === 'Escape'){ closeSheet(); return; }
+    var el = ev.target;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (ev.key === 's' || ev.key === 'S'){
+      ev.preventDefault();
+      elSheet.hidden ? openSheet() : closeSheet();
+      return;
+    }
+    // "l" for language. ev.code is checked too: on a Thai keyboard layout that
+    // physical key types "ส", and the reader who most wants this shortcut is
+    // exactly the one typing in Thai.
+    if (ev.key === 'l' || ev.key === 'L' || ev.code === 'KeyL'){
+      ev.preventDefault();
+      setLang(LANG === 'th' ? 'en' : 'th');
+    }
+  });
+
+  // ---------------------------------------------------------------- switcher
+  // Changing language re-renders in place: paint() rewrites every live string
+  // and applyLang() rewrites the fixed ones. Nothing reloads, so the MQTT
+  // connection, the sky cross-fade and the board table all survive the switch.
+  var elLangBox = $('lang'), elLangTh = $('lang-th'), elLangEn = $('lang-en');
+
+  function applyLang(){
+    document.documentElement.setAttribute('lang', LANG);
+    elLangTh.setAttribute('aria-pressed', LANG === 'th' ? 'true' : 'false');
+    elLangEn.setAttribute('aria-pressed', LANG === 'en' ? 'true' : 'false');
+    hint.textContent = t('conn.hint');
+    $('fail-hint').textContent = t('conn.hint');
+    paint();
+  }
+
+  function setLang(l){
+    if ((l !== 'th' && l !== 'en') || l === LANG) return;
+    LANG = l;
+    try { localStorage.setItem(LANG_KEY, l); } catch (e) {}   // private mode: switch still works, just forgets
+    applyLang();
+  }
+
+  elLangBox.addEventListener('click', function(ev){
+    var b = ev.target && ev.target.closest ? ev.target.closest('button[data-l]') : null;
+    if (b) setLang(b.getAttribute('data-l'));
+  });
+
+  // ---------------------------------------------------------------- boot
+  // NO configuration UI on load. localStorage first, then ?u=&p= in the URL,
+  // then anonymous to the default broker. The screen simply starts listening.
+  function urlCfg(){
+    var q;
+    try { q = new URLSearchParams(location.search); } catch (e) { return null; }
+    var u = q.get('u'), p = q.get('p'), h = q.get('h'), port = q.get('port'), f = q.get('f');
+    if (u === null && p === null && h === null && port === null && f === null) return null;
+    return { host:h || DEFAULT_HOST, port:port || DEFAULT_PORT, user:u || '', pass:p || '',
+             tls:q.get('tls') === '1', filter:(f === null ? DEFAULT_FILTER : f), remember:false };
+  }
+
+  var saved = loadStore();
+  var boot = (saved && saved.host && saved.port) ? saved : (urlCfg() || {
+    host:DEFAULT_HOST, port:DEFAULT_PORT, user:'', pass:'', tls:false,
+    filter:DEFAULT_FILTER, remember:false
+  });
+  if (!storeWorks) setNote('store','<b>This browser blocks local storage,</b> so settings cannot be remembered here.');
+
+  fillForm(boot);
+  applyLang();          // sets <html lang>, the switcher, the fixed strings — and paints
+  flashHint();
+  connect(boot);
+
+  // Trickle the rest of the six frames in once the page is settled, so a jump
+  // of several bands at once is still a cross-fade and not a flash.
+  setTimeout(function(){
+    var i = 0;
+    (function next(){
+      if (i >= BANDS.length) return;
+      preload(BANDS[i++].img);
+      setTimeout(next, 900);
+    })();
+  }, 4000);
+})();
+</script>
+<script src="_wallcreds.js"></script>
+</body>
+</html>
