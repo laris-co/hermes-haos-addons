@@ -1,0 +1,27 @@
+name: "MQTT Hub"
+version: "0.1.0"
+slug: "mqtt_hub_panel"
+description: >-
+  Sidebar view of the dedicated mqtt-hub broker's EMQX dashboard — connected
+  users, ACL status, topic activity — without leaving Home Assistant.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/mqtt-hub-panel"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+hassio_api: false
+homeassistant_api: false
+# EMQX's dashboard lives on the NetBird mesh (mqtt-hub.oracle.netbird), not on
+# this guest's own Docker bridge network. host_network lets this container see
+# the guest's netbird interface the same way any other host process would —
+# without it, the add-on's isolated bridge network has no route to the mesh
+# at all and every proxy_pass here times out with no useful error.
+host_network: true
+ingress: true
+ingress_port: 8100
+panel_icon: mdi:chart-timeline-variant
+panel_title: MQTT Hub
+panel_admin: true
+stage: experimental
