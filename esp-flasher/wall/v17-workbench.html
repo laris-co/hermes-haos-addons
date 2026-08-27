@@ -255,8 +255,8 @@ html[lang="th"] .ch-age{white-space:normal}
 .tele div{display:flex;flex-direction:column;gap:.1rem;min-width:0;border-top:1px solid var(--rule);padding-top:.32rem}
 .tele dt{font-size:.66rem;letter-spacing:.12em;color:var(--faint)}
 /* break-word, never anywhere: an unbreakable token still breaks rather than overflow, but a
-   host:port or a slashed topic breaks at its own joints instead of mid-token. "your-broker-host:1"
-   over "884" is not a legible address. */
+   host:port or a slashed topic breaks at its own joints instead of mid-token. A host address
+   split mid-octet is not a legible address. */
 .tele dd{margin:0;font-size:clamp(.78rem,1.1vw,.9rem);font-weight:600;overflow-wrap:break-word}
 .tele dd[data-s="connected"]{color:var(--band-good)}
 .tele dd[data-s="connecting"],.tele dd[data-s="reconnecting"],.tele dd[data-s="error"]{color:var(--band-mod)}
@@ -1395,7 +1395,7 @@ body[data-demo="1"] .hero-band::before{content:"DEMO · "}
      ================================================================ */
 
   // ---------------------------------------------------------------- config
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; an address, not a secret
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser can only speak WebSocket; the plain
                                         // TCP listener is unreachable from here and fails

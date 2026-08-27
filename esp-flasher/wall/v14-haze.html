@@ -825,7 +825,7 @@ html[lang="th"] .demo-seal{line-height:1.35}
   function tOther(key, vars) { return tIn(LANG === 'th' ? 'en' : 'th', key, vars); }
 
   // ================================================================ config
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser cannot speak raw TCP MQTT; the plain
                                         // listener fails here exactly like bad credentials.
@@ -2203,6 +2203,10 @@ html[lang="th"] .demo-seal{line-height:1.35}
   function demoStart() {
     docTitleDemo = true;                           // a screenshot of the tab says so too,
     document.title = 'DEMO — ' + t('doc.title');   // in whichever language it is set to
+    // …and on <html>, because the contact sheet checks a preview by reading
+    // html/body for a data-demo attribute before it falls back to reading the
+    // title, and a title is the easier of the two for a language switch to move.
+    document.documentElement.setAttribute('data-demo', '1');
 
     var band = $('demo-band');
     band.hidden = false;

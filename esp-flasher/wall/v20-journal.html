@@ -326,9 +326,18 @@ table.record[hidden]{display:none}
   font-size:.66rem;line-height:1.28;color:var(--ink-3);min-width:0;
 }
 .seg div:last-child{border-right:0}
+/* Fig. 2 is six equal columns in a narrow deck, and the widest band name is
+   "Sensitive groups". It used to measure 65px inside a 47px column at phone width
+   with overflow visible, so the name did not truncate — it spilled sideways over
+   its neighbour, and two band names occupied the same pixels. break-word (not
+   `anywhere`) lets a name that cannot fit its column break inside a word as a last
+   resort, while leaving every name that does fit exactly as it was. This is a
+   band's NAME, prose, not a reading: the no-mid-number rule that governs .p-num
+   does not reach here, and nothing in this rule can touch a figure. */
 .seg span{
   display:block;color:var(--ink-2);font-weight:600;
-  font-variant-caps:all-small-caps;letter-spacing:.07em;font-size:1.06em;
+  font-variant-caps:all-small-caps;letter-spacing:.05em;font-size:.98em;
+  overflow-wrap:break-word;hyphens:auto;
 }
 .seg em{display:block;font-style:normal;font-variant-numeric:lining-nums tabular-nums}
 
@@ -1014,9 +1023,10 @@ html[lang="th"] body.demo #verdict::before{content:"ตัวอย่าง —
         'was asked for by <span class="mono">?demo=</span> in the address, it is connected to no ' +
         'broker, and it describes the air in no room. Remove that parameter from the address and ' +
         'reload to read the monitors. <span lang="th">หน้านี้เป็นตัวอย่าง ไม่ใช่ค่าอากาศจริง</span>',
-      'alert.demounread': '<b>The demonstration parameter was not understood, so nothing is being ' +
-        'simulated.</b> <span class="mono">{raw}</span> is not a figure or a band name. Every ' +
-        'figure below is a real reading from a real monitor. Use <span class="mono">?demo=</span> ' +
+      'alert.demounread': '<b>The demonstration parameter was not understood.</b> ' +
+        '<span class="mono">{raw}</span> is not a figure or a band name, so this page is ' +
+        'simulating the fleet’s usual mixed state instead — no figure below is a real reading, ' +
+        'and no monitor is connected. Use <span class="mono">?demo=</span> ' +
         'with a number, with <span class="mono">good</span>, <span class="mono">moderate</span>, ' +
         '<span class="mono">sensitive</span>, <span class="mono">unhealthy</span>, ' +
         '<span class="mono">verybad</span> or <span class="mono">hazardous</span>, or with ' +
@@ -1286,9 +1296,9 @@ html[lang="th"] body.demo #verdict::before{content:"ตัวอย่าง —
         'หน้านี้ไม่ได้ต่อกับ broker ไหน และไม่ได้บอกอากาศของห้องไหนทั้งนั้น ' +
         'ลบพารามิเตอร์นั้นออกแล้วโหลดใหม่ ถึงจะกลับไปอ่านค่าจากเครื่องวัดจริง ' +
         '<span lang="en">SIMULATED DATA, NOT A REAL READING</span>',
-      'alert.demounread': '<b>อ่านพารามิเตอร์ demo ไม่ออก เลยไม่ได้จำลองอะไรเลย</b> ' +
+      'alert.demounread': '<b>อ่านพารามิเตอร์ demo ไม่ออก</b> ' +
         '<span class="mono">{raw}</span> ไม่ใช่ตัวเลขและไม่ใช่ชื่อระดับ ' +
-        'ตัวเลขข้างล่างทุกตัวเป็นค่าจริงจากเครื่องวัดจริง ใช้ ' +
+        'หน้านี้เลยจำลองบอร์ดหลายสถานะแทน ตัวเลขข้างล่างไม่มีตัวไหนเป็นค่าจริง และไม่ได้ต่อกับเครื่องวัด ใช้ ' +
         '<span class="mono">?demo=</span> กับตัวเลข หรือกับ <span class="mono">good</span> ' +
         '<span class="mono">moderate</span> <span class="mono">sensitive</span> ' +
         '<span class="mono">unhealthy</span> <span class="mono">verybad</span> ' +
@@ -1389,7 +1399,7 @@ html[lang="th"] body.demo #verdict::before{content:"ตัวอย่าง —
      ========================================================================== */
 
   // ---------------------------------------------------------------- config
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser cannot speak to the raw TCP listener at
                                         // all; pointing it there fails in a way that looks
@@ -1442,8 +1452,7 @@ html[lang="th"] body.demo #verdict::before{content:"ตัวอย่าง —
     catch (e) { return null; }
     if (raw === null) return null;
     var s = String(raw).trim().toLowerCase();
-    if (s === '') { DEMO_UNREAD = '(empty)'; return null; }
-    if (s === 'cycle') return { mode: 'cycle' };
+    if (s === '' || s === 'cycle') return { mode: 'cycle' };
     if (s === 'mixed') return { mode: 'mixed' };
     if (Object.prototype.hasOwnProperty.call(DEMO_BAND_VALUE, s)) {
       return { mode: 'value', n: DEMO_BAND_VALUE[s], band: s };
@@ -1454,8 +1463,16 @@ html[lang="th"] body.demo #verdict::before{content:"ตัวอย่าง —
       var n = Number(s);
       if (Number.isFinite(n) && n >= 0 && n <= 9999) return { mode: 'value', n: n };
     }
+    // A token nobody recognises FAILS TOWARD THE DEMO. This file used to fall
+    // through to the real monitors and print a Correction saying so, which reads as
+    // the careful answer and is not: the reader who typed ?demo=hazardus is expecting
+    // a simulation, and a genuine reading handed over under that expectation is a real
+    // number photographed and passed on as a mock-up. The mixed fleet invents no band
+    // out of the bad token, and the Correction below still names it. Every wall in
+    // this folder answers a bad token this way, because one control on the contact
+    // sheet drives all twenty and they cannot each hold a policy of their own.
     DEMO_UNREAD = raw;
-    return null;
+    return { mode: 'mixed' };
   }
 
   // Decided once, here, before a single line of the page has run. Everything below
@@ -2909,13 +2926,14 @@ html[lang="th"] body.demo #verdict::before{content:"ตัวอย่าง —
 
   if (DEMO) {
     demoStart();
-  } else {
-    // A ?demo= that could not be read is reported and then ignored. The page goes on
-    // reading the real monitors, because inventing figures on a health display for a
-    // reader who mistyped a parameter is the one outcome that is never acceptable.
+    // A ?demo= that could not be read is named in a Correction, beside a page that is
+    // already marked as a simulation throughout. Naming the token matters: it is the
+    // only thing that tells the reader why they are looking at the mixed fleet rather
+    // than the Hazardous scene they asked for.
     if (DEMO_UNREAD) {
       setAlert('demo', 'bad', 'alert.demounread', { raw: esc(DEMO_UNREAD) });
     }
+  } else {
     connect(boot);
   }
 

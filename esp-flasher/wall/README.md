@@ -282,13 +282,40 @@ So every wall takes a simulated reading from the URL.
 
 Two properties make it trustworthy rather than a second renderer:
 
-- **The fake readings go through the real code path.** Instead of a broker the wall is handed
-  a stub client with no URL and no socket, and the demo publishes through `onMessage()` — the
-  same function the broker's bytes land in. Discovery parsing, aliasing, the availability and
-  expiry indexes, EPA banding, the headline and the layout are the shipped ones. If the demo
-  looks right the wall looks right; if the demo breaks, the wall would have broken too.
+- **The fake readings go through the real code path.** `connect()` refuses outright while
+  `?demo=` is set, so there is no client at all; the scene is emitted as discovery configs
+  and state payloads — the same abbreviated-key JSON and the same UTF-8 bytes a board puts on
+  the wire — and pushed through `onMessage()`, the function the broker's bytes land in.
+  Discovery parsing, `~` alias expansion, the wildcard refusal, `unique_id` eviction, the
+  availability and expiry indexes, EPA banding, the headline and the layout are the shipped
+  ones. If the demo looks right the wall looks right; if the demo breaks, the wall would have
+  broken too. A demo that builds entity objects by hand and drops them into the indexes draws
+  a convincing picture while testing none of that — v15 did exactly this and was rewritten,
+  because two other walls had each shipped a bug in the one guard such a demo cannot reach.
 - **Band-reactive photographs are driven by it too.** The glass set picks its ground from the
   live worst band, so a demo band cross-fades `img/` exactly as a real reading would.
+
+### The test protocol — one value per band, not two from next door
+
+`163.3` and `250.5` are the two values everyone reaches for, and between them they
+cannot show the case this set is most likely to break on. `163.3` is **Very
+unhealthy** (14 characters) and `250.5` is **Hazardous** (9). The 30-character
+**Unhealthy for Sensitive Groups** exists only between 35.5 and 55.4 µg/m³, so a
+sweep of those two values would ship without either of them ever putting the
+longest band name in the standard on screen.
+
+It hid a real defect exactly that way: v13's hero printed `SENSITIVE GROUPS` while
+its own caption printed `Unhealthy for sensitive groups` — not a shortening of the
+name but a different statement, and the word it dropped was the word that says the
+air is unhealthy. Only a sensitive-band reading shows both at once.
+
+So, for any layout sign-off:
+
+- **`?demo=cycle` is the required screenshot set.** It walks all six bands in order,
+  about four seconds each, so every band name and every band colour is photographed.
+- **Add `?demo=45.4`** (or `?demo=sensitive`) to any manual check list, and
+  `?demo=mixed`, which is the only value that shows a stale reading beside a live one.
+- **Run `node tools/wall/boot-check.js` first**, at 1920 and at 390.
 
 ### The safety rule
 
@@ -328,6 +355,16 @@ from a demo sheet keeps the same setting. Choosing **Live** removes the paramete
 The choice is written to the sheet's own address bar and to nothing else — reload without it
 and the sheet is live again. The credentials are never written there.
 
+The twenty `<iframe>` elements ship with **no `src` at all**, and exactly one function ever
+gives them one. They used to carry a bare `src` in the markup that the bench rewrote after
+the fact, which is a race the bench always loses: the browser had already fetched twenty live
+walls and let them open broker sockets before the rewrite ran, so a sheet displaying its
+"every board is simulating 163.3 µg/m³" banner had also, for a second, been showing real air.
+Measured then: 40 wall requests, 20 of them with no `?demo=`, and nine WebSockets to the
+fleet broker. Measured now, with the same sweep: 19 wall requests, all 19 carrying `?demo=`,
+zero sockets. A `<noscript>` list of plain links covers the case where nothing composes the
+address because script is off.
+
 When demo mode is on the sheet grows the same hazard-taped sticky bar, tabs every thumbnail
 **DEMO**, and prefixes its tab title.
 
@@ -341,9 +378,14 @@ verified. Opened from `file://` an iframe is a foreign origin and nothing can be
 everything is reported unknown and the sheet tells you to look for each wall's own DEMO bar
 in its thumbnail.
 
-At the time of writing, versions **11–20 implement `?demo=` and 21–30 do not**. You never
-have to trust that sentence: open the sheet with any `?demo=` value and the bench counts them
-for you.
+**All twenty walls implement `?demo=`**, versions 21–30 included — and those ten are the ones
+that matter most for it, because they are the ten carrying the band-reactive photographs in
+`img/`. Until they had a demo path there was no way to put a single one of those six
+photographs on screen, so the legibility contract each of them declares — that its ink
+survives every ground — had never been tested on any of them. It can now be photographed at
+all six bands. You never have to trust that sentence either: open the sheet with any
+`?demo=` value and the bench counts the previews for you, over `http://` where it can read
+them.
 
 ---
 
@@ -383,5 +425,23 @@ img/unhealthy.jpg
 img/verybad.jpg
 img/hazardous.jpg
 
+boot-check.js            the gate: loads all 21 pages headless, fails on any
+                         thrown exception, on a demo that does not mark itself,
+                         and on any socket opened while ?demo= is set
+
 ../mqtt-dashboard.html   the tested engine all twenty are built on
 ```
+
+`boot-check.js` is the only file here that is not a wall. It exists because a
+whole-page crash once sat in this folder for ten minutes without anyone noticing
+— including through a review pass that recorded the page as working and then as
+blank — and because "the demo opens no socket" is a claim, not a fact, until
+something checks it. It has no dependencies and drives whatever Chrome is already
+on the machine:
+
+```
+node tools/wall/boot-check.js                 # 1920×1080
+node tools/wall/boot-check.js --width 390 --height 844
+```
+
+Run it before reviewing a layout, not after.

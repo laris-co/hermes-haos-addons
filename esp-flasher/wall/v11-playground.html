@@ -934,7 +934,7 @@ html.demo .card::after{
      Only the presentation below it is new.
      ====================================================================== */
 
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser cannot speak to the raw TCP port.
   var STORE_KEY = 'air-playground.conn.v1';

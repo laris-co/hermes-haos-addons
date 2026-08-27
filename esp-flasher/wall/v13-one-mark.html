@@ -693,7 +693,7 @@ html[lang="th"] .sat i{white-space:normal;max-width:9em;text-align:center}
      is new. Comments that record a real past bug are kept with the code.
      ======================================================================= */
 
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';          // the broker's MQTT-over-WebSocket listener.
                                       // A browser can only speak MQTT over a
                                       // WebSocket; a raw TCP listener fails here in

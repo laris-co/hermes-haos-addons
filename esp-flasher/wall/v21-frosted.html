@@ -859,7 +859,7 @@ html[lang="th"] .wdemo{letter-spacing:normal;line-height:1.6}
      presentation below them is new.
      ========================================================================== */
 
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';          // the broker's MQTT-over-WebSocket listener.
                                       // A browser cannot open a raw MQTT socket, so
                                       // this port is the only way in from a page.
@@ -1807,9 +1807,10 @@ html[lang="th"] .wdemo{letter-spacing:normal;line-height:1.6}
      that can send a child outside during a hazardous episode.
      =================================================================== */
 
-  // µg/m³ written in code points, so no editor, transform or copy-paste can turn
-  // the micro sign into the letter M and the reading into a 1000x lie.
-  var DEMO_UNIT = 'µg/m³';
+  // Written as escapes, not as a literal: the micro sign and the letter M are one
+  // careless transform apart, and µg/m³ read as mg/m³ is a 1000x lie about the air.
+  // Spelled this way no editor, pipeline or copy-paste can bend it.
+  var DEMO_UNIT = '\u00b5g/m\u00b3';
 
   // A value from the middle of each band, so a screenshot shows that band's
   // colour and wording rather than an edge case that could belong to either

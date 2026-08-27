@@ -550,7 +550,7 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
      =================================================================== */
 
   // ---------------------------------------------------------------- config
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser cannot open the raw-TCP listener at all;
                                         // pointing at it fails exactly like bad credentials.
@@ -1498,6 +1498,10 @@ button.ghost{background:transparent;color:#9fb2c4;border-color:#2b3b4d}
   }
 
   function demoStart() {
+    // The bar and the ring cover every crop of a photograph of the SCREEN, but not
+    // a crop of the browser chrome above it: a tab strip, a bookmark and a
+    // screenshot of the window frame carry the title and nothing else.
+    document.title = 'DEMO · ' + document.title;
     document.documentElement.setAttribute('data-demo', DEMO.mode);
     $('demo').hidden = false;
     $('demo-ring').hidden = false;

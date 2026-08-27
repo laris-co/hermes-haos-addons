@@ -1032,7 +1032,7 @@ html[lang="th"] .rd-num[data-kind="word"]{letter-spacing:.02em}
      are the tested engine; only the presentation above is new.
      ================================================================ */
 
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener
   var STORE_KEY = 'air-wall.conn.v1';
   var MAX_SUBS = 64;

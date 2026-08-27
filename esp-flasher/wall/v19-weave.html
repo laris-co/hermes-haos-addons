@@ -752,7 +752,7 @@ body[data-demo] .cloth::before{
   function t(key, vars) { return tIn(LANG, key, vars); }
 
   // ---------------------------------------------------------------- config
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // the MQTT-over-WebSocket listener
   var STORE_KEY = 'air-weave.conn.v1';
   var MAX_SUBS = 64;                    // hard ceiling; a browser must never firehose a broker

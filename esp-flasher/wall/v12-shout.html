@@ -532,7 +532,7 @@ html[lang="th"] .digits[data-kind="word"]{font-family:var(--thai);line-height:1.
   }
 
   // ================================================================ config
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // Mosquitto's MQTT-over-WebSocket listener.
                                         // A browser cannot open the raw-TCP listener at all:
                                         // pointing it there fails in a way that looks exactly
@@ -1530,6 +1530,11 @@ html[lang="th"] .digits[data-kind="word"]{font-family:var(--thai);line-height:1.
 
   function startDemo() {
     document.title = 'DEMO · simulated air · SHOUT';
+    // On <html> as well as on .screen. The contact sheet checks a preview by
+    // reading html/body for a data-demo attribute before it falls back to the
+    // title, and a marker only this file knows where to find is a marker the
+    // sheet has to take on trust.
+    document.documentElement.setAttribute('data-demo', 'on');
     screen.setAttribute('data-demo', 'on');
     $('demo-top').hidden = false;
     $('demo-bot').hidden = false;

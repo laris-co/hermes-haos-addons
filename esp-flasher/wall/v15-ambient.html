@@ -850,7 +850,7 @@ body[data-demo="1"] #rest,body[data-demo="1"] #detail{top:var(--demobar-h,3.6rem
      ===================================================================== */
 
   // ---------------------------------------------------------------- config
-  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — see esp-flasher note. */   // lab broker; not a secret, just a starting point
+  var DEFAULT_HOST = (location.hostname || '');  /* derive from the page's own host — a browser cannot open a WebSocket to a LAN address from a different network, and this keeps one out of source. */
   var DEFAULT_PORT = '1884';            // the broker's MQTT-over-WebSocket listener. A browser
                                         // cannot open the raw-TCP MQTT port at all, and pointing
                                         // it there fails looking exactly like bad credentials.
@@ -2083,6 +2083,26 @@ body[data-demo="1"] #rest,body[data-demo="1"] #detail{top:var(--demobar-h,3.6rem
       if (e.availAt) e.availAt = availAt;
     });
     if (boardStatus.has(p.id)) boardStatus.get(p.id).at = availAt;
+  }
+
+  function demoPlan(spec) {
+    if (spec.kind === 'mixed') {
+      // The state the fleet is actually in most days: one board reporting, one
+      // dark, and one that answered hours ago and has not been heard from since
+      // — the arrangement a layout is most likely to render badly.
+      return [
+        { id: 'DBK-001', state: 'offline', pm: 38.2, age: 11894, availAge: 11720, rssi: -74, up: 0 },
+        { id: 'DBK-002', state: 'live',    pm: 42.7, age: 6,     availAge: 268,   rssi: -58, up: 214380, extras: true },
+        { id: 'DBK-010', state: 'stale',   pm: 57.4, age: 2520,  availAge: 2520,  rssi: -69, up: 61980 }
+      ];
+    }
+    // Every board reporting the same value, so the value under test is the only
+    // thing the layout has to deal with.
+    return [
+      { id: 'DBK-001', state: 'live', pm: spec.pm, age: 11, availAge: 74520, rssi: -71, up: 91260 },
+      { id: 'DBK-002', state: 'live', pm: spec.pm, age: 4,  availAge: 74210, rssi: -58, up: 214380, extras: true },
+      { id: 'DBK-010', state: 'live', pm: spec.pm, age: 18, availAge: 73980, rssi: -66, up: 61980 }
+    ];
   }
 
   function demoFleet(plan, now) {

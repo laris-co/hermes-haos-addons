@@ -1295,7 +1295,8 @@ html[lang="th"] .num{
      for most of the year.
 
      The bench is a control, not a state: it writes ?demo= into this page's address bar
-     and into each preview's src, and nowhere else. Nothing here touches localStorage. -->
+     and hands it to THE FRAME WRITER, which is the only code in the file that gives an
+     iframe a src. Nothing here touches localStorage. -->
 <section class="rig" aria-labelledby="rig-h">
   <h2 id="rig-h">Band bench &mdash; drive all twenty previews at once</h2>
   <p class="why">The only live board reads <b>0 &micro;g/m&sup3;</b> and two are dark, so no
@@ -1364,17 +1365,16 @@ html[lang="th"] .num{
   u.value = ls(U) || ''; p.value = ls(P) || '';
   function apply() {
     var qs = u.value ? '?u=' + encodeURIComponent(u.value) + '&p=' + encodeURIComponent(p.value) : '';
-    // The band bench at the bottom of this page is the single writer of every preview's
-    // src once it has booted, because the src it composes may also carry ?demo=. Hand the
-    // credentials to it rather than overwriting its work and dropping the demo flag —
-    // that would put live air behind a DEMO banner, which is the one thing forbidden here.
-    if (window.WallBench) { window.WallBench.setCarry(qs); return; }
-    [].forEach.call(document.querySelectorAll('iframe[data-wall]'), function (f) {
-      // Re-point, but stay lazy. Twenty eager iframes would open twenty broker
-      // connections in one breath, which is exactly what loading="lazy" is here
-      // to prevent; a frame already on screen reloads immediately anyway.
-      f.src = f.getAttribute('data-wall') + qs;
-    });
+    // This script NEVER writes a preview's src. One function does, and it composes the
+    // credentials and the demo flag together — a src written anywhere else is a src
+    // written without the flag, which would put live air behind a DEMO banner, and that
+    // is the one thing forbidden on this page.
+    if (window.WallBench)  { window.WallBench.setCarry(qs); return; }   // bench up: keep it in step
+    if (window.WallFrames) { window.WallFrames.set({ carry: qs.replace(/^\?/, '') }); return; }
+    // Neither is up yet — this block sits above both in the document, and on a
+    // remembered sign-in apply() runs immediately. Leave the credentials here; the
+    // frame writer merges them before it points a single iframe anywhere.
+    window.WallPendingCarry = qs;
   }
   document.getElementById('pv-go').addEventListener('click', function () {
     ls(U, u.value); ls(P, p.value); apply();
@@ -1941,6 +1941,20 @@ html[lang="th"] .num{
     if (q.has('demo')) state.demo = String(q.get('demo'));
   }
 
+  // The sign-in block sits above this one in the document, so on a remembered
+  // sign-in it has already run and could not reach this module. It leaves its
+  // credentials in a global rather than writing a src of its own; they are merged
+  // here, before anything is pointed anywhere.
+  try {
+    var pend = window.WallPendingCarry;
+    if (typeof pend === 'string' && pend) {
+      var pq = new URLSearchParams(pend.replace(/^\?/, ''));
+      var merged = new URLSearchParams(state.carry);
+      pq.forEach(function (v, k) { merged.set(k, v); });
+      state.carry = merged.toString();
+    }
+  } catch (e) {}
+
   window.WallFrames = {
     carry: function () { return state.carry; },
     demo:  function () { return state.demo; },
@@ -1978,7 +1992,15 @@ html[lang="th"] .num{
      through the same message handler the broker's would land in, so what you see is
      the shipped renderer, not a second one written for the demo. This bench does one
      job — it puts the same ?demo= on all twenty previews at once, and it makes the
-     fact loud.
+     fact loud. It does not write a src: it hands its band to THE FRAME WRITER above,
+     which composes the credentials and the flag together before anything is fetched.
+
+     All twenty answer an unrecognised value the same way, and it is the FAIL-TOWARD-
+     DEMO direction: no socket, the usual mixed fleet, and the rejected token printed
+     back. Half of them used to fall through to the live wall on a typo, which reads as
+     the careful choice and is not — the reader who typed ?demo=hazardus is expecting a
+     simulation, and a genuine reading handed over under that expectation is a real
+     number photographed and passed on as a mock-up. An empty ?demo= is `cycle`.
 
      THE SAFETY RULE, which is why the code below looks the way it does. These are
      health displays for children in a burning season. Fake Good air could send a
@@ -2043,12 +2065,14 @@ html[lang="th"] .num{
 
   function classify(d) {
     var k = String(d).trim().toLowerCase();
-    if (k === 'cycle') return { mode: 'cycle' };
+    // An empty value is what every wall reads as `cycle`, so the sheet has to read it
+    // the same way or it would describe a state none of the previews is in.
+    if (k === '' || k === 'cycle') return { mode: 'cycle' };
     if (k === 'mixed') return { mode: 'mixed' };
     var b = byKey(k);
     if (b) return { mode: 'band', band: b };
     var n = Number(k);
-    if (k !== '' && isFinite(n) && n >= 0) return { mode: 'number', n: n };
+    if (isFinite(n) && n >= 0) return { mode: 'number', n: n };
     return { mode: 'bad' };
   }
 
@@ -2088,12 +2112,10 @@ html[lang="th"] .num{
     var c = classify(state.demo), b;
 
     if (c.mode === 'bad') {
-      var what = state.demo === ''
-        ? '?demo= was left empty'
-        : '“' + state.demo + '” is not a band name or a number';
+      var what = '“' + state.demo + '” is not a band name or a number';
       return { band: '—', range: '—',
         say: what + ', so every preview is showing the fleet’s usual mixed state instead',
-        note: what + '. The walls refuse to fall back to live air while ?demo= is present, so each one shows the usual mixed fleet and says why.' };
+        note: what + '. Every wall in this folder fails TOWARD the demo: while ?demo= is present none of them opens a broker connection, so a mistyped value shows the usual mixed fleet with the rejected token named on screen, and never today’s real air under a banner that says it is a simulation. Verified by the count below, and by tools/wall/boot-check.js.' };
     }
 
     if (c.mode === 'mixed') {
