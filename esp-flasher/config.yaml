@@ -1,5 +1,5 @@
 name: "ESP Web Flasher"
-version: "2.12.0"
+version: "2.13.0"
 slug: "esp_flasher"
 description: >-
   The Many Bodies, One Soul workshop gallery and web flasher, served inside the
@@ -33,6 +33,17 @@ options:
   # ?u=/?p= or the "s" settings panel, same as before this option existed.
   mqtt_user: ""
   mqtt_password: ""
+  # Broker location override. Blank host = each wall's existing default
+  # (this page's own hostname, port 1884, plain ws://) — the LAN/ingress path.
+  # Set all three to point every wall at a broker reachable from OUTSIDE the
+  # LAN instead, e.g. a Cloudflare Tunnel published straight to the broker
+  # (host: the tunnel's public hostname, port: "443", tls: true → wss://).
+  mqtt_host: ""
+  mqtt_port: ""
+  mqtt_tls: false
 schema:
   mqtt_user: str
   mqtt_password: password
+  mqtt_host: str
+  mqtt_port: str
+  mqtt_tls: bool

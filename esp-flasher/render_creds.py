@@ -23,20 +23,25 @@ OUT_PATH = "/usr/share/esp-flasher/wall/_creds.json"
 
 
 def main():
-    user, password = "", ""
+    user, password, host, port, tls = "", "", "", "", False
     if os.path.exists(OPTIONS_FILE):
         with open(OPTIONS_FILE) as f:
             opt = json.load(f)
         user = (opt.get("mqtt_user") or "").strip()
         password = opt.get("mqtt_password") or ""
+        host = (opt.get("mqtt_host") or "").strip()
+        port = (opt.get("mqtt_port") or "").strip()
+        tls = bool(opt.get("mqtt_tls") or False)
 
     # Never let a corrupt/partial value produce a broken JSON file — the wall's
     # own fetch() error handling then just falls through, same as no file at all.
     with open(OUT_PATH, "w") as f:
-        json.dump({"user": user, "pass": password}, f)
+        json.dump({"user": user, "pass": password, "host": host, "port": port, "tls": tls}, f)
 
     print(f"[render_creds] wrote {OUT_PATH} — "
-          f"{'credential set' if user else 'blank (no option configured)'}", flush=True)
+          f"{'credential set' if user else 'blank (no option configured)'}, "
+          f"{'broker override -> ' + host + ':' + port if host else 'default broker (this hostname:1884)'}",
+          flush=True)
 
 
 if __name__ == "__main__":

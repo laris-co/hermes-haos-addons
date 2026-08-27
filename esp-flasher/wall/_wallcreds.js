@@ -12,6 +12,12 @@
  * It NEVER overwrites a key that already holds something — a value someone
  * typed in through a wall's own settings panel always wins. It only fills a
  * wall that would otherwise be asking.
+ *
+ * host/port/tls are also optional overrides from the same options (blank by
+ * default = each wall's normal LAN behavior: this page's own hostname, port
+ * 1884, plain ws://). Set them to point every wall at a broker reachable from
+ * outside the LAN instead — e.g. a Cloudflare Tunnel published straight to
+ * the broker.
  */
 (function () {
   var KEYS = [
@@ -49,9 +55,10 @@
       if (!creds || !creds.user) return; // no option configured on this install — normal, silent
 
       var cfg = {
-        host: location.hostname || '', port: '1884',
+        host: creds.host || location.hostname || '',
+        port: creds.port || '1884',
         user: creds.user, pass: creds.pass || '',
-        tls: false, filter: '', remember: true
+        tls: !!creds.tls, filter: '', remember: true
       };
 
       var filledAny = false;
