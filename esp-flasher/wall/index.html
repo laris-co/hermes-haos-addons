@@ -102,6 +102,17 @@ h1{
   font-size:clamp(1.9rem,4.4vw,3.1rem);
   text-wrap:balance;
 }
+.about{margin:1.1rem 0 0;max-width:44rem}
+.about summary{
+  cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:.4em;
+  font-family:var(--sans);font-size:.83rem;color:var(--faint);padding:.15rem 0;
+}
+.about summary::-webkit-details-marker{display:none}
+.about summary::before{content:'\25b8';font-size:.7em;transition:transform .15s}
+.about[open] summary::before{transform:rotate(90deg)}
+.about summary:hover{color:var(--dim)}
+.about summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
 .lede{
   margin:1.1rem 0 0;max-width:44rem;color:var(--dim);
   font-size:clamp(1rem,1.35vw,1.12rem);
@@ -462,6 +473,7 @@ html[lang="th"] .colophon h2{line-height:1.45;letter-spacing:normal}
 html[lang="th"] .lede,
 html[lang="th"] .facts,
 html[lang="th"] .scale,
+html[lang="th"] .about summary,
 html[lang="th"] .grouphead p,
 html[lang="th"] .key,
 html[lang="th"] .brief,
@@ -564,6 +576,7 @@ html[lang="th"] .num{
       'sheet.title':   'Twenty Air Walls — contact sheet',
       'sheet.eyebrow': 'Kit4Kids · PM2.5 · Chiang Mai',
       'sheet.h1':      'Twenty walls for one question',
+      'sheet.about.toggle': 'About this page',
       'sheet.lede':
         'Twenty wall displays built on one tested MQTT engine, each answering ' +
         '<b>“should we go outside?”</b> in plain words before it shows a number. ' +
@@ -895,6 +908,7 @@ html[lang="th"] .num{
       'sheet.title':   'ยี่สิบจอวัดอากาศ — แผ่นรวมทั้งหมด',
       'sheet.eyebrow': 'Kit4Kids · PM2.5 · เชียงใหม่',
       'sheet.h1':      'ยี่สิบจอ สำหรับคำถามเดียว',
+      'sheet.about.toggle': 'เกี่ยวกับหน้านี้',
       'sheet.lede':
         'จอติดผนังยี่สิบแบบ สร้างบน MQTT engine ตัวเดียวกันที่ผ่านการทดสอบแล้ว ' +
         'ทุกแบบตอบคำถามว่า <b>“ออกไปข้างนอกได้ไหม”</b> เป็นคำพูดธรรมดาก่อน แล้วค่อยโชว์ตัวเลข ' +
@@ -1256,36 +1270,42 @@ html[lang="th"] .num{
     </div>
   </div>
   <h1 data-t="sheet.h1">Twenty walls for one question</h1>
-  <p class="lede" data-tx="sheet.lede">Twenty wall displays built on one tested MQTT engine, each answering
-    <b>&ldquo;should we go outside?&rdquo;</b> in plain words before it shows a number.
-    Ten draw the air; ten photograph it. Every thumbnail below is the real page running
-    &mdash; not a screenshot: live against the lab broker, or, when the bench below is
-    switched on, every one of them simulating the same reading. Click one to open it
-    full size.</p>
 
-  <dl class="facts">
-    <div><dt data-t="sheet.fact.boards">Boards</dt><dd data-tx="sheet.fact.boards.d"><b>DBK-001</b>, <b>DBK-002</b>, <b>DBK-010</b> &mdash; normally one live
-      and two dark. Every version draws that mixed state on purpose; none of them lets a zero
-      stand in for a sensor that has stopped speaking.</dd></div>
-    <div><dt data-t="sheet.fact.source">Source</dt><dd data-tx="sheet.fact.source.d">Home Assistant MQTT discovery over WebSocket, port <b>1884</b>.
-      Board identity is parsed out of <span class="mono">state_topic</span>, never from the
-      discovery name &mdash; that name is <span class="mono">&quot;PM2.5&quot;</span> on all three.</dd></div>
-    <div><dt data-t="sheet.fact.previews">Previews</dt><dd data-tx="sheet.fact.previews.d">All twenty are <b>live</b>, not screenshots. Each iframe is
-      <span class="mono">loading=&quot;lazy&quot;</span>, so a wall opens its own broker connection
-      only when its thumbnail scrolls into view &mdash; twenty MQTT connections never open at
-      once, and reaching the bottom of this page is what brings the last of them up. In demo
-      mode not one of them opens a connection at all.</dd></div>
-    <div><dt data-t="sheet.fact.settings">Settings</dt><dd data-tx="sheet.fact.settings.d">None here for the walls, and none on the walls at startup. Each wall
-      connects by itself and hides its settings behind pressing <b>s</b>. If the broker wants a
-      login, open this sheet once with <span class="mono">?u=&amp;p=</span> and every preview
-      inherits it &mdash; the hint is then wiped from the address bar.</dd></div>
-  </dl>
+  <!-- Collapsed by default (native <details>, no JS) — the story is one click away,
+       not something to scroll past before the bench and the live grid. -->
+  <details class="about">
+    <summary data-t="sheet.about.toggle">About this page</summary>
+    <p class="lede" data-tx="sheet.lede">Twenty wall displays built on one tested MQTT engine, each answering
+      <b>&ldquo;should we go outside?&rdquo;</b> in plain words before it shows a number.
+      Ten draw the air; ten photograph it. Every thumbnail below is the real page running
+      &mdash; not a screenshot: live against the lab broker, or, when the bench below is
+      switched on, every one of them simulating the same reading. Click one to open it
+      full size.</p>
 
-  <p class="scale" data-tx="sheet.scale"><b>US EPA PM2.5 scale</b>, &micro;g/m&sup3; &mdash; the standard every
-    version bands against:
-    0&ndash;12.0 Good<span class="sep">&middot;</span>12.1&ndash;35.4 Moderate<span class="sep">&middot;</span>35.5&ndash;55.4
-    Unhealthy for sensitive groups<span class="sep">&middot;</span>55.5&ndash;150.4 Unhealthy<span class="sep">&middot;</span>150.5&ndash;250.4
-    Very unhealthy<span class="sep">&middot;</span>250.5 and above Hazardous.</p>
+    <dl class="facts">
+      <div><dt data-t="sheet.fact.boards">Boards</dt><dd data-tx="sheet.fact.boards.d"><b>DBK-001</b>, <b>DBK-002</b>, <b>DBK-010</b> &mdash; normally one live
+        and two dark. Every version draws that mixed state on purpose; none of them lets a zero
+        stand in for a sensor that has stopped speaking.</dd></div>
+      <div><dt data-t="sheet.fact.source">Source</dt><dd data-tx="sheet.fact.source.d">Home Assistant MQTT discovery over WebSocket, port <b>1884</b>.
+        Board identity is parsed out of <span class="mono">state_topic</span>, never from the
+        discovery name &mdash; that name is <span class="mono">&quot;PM2.5&quot;</span> on all three.</dd></div>
+      <div><dt data-t="sheet.fact.previews">Previews</dt><dd data-tx="sheet.fact.previews.d">All twenty are <b>live</b>, not screenshots. Each iframe is
+        <span class="mono">loading=&quot;lazy&quot;</span>, so a wall opens its own broker connection
+        only when its thumbnail scrolls into view &mdash; twenty MQTT connections never open at
+        once, and reaching the bottom of this page is what brings the last of them up. In demo
+        mode not one of them opens a connection at all.</dd></div>
+      <div><dt data-t="sheet.fact.settings">Settings</dt><dd data-tx="sheet.fact.settings.d">None here for the walls, and none on the walls at startup. Each wall
+        connects by itself and hides its settings behind pressing <b>s</b>. If the broker wants a
+        login, open this sheet once with <span class="mono">?u=&amp;p=</span> and every preview
+        inherits it &mdash; the hint is then wiped from the address bar.</dd></div>
+    </dl>
+
+    <p class="scale" data-tx="sheet.scale"><b>US EPA PM2.5 scale</b>, &micro;g/m&sup3; &mdash; the standard every
+      version bands against:
+      0&ndash;12.0 Good<span class="sep">&middot;</span>12.1&ndash;35.4 Moderate<span class="sep">&middot;</span>35.5&ndash;55.4
+      Unhealthy for sensitive groups<span class="sep">&middot;</span>55.5&ndash;150.4 Unhealthy<span class="sep">&middot;</span>150.5&ndash;250.4
+      Very unhealthy<span class="sep">&middot;</span>250.5 and above Hazardous.</p>
+  </details>
 </header>
 
 <!-- ===================================================================== BAND BENCH
