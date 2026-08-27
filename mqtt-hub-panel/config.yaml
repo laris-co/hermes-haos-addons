@@ -1,5 +1,5 @@
 name: "MQTT Hub"
-version: "0.2.0"
+version: "0.3.0"
 slug: "mqtt_hub_panel"
 description: >-
   Sidebar view of the dedicated mqtt-hub broker's EMQX dashboard — connected
