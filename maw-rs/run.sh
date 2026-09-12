@@ -33,6 +33,10 @@ cd "$HOME"
 # <title>ARRA Office</title>).
 export MAW_UI_DIR=/opt/maw-ui
 
+# Must match the Origin nginx rewrites every proxied request to — see
+# maw-proxy.inc for why that rewrite exists.
+export MAW_SERVE_ALLOWED_ORIGINS=http://127.0.0.1:3461
+
 # tmux needs a writable socket dir and a sane TERM; maw drives tmux for every
 # oracle it wakes, so a broken tmux here is a broken add-on.
 export TMUX_TMPDIR=/tmp
