@@ -68,5 +68,11 @@ cd "$HOME"
 # another host) need SSH keys and network access this add-on does not
 # configure — it ships a working `maw` binary and a place to run it, not
 # a pre-wired connection to the rest of your fleet. See DOCS.md.
-echo "[maw] exec: ttyd -p 8343 -c ${username}:*** tmux new-session -A -s maw"
-exec ttyd -p 8343 -c "${username}:${password}" tmux new-session -A -s maw
+# -W (--writable) is REQUIRED and easy to miss: without it ttyd starts in
+# read-only mode and silently serves a terminal you cannot type into. It
+# announces this only in its own startup log ("The --writable option is not
+# set, will start in readonly mode") — the add-on still reports "started"
+# and the page still renders, so nothing else catches it. Caught on the
+# first real install to catlab, not in the build.
+echo "[maw] exec: ttyd -W -p 8343 -c ${username}:*** tmux new-session -A -s maw"
+exec ttyd -W -p 8343 -c "${username}:${password}" tmux new-session -A -s maw
