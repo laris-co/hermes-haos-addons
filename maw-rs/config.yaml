@@ -1,0 +1,49 @@
+name: "maw"
+version: "1.0.0"
+slug: "maw_rs"
+description: >-
+  maw (github.com/Soul-Brews-Studio/maw-rs) — "Run a fleet of AI coding
+  agents across tmux sessions and machines, from one command line." maw
+  itself has no web mode of its own (verified: no --serve/web/http
+  option in its own --help or README) — it is a tmux orchestrator, so
+  this add-on gives it a browser tab the same way this repo's thclaws
+  add-on does for a different CLI-only Rust tool: a web terminal
+  (ttyd, official static binary) in front of a tmux session with maw
+  on PATH. This is a terminal into ONE container, not a way to reach
+  the rest of your fleet — maw's federation features need SSH/network
+  access to other hosts, which this add-on does not configure. See
+  DOCS.md.
+url: "https://github.com/laris-co/hermes-haos-addons/tree/main/maw-rs"
+# Only linux-x86_64-musl is published by upstream (checked directly via
+# `gh release view`) — no aarch64 Linux asset exists, so this add-on is
+# amd64-only. That happens to match catlab (qemux86-64), the guest this
+# was built and verified against.
+arch:
+  - amd64
+startup: application
+boot: manual
+# init: true — same reasoning as thclaws/config.yaml: this image has no
+# init system of its own (bare static binaries on a plain debian:13-slim
+# base), so Docker's own --init (tini) is what reaps zombies for the
+# whole pid namespace.
+init: true
+hassio_api: false
+homeassistant_api: false
+host_network: false
+# ingress: true, no ports: block — same shape as thclaws. ttyd is
+# bound to 127.0.0.1 by run.sh; nginx is the only thing Supervisor's
+# ingress proxy talks to.
+ingress: true
+ingress_port: 8343
+panel_icon: mdi:console-network
+panel_title: maw
+options:
+  # Defaults match this add-on's own README/DOCS: a real HTTP Basic Auth
+  # gate in front of the terminal (ttyd's own -c flag), independent of
+  # whatever HA ingress session already authenticated. Change these
+  # before exposing this add-on beyond your own LAN.
+  username: "catlab"
+  password: "catlab"
+schema:
+  username: str
+  password: password
