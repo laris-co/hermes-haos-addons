@@ -64,8 +64,17 @@ tmux new-session -d -s maw
 # `tmux has-session` is the check rather than `tmux ls`, because it exits
 # non-zero both when the session is missing and when the whole server is
 # gone, which are the same problem here.
+#
+# The "=" is load-bearing: tmux resolves a bare -t target by PREFIX, so with
+# any session named maw-<something> around — exactly what this add-on's own
+# "+ session" button suggests by default — `has-session -t maw` succeeds
+# while the maw session itself is gone, and the watchdog never fires. Caught
+# live: after `exit`, the only sessions left were an unrelated one and
+# maw-e8yz.
+# Measured in the container: `-t maw` exits 0 against maw-abcd, `-t =maw`
+# exits 1.
 while true; do
-    tmux has-session -t maw 2>/dev/null || tmux new-session -d -s maw
+    tmux has-session -t =maw 2>/dev/null || tmux new-session -d -s maw
     sleep 5
 done &
 session_keeper_pid=$!

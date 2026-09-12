@@ -17,10 +17,10 @@ proxy_set_header X-Real-IP $remote_addr;
 
 # Origin is REWRITTEN to one fixed value, which run.sh puts in
 # MAW_SERVE_ALLOWED_ORIGINS. maw serve enforces an Origin allowlist (verified:
-# an asset request carrying Origin: http://catlab.local gets 403, the same
+# an asset request carrying Origin: http://<ha-host> gets 403, the same
 # request with no Origin gets 200, and "*" is not accepted as a wildcard), but
 # the real Origin here depends on how the user reached Home Assistant —
-# catlab.local, a bare IP, a Tailscale or NetBird name — so it cannot be
+# an mDNS name, a bare IP, a Tailscale or NetBird name — so it cannot be
 # enumerated at build time. Normalizing it keeps the allowlist meaningful
 # instead of forcing it open, and costs nothing: the only way to reach this
 # proxy at all is through Supervisor's authenticated ingress.

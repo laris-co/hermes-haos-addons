@@ -6,10 +6,8 @@
 # add-on's first version was built on the wrong conclusion that maw had no
 # web mode at all; it does.
 #
-# The UI it serves is maw-ui, published as a prebuilt dist tarball, so this
-# image needs no node/bun toolchain. That dist is the same application
-# deployed at god.buildwithoracle.com — verified by matching its built asset
-# hash (boot-6wKmv1fM.css) and <title>ARRA Office</title> against that site.
+# The UI it serves is maw-ui ("ARRA Office"), published as a prebuilt dist
+# tarball, so this image needs no node/bun toolchain.
 FROM debian:13-slim
 
 ARG TARGETARCH

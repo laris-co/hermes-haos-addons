@@ -1,5 +1,5 @@
 name: "maw"
-version: "2.7.0"
+version: "2.7.1"
 slug: "maw_rs"
 description: >-
   maw (github.com/Soul-Brews-Studio/maw-rs) — "Run a fleet of AI coding
@@ -16,8 +16,8 @@ description: >-
 url: "https://github.com/laris-co/hermes-haos-addons/tree/main/maw-rs"
 # Only linux-x86_64-musl is published by upstream (checked directly via
 # `gh release view`) — no aarch64 Linux asset exists, so this add-on is
-# amd64-only. That happens to match catlab (qemux86-64), the guest this
-# was built and verified against.
+# amd64-only, which matches the qemux86-64 HAOS guest this was built and
+# verified against.
 arch:
   - amd64
 startup: application
