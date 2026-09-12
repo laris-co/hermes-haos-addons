@@ -1,46 +1,45 @@
-# maw — Home Assistant OS add-on: a web terminal in front of the maw CLI.
+# maw — Home Assistant OS add-on: `maw serve` plus the maw web UI.
 #
-# Same shape as this repo's thclaws add-on: neither upstream binary has a
-# Docker image of its own, so both are fetched as official, checksummed
-# GitHub Release assets and run directly — no source build.
+# maw serve is a real HTTP + WebSocket server ("APIs, federation, and browser
+# views" in its own help text). It is NOT advertised in the README or in
+# `maw --help`'s core command list — only `maw help --all` shows it. This
+# add-on's first version was built on the wrong conclusion that maw had no
+# web mode at all; it does.
 #
-# ttyd as a static binary rather than `apt install ttyd`: Debian's package
-# tracker lists ttyd only in "sid", not confirmed present in trixie's apt
-# archive, and this repo's own convention (thclaws' Dockerfile) is already
-# "download the release binary, verify its checksum" over depending on
-# whatever a given base image's apt repo happens to carry.
+# The UI it serves is maw-ui, published as a prebuilt dist tarball, so this
+# image needs no node/bun toolchain. That dist is the same application
+# deployed at god.buildwithoracle.com — verified by matching its built asset
+# hash (boot-6wKmv1fM.css) and <title>ARRA Office</title> against that site.
 FROM debian:13-slim
 
 ARG TARGETARCH
-ARG MAW_VERSION=v26.7.16-alpha.1159
-ARG TTYD_VERSION=1.7.7
+ARG MAW_VERSION=v26.9.12-alpha.1834
+ARG MAW_UI_VERSION=v1.4.2
+# No .sha256 sidecar is published alongside the UI tarball, so this digest was
+# measured from the release asset and pinned here by hand. It is what makes
+# MAW_UI_VERSION an immutable reference rather than a mutable tag.
+ARG MAW_UI_SHA256=d5ce5dc2fff06e8c991df5632bf8d11251309cd9f20fabf2044c2d3e71894693
 
-# python3-minimal for run.sh's options.json reader — same tool this repo's
-# other add-ons (thclaws, hermes-agent) use instead of adding a jq
-# dependency. tmux is maw's own substrate: it manages tmux sessions/windows
-# for each "oracle", so this is not optional the way it would be for a
-# plain CLI tool.
+# nginx: maw serve has no authentication of its own, so the catlab:catlab
+# credential this add-on promises has to be enforced in front of it. Same
+# reason (different mechanism) as this repo's thclaws add-on.
+# tmux + git: maw is a tmux orchestrator and `maw work` clones repos; both are
+# part of what the server drives, not optional extras.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl python3-minimal tmux \
+        ca-certificates curl git nginx openssl python3-minimal tmux \
     && rm -rf /var/lib/apt/lists/*
 
-# maw: only linux-x86_64-musl is published (verified via `gh release view
-# --repo Soul-Brews-Studio/maw-rs` — no aarch64 Linux asset exists), which
-# is also why this add-on's config.yaml declares amd64 only.
+# maw: only linux-x86_64 is published (verified against the release list — no
+# aarch64 Linux asset), which is why config.yaml declares amd64 only.
 #
-# The published .sha256 sidecar is NOT plain `<hash>  <filename>` — it is
-# `<hash>  dist/<filename>` (a leftover build-tree path from upstream's own
-# release process). Verified directly: `sha256sum -c` against that file
-# fails with "dist/maw-rs-linux-x86_64-musl: No such file or directory"
-# unless you either recreate that path or (simpler, done here) compare the
-# hash field yourself rather than trusting the sidecar's filename column.
+# The published .sha256 sidecar is NOT plain `<hash>  <filename>` — it reads
+# `<hash>  dist/<filename>`, a leftover build-tree path. `sha256sum -c` against
+# it fails looking for a dist/ directory that does not exist here, so the hash
+# field is compared directly instead.
 RUN set -eu; \
-    case "$TARGETARCH" in \
-        amd64) TRIPLE=x86_64 ;; \
-        *) echo "maw: unsupported TARGETARCH: $TARGETARCH (only linux-x86_64-musl is published upstream)" >&2; exit 1 ;; \
-    esac; \
+    [ "$TARGETARCH" = "amd64" ] || { echo "maw: unsupported TARGETARCH: $TARGETARCH (only linux-x86_64 is published upstream)" >&2; exit 1; }; \
     BASE="https://github.com/Soul-Brews-Studio/maw-rs/releases/download/${MAW_VERSION}"; \
-    NAME="maw-rs-linux-${TRIPLE}-musl"; \
+    NAME="maw-rs-linux-x86_64-musl"; \
     cd /tmp; \
     curl -fsSL -o "$NAME" "${BASE}/${NAME}"; \
     curl -fsSL -o "${NAME}.sha256" "${BASE}/${NAME}.sha256"; \
@@ -50,28 +49,19 @@ RUN set -eu; \
     install -m 0755 "$NAME" /usr/local/bin/maw; \
     rm -f "$NAME" "${NAME}.sha256"
 
-# ttyd: static binary, checksum verified against upstream's own
-# SHA256SUMS file (one file covering every architecture's binary).
+# The UI dist is baked into the image rather than downloaded at boot: an
+# add-on must start without network access, and a boot-time fetch would make
+# every restart depend on GitHub being up.
 RUN set -eu; \
-    case "$TARGETARCH" in \
-        amd64) TTYD_ARCH=x86_64 ;; \
-        arm64) TTYD_ARCH=aarch64 ;; \
-        *) echo "maw: unsupported TARGETARCH for ttyd: $TARGETARCH" >&2; exit 1 ;; \
-    esac; \
-    BASE="https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}"; \
     cd /tmp; \
-    curl -fsSL -o "ttyd.${TTYD_ARCH}" "${BASE}/ttyd.${TTYD_ARCH}"; \
-    curl -fsSL -o SHA256SUMS "${BASE}/SHA256SUMS"; \
-    grep "ttyd.${TTYD_ARCH}\$" SHA256SUMS | sha256sum -c -; \
-    install -m 0755 "ttyd.${TTYD_ARCH}" /usr/local/bin/ttyd; \
-    rm -f "ttyd.${TTYD_ARCH}" SHA256SUMS
+    curl -fsSL -o ui.tar.gz "https://github.com/Soul-Brews-Studio/maw-ui/releases/download/${MAW_UI_VERSION}/maw-ui-dist.tar.gz"; \
+    echo "${MAW_UI_SHA256}  ui.tar.gz" | sha256sum -c -; \
+    mkdir -p /opt/maw-ui; \
+    tar xzf ui.tar.gz -C /opt/maw-ui; \
+    rm -f ui.tar.gz; \
+    test -f /opt/maw-ui/index.html
 
-# No nginx sidecar, unlike thclaws — thclaws needs one because the
-# thclaws binary itself only supports --bind 127.0.0.1 (upstream's own
-# --serve has no way to listen on an arbitrary ingress_port directly).
-# ttyd has no such restriction: run.sh invokes it with -p pointed straight
-# at ingress_port, so Supervisor's ingress proxy talks to it with nothing
-# in between.
+COPY rootfs/etc/nginx/ /etc/nginx/
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
 
