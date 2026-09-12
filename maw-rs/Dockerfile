@@ -61,6 +61,27 @@ RUN set -eu; \
     rm -f ui.tar.gz; \
     test -f /opt/maw-ui/index.html
 
+# maw-ui is built with Vite's default base of "/", which bakes an absolute
+# asset root into the bundle's own preload helper:
+#
+#   const qe="modulepreload",Ge=function(n){return"/"+n}
+#
+# nginx rewrites the asset URLs in index.html, but this helper builds more of
+# them at runtime — every lazily-loaded route's CSS. Under ingress those
+# absolute URLs leave the /api/hassio_ingress/<token> prefix and 404 on Home
+# Assistant, which the UI surfaces as "Something crashed — Unable to preload
+# CSS for /assets/…". Dropping the leading slash makes them resolve against
+# the document base, which is the ingress root.
+#
+# Patched here rather than with nginx sub_filter so it costs nothing per
+# request, and the build FAILS if the pattern is not found — a maw-ui version
+# bump that changes this shape must be looked at, not silently un-fixed.
+RUN set -eu; \
+    f=/opt/maw-ui/assets/main-*.js; \
+    grep -q 'function(n){return"/"+n}' $f; \
+    sed -i 's|function(n){return"/"+n}|function(n){return n}|g' $f; \
+    ! grep -q 'function(n){return"/"+n}' $f
+
 COPY rootfs/etc/nginx/ /etc/nginx/
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
