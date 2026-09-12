@@ -42,6 +42,17 @@ export MAW_SERVE_ALLOWED_ORIGINS=http://127.0.0.1:3461
 export TMUX_TMPDIR=/tmp
 export TERM=xterm-256color
 
+# Start the tmux server up front. maw serve shells out to tmux to answer
+# /api/teams and the fleet views; with no server running it returns 503
+# ("tmux unreachable: no server running on /tmp/tmux-0/default") and the UI
+# loads with nothing in it.
+#
+# `tmux start-server` is NOT enough despite exiting 0 — measured: `tmux ls`
+# immediately after still reports "no server running", because a server with
+# no sessions has nothing to keep it alive. One detached session does the job
+# (/api/teams then returns 200), and maw creates its own sessions on top.
+tmux new-session -d -s maw
+
 nginx -c /etc/nginx/maw-ingress.conf &
 nginx_pid=$!
 
