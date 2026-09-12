@@ -1,5 +1,5 @@
 name: "maw"
-version: "2.0.0"
+version: "2.1.0"
 slug: "maw_rs"
 description: >-
   maw (github.com/Soul-Brews-Studio/maw-rs) — "Run a fleet of AI coding
@@ -37,13 +37,6 @@ ingress: true
 ingress_port: 8343
 panel_icon: mdi:console-network
 panel_title: maw
-options:
-  # Defaults match this add-on's own README/DOCS: a real HTTP Basic Auth
-  # gate in front of the terminal (ttyd's own -c flag), independent of
-  # whatever HA ingress session already authenticated. Change these
-  # before exposing this add-on beyond your own LAN.
-  username: "catlab"
-  password: "catlab"
-schema:
-  username: str
-  password: password
+# No options: the add-on has nothing left to configure. Access is Home
+# Assistant's own ingress session, and maw serve's bearer token is generated
+# and kept server-side (see run.sh) rather than being an operator's to manage.

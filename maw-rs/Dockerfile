@@ -26,7 +26,7 @@ ARG MAW_UI_SHA256=d5ce5dc2fff06e8c991df5632bf8d11251309cd9f20fabf2044c2d3e718946
 # tmux + git: maw is a tmux orchestrator and `maw work` clones repos; both are
 # part of what the server drives, not optional extras.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl git nginx openssl python3-minimal tmux \
+        ca-certificates curl git nginx openssl tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # maw: only linux-x86_64 is published (verified against the release list — no
