@@ -53,12 +53,33 @@ export TERM=xterm-256color
 # (/api/teams then returns 200), and maw creates its own sessions on top.
 tmux new-session -d -s maw
 
+# Keep at least one session alive, forever.
+#
+# The reported failure: type `exit` in the terminal view and tmux prints
+# "[session detached] / [connection closed]", the last session is gone, and
+# the UI has nothing left to attach to and no way to make one — the add-on
+# looks dead until it is restarted. Exiting a shell is a normal thing to do,
+# so it must not be able to leave the add-on unusable.
+#
+# `tmux has-session` is the check rather than `tmux ls`, because it exits
+# non-zero both when the session is missing and when the whole server is
+# gone, which are the same problem here.
+while true; do
+    tmux has-session -t maw 2>/dev/null || tmux new-session -d -s maw
+    sleep 5
+done &
+session_keeper_pid=$!
+
+# The add-on's own session-creation endpoint — see rootfs/opt/maw-addon.
+python3 /opt/maw-addon/session-api.py &
+session_api_pid=$!
+
 nginx -c /etc/nginx/maw-ingress.conf &
 nginx_pid=$!
 
 # If nginx dies, the add-on is unreachable but would otherwise sit there
 # looking "started" — take the whole container down so Supervisor shows it.
-trap 'kill "$nginx_pid" 2>/dev/null || true' TERM INT
+trap 'kill "$nginx_pid" "$session_keeper_pid" "$session_api_pid" 2>/dev/null || true' TERM INT
 
 echo "[maw] $(maw version 2>/dev/null || echo 'version unknown')"
 echo "[maw] exec: maw serve --host 127.0.0.1 --port 3461 (nginx ingress on :8343)"
