@@ -19,10 +19,10 @@
 # Dockerfile for the full rationale on pulling the published image
 # instead of rebuilding from source (same reasoning applies here).
 #
-# Pinned by digest, verified multi-arch (amd64 + arm64, both native
-# builds upstream) — see hermes-gateway/Dockerfile for the
+# Pinned by digest to v2026.9.24, verified multi-arch (amd64 + arm64, both
+# native builds upstream) — see hermes-gateway/Dockerfile for the
 # `docker manifest inspect` verification note.
-FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495
+FROM nousresearch/hermes-agent@sha256:fca358f12efd65bfaaca05884166f15c0e2788375ca30d77061ac1ebc96452b7
 
 ENV HERMES_HOME=/data
 ENV HERMES_WRITE_SAFE_ROOT=/data

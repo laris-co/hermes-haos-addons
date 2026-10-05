@@ -1,5 +1,5 @@
 name: "Hermes Server"
-version: "1.0.0"
+version: "1.0.1"
 slug: "hermes_server"
 description: >-
   Nous Research's Hermes Agent, running as `hermes serve` — the headless

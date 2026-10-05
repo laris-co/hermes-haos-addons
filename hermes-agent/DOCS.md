@@ -2,7 +2,7 @@
 
 ## What this wraps
 
-`FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495`
+`FROM nousresearch/hermes-agent@sha256:fca358f12efd65bfaaca05884166f15c0e2788375ca30d77061ac1ebc96452b7`
 (same pin as `hermes-gateway` — see that add-on's `DOCS.md` for the
 multi-arch verification), plus (as of v1.1) `nginx-light` and one new s6
 service — see "ingress: true" below for why.

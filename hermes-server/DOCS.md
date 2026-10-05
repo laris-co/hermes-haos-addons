@@ -2,7 +2,7 @@
 
 ## What this wraps
 
-`FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495`
+`FROM nousresearch/hermes-agent@sha256:fca358f12efd65bfaaca05884166f15c0e2788375ca30d77061ac1ebc96452b7`
 (same pin as `hermes-gateway`/`hermes-agent`), unmodified, running
 `hermes serve` instead of `hermes gateway run` or `hermes dashboard`.
 

@@ -127,9 +127,11 @@ equivalent).
 
 ## Design notes — full variant (`hermes-gateway` / `hermes-agent`)
 
-- **Base image**: both Dockerfiles pin
-  `nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495`
-  (was tagged `:latest` on Docker Hub as of 2026-08-24) — a digest, not a
+- **Base image**: the full-image Dockerfiles (`hermes-gateway`,
+  `hermes-agent`, `hermes-server`) pin
+  `nousresearch/hermes-agent@sha256:fca358f12efd65bfaaca05884166f15c0e2788375ca30d77061ac1ebc96452b7`
+  (the `v2026.9.24` release, re-pinned 2026-10-05; previously the image
+  tagged `:latest` on Docker Hub as of 2026-08-24) — a digest, not a
   mutable tag. Confirmed via `docker manifest inspect` to be a real
   multi-arch manifest list (linux/amd64 + linux/arm64), and confirmed
   against upstream's `.github/workflows/docker.yml` that both are built

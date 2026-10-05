@@ -13,14 +13,21 @@
 # translation shim, and redirecting hermes's state dir to Supervisor's
 # per-addon /data volume.
 #
-# Pinned by digest, not a mutable tag, for reproducible builds. Verified
-# with `docker manifest inspect nousresearch/hermes-agent:latest` on
-# 2026-08-24: this digest is a multi-arch manifest list covering
+# Pinned by digest, not a mutable tag, for reproducible builds. Pinned to
+# the v2026.9.24 release image, verified with `docker manifest inspect
+# nousresearch/hermes-agent:v2026.9.24` on 2026-10-05 (digest cross-checked
+# against Docker Hub's tag metadata): a multi-arch manifest list covering
 # linux/amd64 AND linux/arm64, both built on real native runners per
 # hermes-agent's .github/workflows/docker.yml matrix (arm64 runs on
 # ubuntu-24.04-arm, not qemu emulation) — so claiming aarch64 support
 # here is honest, not aspirational.
-FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495
+#
+# The previous pin was the image built from revision 057dcdf2 (2026-08-24),
+# which predates upstream's markerless-config migration fix
+# (NousResearch/hermes-agent a88bef98b2, 2026-09-24) — so a fresh /data
+# volume could still hit that script's false "config predates version 12"
+# refusal. v2026.9.24 is built from a revision after that fix.
+FROM nousresearch/hermes-agent@sha256:fca358f12efd65bfaaca05884166f15c0e2788375ca30d77061ac1ebc96452b7
 
 # Supervisor gives every add-on a persistent, backed-up /data directory
 # for free (no `map:` entry needed). Point hermes's own state directory

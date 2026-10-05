@@ -2,9 +2,11 @@
 
 ## What this wraps
 
-`FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495`
-(Docker Hub `:latest` as of 2026-08-24, revision label
-`057dcdf236f8a6a26721c10fcc6ccb72726e272a`), unmodified, plus:
+`FROM nousresearch/hermes-agent@sha256:fca358f12efd65bfaaca05884166f15c0e2788375ca30d77061ac1ebc96452b7`
+(Docker Hub `v2026.9.24`, revision label
+`f97608f178d1ffeca59860195ab7da295f7c8e5f`; previously `:latest` as of
+2026-08-24, revision label `057dcdf236f8a6a26721c10fcc6ccb72726e272a`),
+unmodified, plus:
 
 - `run.sh` — reads `/data/options.json`, exports the matching env vars,
   then `exec`s `/opt/hermes/docker/entrypoint-dispatch.sh gateway run`.
@@ -112,6 +114,53 @@ $ docker manifest inspect nousresearch/hermes-agent:latest
 Cross-checked against `nousresearch/hermes-agent/.github/workflows/docker.yml`:
 the build matrix is `arch: amd64 -> runner: ubuntu-latest` and
 `arch: arm64 -> runner: ubuntu-24.04-arm` — both native runners, no qemu.
+
+### 1b. Re-pin to `v2026.9.24` (2026-10-05)
+
+The block above records the original 2026-08-24 verification; the pin has
+since moved to the `v2026.9.24` release image. The 2026-08-24 image was built
+from revision `057dcdf2`, which predates upstream's markerless-config
+migration fix (`NousResearch/hermes-agent` `a88bef98b2`, 2026-09-24) — a
+fresh `/data` volume could therefore still hit that script's false refusal.
+
+```
+$ docker manifest inspect nousresearch/hermes-agent:v2026.9.24
+  "architecture": "amd64", "os": "linux"
+  "architecture": "arm64", "os": "linux"
+
+# index digest, as reported by Docker Hub's tag metadata and returned by the
+# registry for the same manifest list (both agree):
+sha256:fca358f12efd65bfaaca05884166f15c0e2788375ca30d77061ac1ebc96452b7
+
+# revision the image was built from (label org.opencontainers.image.revision):
+f97608f178d1ffeca59860195ab7da295f7c8e5f   # "chore: release v0.21.5 (2026.9.24)"
+```
+
+That revision is a descendant of `a88bef98b2`, and at that revision
+`scripts/docker_config_migrate.py` carries the corrected guard
+(`stamp is not None and current_ver < SUPPORT_FLOOR_VERSION`).
+
+Behaviour confirmed directly against both images, using a synthetic
+markerless `config.yaml` and the same interpreter + script the container boot
+runs (`.venv/bin/python scripts/docker_config_migrate.py`, `HERMES_HOME=/opt/data`):
+
+```
+# old pin (sha256:143bdb…)
+[config-migrate] WARNING: This config predates version 12 (~2 years old) and
+  can no longer be auto-migrated. …         # config.yaml left untouched
+
+# v2026.9.24
+[config-migrate] Migrating config schema 0 -> 46; backups: /opt/data/backups/config/…
+Config version: 0 → 46                      # config.yaml stamped _config_version: 46
+
+# second run on the same volume
+(no output)                                 # config.yaml byte-identical, no new backup
+```
+
+`hermes config check` on the migrated volume reports `Config version: 46 ✓`.
+All three wrapper Dockerfiles were built against the new pin
+(`hermes-gateway` amd64 **and** arm64, `hermes-agent` amd64, `hermes-server`
+amd64). No Supervisor/HAOS install was performed in this pass.
 
 ### 2. `docker build` — both add-ons, both claimed archs
 
