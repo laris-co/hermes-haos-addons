@@ -103,3 +103,5 @@ automatically.
 See [`DOCS.md`](DOCS.md) for the full verification log (exact
 `docker build`/`docker run` commands and their real output, including
 the WebSocket-upgrade transcript this design depends on).
+
+The HAOS image also restores gateway profile reconciliation in the combined dashboard and gateway container. A build-time guarded patch opts this add-on in; the regression tests verify the opt-in and fail-closed behavior.

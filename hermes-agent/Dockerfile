@@ -13,6 +13,17 @@
 # `docker manifest inspect` verification note.
 FROM nousresearch/hermes-agent@sha256:143bdb9086bb2db645346179f11091e621ef6b7f4f9e5049ae7454bfeb3a0495
 
+# This add-on runs the dashboard and its gateway in one container. Upstream
+# skips gateway profile reconciliation for every dashboard command (to avoid
+# two containers racing over a shared HERMES_HOME), which leaves
+# gateway-default unregistered after a restart here. Add a narrow opt-in to
+# the pinned boot reconciler; separate dashboard containers retain upstream's
+# default skip behavior.
+COPY patches/dashboard_gateway_reconcile.py /tmp/dashboard_gateway_reconcile.py
+RUN /opt/hermes/.venv/bin/python /tmp/dashboard_gateway_reconcile.py /opt/hermes/hermes_cli/container_boot.py \
+    && rm /tmp/dashboard_gateway_reconcile.py
+ENV HERMES_DASHBOARD_RECONCILE_GATEWAYS=1
+
 # --- HA ingress sidecar ---
 # nginx-light: a reverse proxy running IN this container, in front of
 # hermes's own dashboard, so the add-on can use `ingress: true` (a
