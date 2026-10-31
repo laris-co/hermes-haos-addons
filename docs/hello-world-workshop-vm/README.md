@@ -16,7 +16,8 @@ follows the same steps.
 | You end with | an app in the sidebar that Home Assistant built from source on your machine |
 
 The VM's address is written `<vm-ip>` below: find yours on the VM console (the `ha >` banner shows
-it) or in your router. Home Assistant answers on port 80 here; `:8123` redirects to it.
+it) or in your router. On this image Home Assistant answers on port 80. During the first-boot
+download `:8123` also answers and redirects to port 80; once Core runs, only port 80 does.
 
 ## 1. First boot: Home Assistant downloads its Core
 
